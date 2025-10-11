@@ -1073,7 +1073,52 @@ struct SummarizeButton: View {
             Capsule()
                 .fill(.thinMaterial)
         )
-        // Removed the inner overlay that rendered SpinningSmokeyGlow to avoid double rendering
+        // Siri-like glow halo placed outside clipping so it’s visible
+        .overlay(
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                let seconds = context.date.timeIntervalSinceReferenceDate
+                let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: 14.0) / 14.0) * 360.0)
+
+                let baseOpacity: Double = 0.42
+                let activeBoost: Double = 0.14
+                let glowOpacity: Double = (isGenerating ? (baseOpacity + activeBoost) : baseOpacity)
+                let blurFill: CGFloat = isGenerating ? 52 : 44
+                let blur1: CGFloat = isGenerating ? 42 : 36
+                let blur2: CGFloat = isGenerating ? 78 : 64
+
+                ZStack {
+                    // Soft backlight fill
+                    Capsule()
+                        .fill(
+                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation)
+                        )
+                        .opacity(glowOpacity * 0.55)
+                        .blur(radius: blurFill)
+                        .blendMode(.plusLighter)
+
+                    // Outer glow strokes
+                    Capsule()
+                        .strokeBorder(
+                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                            lineWidth: 3
+                        )
+                        .opacity(glowOpacity)
+                        .blur(radius: blur1)
+                        .blendMode(.plusLighter)
+
+                    Capsule()
+                        .strokeBorder(
+                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                            lineWidth: 2
+                        )
+                        .opacity(glowOpacity * 0.9)
+                        .blur(radius: blur2)
+                        .blendMode(.plusLighter)
+                }
+                .padding(-22)
+                .allowsHitTesting(false)
+            }
+        )
 
         .overlay(
             ZStack {
