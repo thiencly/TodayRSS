@@ -1,0 +1,98 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Xcode
+## User settings
+*.xcuserstate
+**/xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+## Derived data and build products
+DerivedData/
+build/
+
+## iOS/Swift artifacts
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods (if ever used)
+Pods/
+
+# Carthage (if ever used)
+Carthage/Build/
+
+# Fastlane (if ever used)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Simulator devices
+**/CoreSimulator/Devices/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift playgrounds generated workspace data
+playground.xcworkspace/contents.xcworkspacedata
+
+# SwiftData / Core Data generated artifacts (optional caches)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Logs
+*.log
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+~*
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+
+# Metal shader cache
+*.metallib
+
+# SPM Xcode workspace data (often regenerated)
+.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Ignore user-specific configuration files
+*.local
+.env
+.env.*
+
+# End of standard Xcode/Swift .gitignore
