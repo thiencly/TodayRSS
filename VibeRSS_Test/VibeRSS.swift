@@ -1051,6 +1051,58 @@ struct SummarizeButton: View {
         }
     }
 
+    // New: a single moving light streak around the button border when generating
+    @ViewBuilder
+    private func progressStreakOverlay(isGenerating: Bool) -> some View {
+        // We draw a capsule stroke and mask it with a narrow animated angular gradient window
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            // 3 seconds per full lap
+            let progress = seconds.truncatingRemainder(dividingBy: 3.0) / 3.0
+            let angle = Angle(degrees: progress * 360.0)
+
+            // Build a tight color window that feels like a light streak
+            let streakColors: [Color] = [
+                .clear,
+                SiriGradient.colors[0].opacity(0.0),
+                SiriGradient.colors[1].opacity(0.15),
+                SiriGradient.colors[2].opacity(0.35),
+                SiriGradient.colors[3].opacity(0.75),
+                SiriGradient.colors[4].opacity(0.95),
+                SiriGradient.colors[3].opacity(0.75),
+                SiriGradient.colors[2].opacity(0.35),
+                SiriGradient.colors[1].opacity(0.15),
+                SiriGradient.colors[0].opacity(0.0),
+                .clear
+            ]
+
+            // The mask defines a narrow bright arc that moves around
+            let mask = Capsule()
+                .strokeBorder(
+                    AngularGradient(colors: streakColors, center: .center, angle: .degrees(0)),
+                    lineWidth: 4
+                )
+                .rotationEffect(angle)
+                .blur(radius: 0.6)
+                .opacity(isGenerating ? 1.0 : 0.0)
+
+            // The base stroke that the mask reveals — slightly thicker to read well
+            let baseStroke = Capsule()
+                .strokeBorder(
+                    LinearGradient(colors: [Color.white.opacity(0.85), Color.white.opacity(0.35)], startPoint: .top, endPoint: .bottom),
+                    lineWidth: 5
+                )
+                .blendMode(.plusLighter)
+
+            ZStack {
+                baseStroke
+                    .mask(mask)
+            }
+            .padding(-2)
+            .allowsHitTesting(false)
+        }
+    }
+
     // Break out the static chrome overlays
     @ViewBuilder
     private func chromeOverlays() -> some View {
@@ -1140,25 +1192,13 @@ struct SummarizeButton: View {
             rotatingGlowOverlay(isGenerating: isGenerating)
         )
         .overlay(
+            progressStreakOverlay(isGenerating: isGenerating)
+        )
+        .overlay(
             chromeOverlays()
         )
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-        // Unclipped spinning smokey glow that extends beyond the button while generating
-        .overlay(
-            Group {
-                if isGenerating {
-                    SpinningSmokeyGlow(pulse: pulse)
-                }
-            }
-        )
-        // Removed .scaleEffect(isPressed ? 0.98 : 1.0)
-        // Removed .opacity(isPressed ? 0.96 : 1.0)
-        // Removed .highPriorityGesture(
-        //     DragGesture(minimumDistance: 0)
-        //         .onChanged { _ in if !isPressed { isPressed = true } }
-        //         .onEnded { _ in isPressed = false }
-        // )
         .onAppear {
             if isGenerating {
                 pulse = true // immediate visual change
