@@ -955,33 +955,21 @@ private struct SpinningSmokeyGlow: View {
     private func smoke(angle: Angle) -> some View {
         ZStack {
             Capsule()
-                .strokeBorder(Color.clear, lineWidth: 0)
-                .background(
-                    AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle)
-                        .opacity(0.42)
-                        .blur(radius: 30)
-                )
-                .clipShape(Capsule())
+                .fill(AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle))
+                .opacity(0.42)
+                .blur(radius: 30)
                 .scaleEffect(pulse ? 1.14 : 1.08)
 
             Capsule()
-                .strokeBorder(Color.clear, lineWidth: 0)
-                .background(
-                    AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle)
-                        .opacity(0.26)
-                        .blur(radius: 48)
-                )
-                .clipShape(Capsule())
+                .fill(AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle))
+                .opacity(0.26)
+                .blur(radius: 48)
                 .scaleEffect(pulse ? 1.22 : 1.14)
 
             Capsule()
-                .strokeBorder(Color.clear, lineWidth: 0)
-                .background(
-                    AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle)
-                        .opacity(0.16)
-                        .blur(radius: 72)
-                )
-                .clipShape(Capsule())
+                .fill(AngularGradient(colors: SiriGradient.colors, center: .center, angle: angle))
+                .opacity(0.16)
+                .blur(radius: 72)
                 .scaleEffect(pulse ? 1.32 : 1.22)
         }
         .compositingGroup()
@@ -1020,6 +1008,87 @@ struct SummarizeButton: View {
     // Visual state
     @State private var pulse = false
     // Removed: @State private var isPressed = false
+
+    // Break out the rotating glow overlay to reduce type-checking complexity
+    @ViewBuilder
+    private func rotatingGlowOverlay(isGenerating: Bool) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: 14.0) / 14.0) * 360.0)
+
+            let baseOpacity: Double = 0.55
+            let activeBoost: Double = 0.18
+            let glowOpacity: Double = (isGenerating ? (baseOpacity + activeBoost) : baseOpacity)
+            let blurFill: CGFloat = isGenerating ? 56 : 50
+            let blur1: CGFloat = isGenerating ? 46 : 40
+            let blur2: CGFloat = isGenerating ? 84 : 72
+
+            ZStack {
+                Capsule()
+                    .fill(
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation)
+                    )
+                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .opacity(glowOpacity * 0.55)
+                    .blur(radius: blurFill)
+                    .blendMode(.plusLighter)
+
+                Capsule()
+                    .strokeBorder(
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                        lineWidth: 3
+                    )
+                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .opacity(glowOpacity)
+                    .blur(radius: blur1)
+                    .blendMode(.plusLighter)
+
+                Capsule()
+                    .strokeBorder(
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                        lineWidth: 2
+                    )
+                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .opacity(glowOpacity * 0.9)
+                    .blur(radius: blur2)
+                    .blendMode(.plusLighter)
+            }
+            .padding(-22)
+            .allowsHitTesting(false)
+        }
+    }
+
+    // Break out the static chrome overlays
+    @ViewBuilder
+    private func chromeOverlays() -> some View {
+        ZStack {
+            Capsule()
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                .blendMode(.overlay)
+            Capsule()
+                .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 1)
+        }
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(colors: [
+                        Color.white.opacity(0.55),
+                        Color.white.opacity(0.15),
+                        .clear
+                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1
+                )
+                .opacity(0.75)
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(colors: [
+                        .clear,
+                        Color.black.opacity(0.10)
+                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1
+                )
+        )
+    }
 
     private var title: String {
         switch state {
@@ -1075,81 +1144,10 @@ struct SummarizeButton: View {
         )
         // Siri-like glow halo placed outside clipping so it’s visible
         .overlay(
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                let seconds = context.date.timeIntervalSinceReferenceDate
-                let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: 14.0) / 14.0) * 360.0)
-
-                let baseOpacity: Double = 0.42
-                let activeBoost: Double = 0.14
-                let glowOpacity: Double = (isGenerating ? (baseOpacity + activeBoost) : baseOpacity)
-                let blurFill: CGFloat = isGenerating ? 52 : 44
-                let blur1: CGFloat = isGenerating ? 42 : 36
-                let blur2: CGFloat = isGenerating ? 78 : 64
-
-                ZStack {
-                    // Soft backlight fill
-                    Capsule()
-                        .fill(
-                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation)
-                        )
-                        .opacity(glowOpacity * 0.55)
-                        .blur(radius: blurFill)
-                        .blendMode(.plusLighter)
-
-                    // Outer glow strokes
-                    Capsule()
-                        .strokeBorder(
-                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
-                            lineWidth: 3
-                        )
-                        .opacity(glowOpacity)
-                        .blur(radius: blur1)
-                        .blendMode(.plusLighter)
-
-                    Capsule()
-                        .strokeBorder(
-                            AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
-                            lineWidth: 2
-                        )
-                        .opacity(glowOpacity * 0.9)
-                        .blur(radius: blur2)
-                        .blendMode(.plusLighter)
-                }
-                .padding(-22)
-                .allowsHitTesting(false)
-            }
-        )
-
-        .overlay(
-            ZStack {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-                    .blendMode(.overlay)
-                Capsule()
-                    .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 1)
-            }
+            rotatingGlowOverlay(isGenerating: isGenerating)
         )
         .overlay(
-            // Top highlight rim (very subtle)
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(colors: [
-                        Color.white.opacity(0.55),
-                        Color.white.opacity(0.15),
-                        .clear
-                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1
-                )
-                .opacity(0.75)
-        )
-        .overlay(
-            // Bottom shadow rim (very subtle) to add depth
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(colors: [
-                        .clear,
-                        Color.black.opacity(0.10)
-                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1
-                )
+            chromeOverlays()
         )
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
