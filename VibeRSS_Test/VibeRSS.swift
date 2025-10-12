@@ -798,15 +798,7 @@ struct RainbowGlowText: View {
     var subtle: Bool = false
     @State private var animate = false
 
-    private var gradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                .red, .orange, .yellow, .green, .teal, .blue, .indigo, .purple, .pink, .red
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
+    private var gradient: LinearGradient { SiriGradient.linear() }
 
     var body: some View {
         Text(text)
@@ -947,8 +939,7 @@ private struct SpinningSmokeyGlow: View {
                 ),
                 lineWidth: 3
             )
-            .blur(radius: 1.5)
-            .opacity(0.95)
+            .opacity(0.9)
     }
 
     // Soft smoky wisps that extend beyond the border
@@ -972,8 +963,6 @@ private struct SpinningSmokeyGlow: View {
                 .blur(radius: 72)
                 .scaleEffect(pulse ? 1.32 : 1.22)
         }
-        .compositingGroup()
-        .drawingGroup()
         .padding(-26)
     }
 
@@ -986,9 +975,10 @@ private struct SpinningSmokeyGlow: View {
             let angle = Angle(degrees: progress * 360.0)
 
             ZStack {
-                smoke(angle: angle)
-                ring(angle: angle)
+                smoke(angle: .degrees(0))
+                ring(angle: .degrees(0))
             }
+            .rotationEffect(angle)
             .allowsHitTesting(false)
         }
     }
@@ -1016,43 +1006,46 @@ struct SummarizeButton: View {
             let seconds = context.date.timeIntervalSinceReferenceDate
             let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: 14.0) / 14.0) * 360.0)
 
-            let baseOpacity: Double = 0.55
-            let activeBoost: Double = 0.18
+            // Tuned for a more vibrant idle glow
+            let baseOpacity: Double = 0.75    // was 0.55 — brighter when idle
+            let activeBoost: Double = 0.20    // was 0.18 — slightly brighter when generating
             let glowOpacity: Double = (isGenerating ? (baseOpacity + activeBoost) : baseOpacity)
-            let blurFill: CGFloat = isGenerating ? 56 : 50
-            let blur1: CGFloat = isGenerating ? 46 : 40
-            let blur2: CGFloat = isGenerating ? 84 : 72
+            // Slightly tighter blurs when idle to make the halo feel crisper
+            let blurFill: CGFloat = isGenerating ? 58 : 44   // was 56 / 50
+            let blur1: CGFloat = isGenerating ? 48 : 34      // was 46 / 40
+            let blur2: CGFloat = isGenerating ? 86 : 66      // was 84 / 72
 
             ZStack {
                 Capsule()
                     .fill(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation)
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0))
                     )
-                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .saturation(isGenerating ? 1.05 : 1.30)
                     .opacity(glowOpacity * 0.55)
                     .blur(radius: blurFill)
                     .blendMode(.plusLighter)
 
                 Capsule()
                     .strokeBorder(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 3
                     )
-                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .saturation(isGenerating ? 1.05 : 1.30)
                     .opacity(glowOpacity)
                     .blur(radius: blur1)
                     .blendMode(.plusLighter)
 
                 Capsule()
                     .strokeBorder(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: rotation),
+                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 2
                     )
-                    .saturation(isGenerating ? 1.0 : 1.15)
+                    .saturation(isGenerating ? 1.05 : 1.30)
                     .opacity(glowOpacity * 0.9)
                     .blur(radius: blur2)
                     .blendMode(.plusLighter)
             }
+            .rotationEffect(rotation)
             .padding(-22)
             .allowsHitTesting(false)
         }
