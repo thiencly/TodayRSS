@@ -999,29 +999,28 @@ struct SummarizeButton: View {
     @State private var pulse = false
     // Removed: @State private var isPressed = false
 
-    // Break out the rotating glow overlay to reduce type-checking complexity
+    // Updated rotatingGlowOverlay per instruction
     @ViewBuilder
-    private func rotatingGlowOverlay(isGenerating: Bool) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+    private func rotatingGlowOverlay() -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 45.0)) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate
-            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: 14.0) / 14.0) * 360.0)
+            // Faster spin when idle, slightly slower when generating to reduce distraction
+            let period: Double = isGenerating ? 10.0 : 6.0 // seconds per full rotation
+            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: period) / period) * 360.0)
 
-            // Tuned for a more vibrant idle glow
-            let baseOpacity: Double = 0.75    // was 0.55 — brighter when idle
-            let activeBoost: Double = 0.20    // was 0.18 — slightly brighter when generating
-            let glowOpacity: Double = (isGenerating ? (baseOpacity + activeBoost) : baseOpacity)
-            // Slightly tighter blurs when idle to make the halo feel crisper
-            let blurFill: CGFloat = isGenerating ? 58 : 44   // was 56 / 50
-            let blur1: CGFloat = isGenerating ? 48 : 34      // was 46 / 40
-            let blur2: CGFloat = isGenerating ? 86 : 66      // was 84 / 72
+            // Brighter glow when idle
+            let baseGlowOpacity: Double = isGenerating ? 0.65 : 0.95
+            let blurFill: CGFloat = isGenerating ? 40 : 52
+            let blur1: CGFloat = isGenerating ? 30 : 40
+            let blur2: CGFloat = isGenerating ? 54 : 76
 
             ZStack {
                 Capsule()
                     .fill(
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0))
                     )
-                    .saturation(isGenerating ? 1.05 : 1.30)
-                    .opacity(glowOpacity * 0.55)
+                    .saturation(1.35)
+                    .opacity(baseGlowOpacity * 0.55)
                     .blur(radius: blurFill)
                     .blendMode(.plusLighter)
 
@@ -1030,8 +1029,8 @@ struct SummarizeButton: View {
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 3
                     )
-                    .saturation(isGenerating ? 1.05 : 1.30)
-                    .opacity(glowOpacity)
+                    .saturation(1.35)
+                    .opacity(baseGlowOpacity)
                     .blur(radius: blur1)
                     .blendMode(.plusLighter)
 
@@ -1040,8 +1039,8 @@ struct SummarizeButton: View {
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 2
                     )
-                    .saturation(isGenerating ? 1.05 : 1.30)
-                    .opacity(glowOpacity * 0.9)
+                    .saturation(1.35)
+                    .opacity(baseGlowOpacity * 0.9)
                     .blur(radius: blur2)
                     .blendMode(.plusLighter)
             }
@@ -1051,57 +1050,7 @@ struct SummarizeButton: View {
         }
     }
 
-    // New: a single moving light streak around the button border when generating
-    @ViewBuilder
-    private func progressStreakOverlay(isGenerating: Bool) -> some View {
-        // We draw a capsule stroke and mask it with a narrow animated angular gradient window
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
-            let seconds = context.date.timeIntervalSinceReferenceDate
-            // 3 seconds per full lap
-            let progress = seconds.truncatingRemainder(dividingBy: 3.0) / 3.0
-            let angle = Angle(degrees: progress * 360.0)
-
-            // Build a tight color window that feels like a light streak
-            let streakColors: [Color] = [
-                .clear,
-                SiriGradient.colors[0].opacity(0.0),
-                SiriGradient.colors[1].opacity(0.15),
-                SiriGradient.colors[2].opacity(0.35),
-                SiriGradient.colors[3].opacity(0.75),
-                SiriGradient.colors[4].opacity(0.95),
-                SiriGradient.colors[3].opacity(0.75),
-                SiriGradient.colors[2].opacity(0.35),
-                SiriGradient.colors[1].opacity(0.15),
-                SiriGradient.colors[0].opacity(0.0),
-                .clear
-            ]
-
-            // The mask defines a narrow bright arc that moves around
-            let mask = Capsule()
-                .strokeBorder(
-                    AngularGradient(colors: streakColors, center: .center, angle: .degrees(0)),
-                    lineWidth: 4
-                )
-                .rotationEffect(angle)
-                .blur(radius: 0.6)
-                .opacity(isGenerating ? 1.0 : 0.0)
-
-            // The base stroke that the mask reveals — slightly thicker to read well
-            let baseStroke = Capsule()
-                .strokeBorder(
-                    LinearGradient(colors: [Color.white.opacity(0.85), Color.white.opacity(0.35)], startPoint: .top, endPoint: .bottom),
-                    lineWidth: 5
-                )
-                .blendMode(.plusLighter)
-
-            ZStack {
-                baseStroke
-                    .mask(mask)
-            }
-            .padding(-2)
-            .allowsHitTesting(false)
-        }
-    }
+    // Removed entire progressStreakOverlay(isGenerating:) helper and all references
 
     // Break out the static chrome overlays
     @ViewBuilder
@@ -1160,10 +1109,20 @@ struct SummarizeButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: isGenerating ? "sparkles" : "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .scaleEffect(isGenerating ? (pulse ? 1.06 : 1.0) : 1.0)
+                Group {
+                    if isGenerating {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(0.8)
+                            .frame(width: 16, height: 16)
+                            .transition(.opacity)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.subheadline.weight(.semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .scaleEffect(1.0)
+                    }
+                }
 
                 Text(title)
                     .font(.callout.weight(.semibold))
@@ -1189,36 +1148,20 @@ struct SummarizeButton: View {
         )
         // Siri-like glow halo placed outside clipping so it’s visible
         .overlay(
-            rotatingGlowOverlay(isGenerating: isGenerating)
+            rotatingGlowOverlay()
         )
-        .overlay(
-            progressStreakOverlay(isGenerating: isGenerating)
-        )
+        // Removed .overlay(progressStreakOverlay(isGenerating: isGenerating))
         .overlay(
             chromeOverlays()
         )
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+        .scaleEffect(isGenerating ? 1.01 : 1.0)
+        .animation(isGenerating ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: isGenerating)
         .onAppear {
-            if isGenerating {
-                pulse = true // immediate visual change
-                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
-            }
+            // Removed pulse animation on appear
         }
-        .onChange(of: isGenerating) { _, newValue in
-            if newValue {
-                pulse = true // immediate
-                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
-            } else {
-                withAnimation(.linear(duration: 0.08)) {
-                    pulse = false
-                }
-            }
-        }
+        // Removed onChange(of: isGenerating)
         .accessibilityLabel(title)
     }
 }
