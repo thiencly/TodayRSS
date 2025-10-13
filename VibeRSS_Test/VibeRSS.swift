@@ -1005,21 +1005,22 @@ struct SummarizeButton: View {
         TimelineView(.animation(minimumInterval: 1.0 / 45.0)) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate
             // Faster spin when idle, slightly slower when generating to reduce distraction
-            let period: Double = isGenerating ? 10.0 : 6.0 // seconds per full rotation
-            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: period) / period) * 360.0)
-
+            let period: Double = isGenerating ? 2.0 : 6.0 // seconds per full rotation
             // Brighter glow when idle
-            let baseGlowOpacity: Double = isGenerating ? 0.65 : 0.95
-            let blurFill: CGFloat = isGenerating ? 40 : 52
-            let blur1: CGFloat = isGenerating ? 30 : 40
-            let blur2: CGFloat = isGenerating ? 54 : 76
+            let baseGlowOpacity: Double = isGenerating ? 3 : 0.5
+            let blurFill: CGFloat = isGenerating ? 58 : 52
+            let blur1: CGFloat = isGenerating ? 44 : 40
+            let blur2: CGFloat = isGenerating ? 84 : 76
+            let saturationBoost: Double = isGenerating ? 1.55 : 1.35
+
+            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: period) / period) * 360.0)
 
             ZStack {
                 Capsule()
                     .fill(
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0))
                     )
-                    .saturation(1.35)
+                    .saturation(saturationBoost)
                     .opacity(baseGlowOpacity * 0.55)
                     .blur(radius: blurFill)
                     .blendMode(.plusLighter)
@@ -1029,7 +1030,7 @@ struct SummarizeButton: View {
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 3
                     )
-                    .saturation(1.35)
+                    .saturation(saturationBoost)
                     .opacity(baseGlowOpacity)
                     .blur(radius: blur1)
                     .blendMode(.plusLighter)
@@ -1039,7 +1040,7 @@ struct SummarizeButton: View {
                         AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
                         lineWidth: 2
                     )
-                    .saturation(1.35)
+                    .saturation(saturationBoost)
                     .opacity(baseGlowOpacity * 0.9)
                     .blur(radius: blur2)
                     .blendMode(.plusLighter)
