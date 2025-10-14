@@ -2199,131 +2199,169 @@ struct ContentView: View {
     @State private var movingSource: Source?
     @State private var showingMoveDialog = false
     @State private var refreshID = UUID()
+    @State private var isRefreshingAll = false
+    private let refreshService = FeedService()
 
-    @ViewBuilder private var sidebar: some View {
-        List {
-            Section("Folders") {
-                NavigationLink {
-                    AllArticlesView(refreshID: refreshID)
-                        .environmentObject(store)
-                } label: {
-                    Label("All Articles", systemImage: "newspaper.fill")
-                        .contentShape(Rectangle())
-                }
-                // Removed .simultaneousGesture to fix tap target and refresh bug
-
-                ForEach(store.folders) { folder in
-                    NavigationLink {
-                        FolderDetailView(folder: folder, refreshID: refreshID)
-                            .environmentObject(store)
-                    } label: {
-                        HStack {
-                            Label(folder.name, systemImage: "folder")
-                            Spacer()
-                            Text("\(store.feeds.filter { $0.folderID == folder.id }.count)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    // Removed .simultaneousGesture to fix tap target and refresh bug
-                    .swipeActions {
-                        Button(role: .destructive) {
-                            store.removeFolder(folder)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+    private func refreshAll() async {
+        // Run all feed loads concurrently and wait for completion.
+        let feeds = store.feeds
+        await withTaskGroup(of: Void.self) { group in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        _ = try await refreshService.loadItems(from: feed.url)
+                    } catch {
+                        // Ignore individual failures for the global refresh
                     }
                 }
             }
-            Section("Sources") {
-                ForEach(store.feeds) { source in
+            // Wait for all
+            for await _ in group { }
+        }
+    }
+
+    @ViewBuilder private var sidebar: some View {
+        ZStack(alignment: .bottomTrailing) {
+            List {
+                Section("Folders") {
                     NavigationLink {
-                        FeedDetailView(source: source, refreshID: refreshID)
+                        AllArticlesView(refreshID: refreshID)
+                            .environmentObject(store)
                     } label: {
-                        HStack(spacing: 12) {
-                            FeedIconView(iconURL: source.iconURL)
-                            Text(source.title)
-                        }
-                        .contentShape(Rectangle())
+                        Label("All Articles", systemImage: "newspaper.fill")
+                            .contentShape(Rectangle())
                     }
                     // Removed .simultaneousGesture to fix tap target and refresh bug
-                    .contextMenu {
-                        Button("Refresh Icon") {
-                            Task { await store.refreshIcon(for: source) }
+
+                    ForEach(store.folders) { folder in
+                        NavigationLink {
+                            FolderDetailView(folder: folder, refreshID: refreshID)
+                                .environmentObject(store)
+                        } label: {
+                            HStack {
+                                Label(folder.name, systemImage: "folder")
+                                Spacer()
+                                Text("\(store.feeds.filter { $0.folderID == folder.id }.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        Menu("Move to Folder") {
-                            ForEach(store.folders) { folder in
-                                Button(folder.name) {
-                                    store.assign(source, to: folder)
+                        // Removed .simultaneousGesture to fix tap target and refresh bug
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                store.removeFolder(folder)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                Section("Sources") {
+                    ForEach(store.feeds) { source in
+                        NavigationLink {
+                            FeedDetailView(source: source, refreshID: refreshID)
+                        } label: {
+                            HStack(spacing: 12) {
+                                FeedIconView(iconURL: source.iconURL)
+                                Text(source.title)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        // Removed .simultaneousGesture to fix tap target and refresh bug
+                        .contextMenu {
+                            Button("Refresh Icon") {
+                                Task { await store.refreshIcon(for: source) }
+                            }
+                            Menu("Move to Folder") {
+                                ForEach(store.folders) { folder in
+                                    Button(folder.name) {
+                                        store.assign(source, to: folder)
+                                    }
+                                }
+                                if source.folderID != nil {
+                                    Button("Remove from Folder") {
+                                        store.assign(source, to: nil)
+                                    }
                                 }
                             }
+                        }
+                        .swipeActions {
                             if source.folderID != nil {
-                                Button("Remove from Folder") {
+                                Button("Remove", role: .destructive) {
                                     store.assign(source, to: nil)
                                 }
                             }
-                        }
-                    }
-                    .swipeActions {
-                        if source.folderID != nil {
-                            Button("Remove", role: .destructive) {
-                                store.assign(source, to: nil)
+                            Button("Move") {
+                                movingSource = source
+                                showingMoveDialog = true
                             }
-                        }
-                        Button("Move") {
-                            movingSource = source
-                            showingMoveDialog = true
-                        }
-                        Button("Delete", role: .destructive) {
-                            if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                store.feeds.remove(at: idx)
-                                if selectedSource?.id == source.id {
-                                    selectedSource = store.feeds.first
+                            Button("Delete", role: .destructive) {
+                                if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                    store.feeds.remove(at: idx)
+                                    if selectedSource?.id == source.id {
+                                        selectedSource = store.feeds.first
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        .navigationTitle("VibeRSS")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }
-            }
-        }
-        .sheet(isPresented: $showingAdd) {
-            AddFeedView { newSource in
-                store.feeds.append(newSource)
-                selectedSource = newSource
-            }
-            .environmentObject(store)
-            .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showingAddFolder) {
-            AddFolderView { newFolder in
-                store.folders.append(newFolder)
-            }
-            .presentationDetents([.medium])
-        }
-        .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
-            ForEach(store.folders) { folder in
-                Button(folder.name) {
-                    store.assign(source, to: folder)
+            .navigationTitle("VibeRSS")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
                 }
             }
-            if source.folderID != nil {
-                Button("Remove from Folder", role: .destructive) {
-                    store.assign(source, to: nil)
+            .sheet(isPresented: $showingAdd) {
+                AddFeedView { newSource in
+                    store.feeds.append(newSource)
+                    selectedSource = newSource
+                }
+                .environmentObject(store)
+                .presentationDetents([.medium])
+            }
+            .sheet(isPresented: $showingAddFolder) {
+                AddFolderView { newFolder in
+                    store.folders.append(newFolder)
+                }
+                .presentationDetents([.medium])
+            }
+            .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
+                ForEach(store.folders) { folder in
+                    Button(folder.name) {
+                        store.assign(source, to: folder)
+                    }
+                }
+                if source.folderID != nil {
+                    Button("Remove from Folder", role: .destructive) {
+                        store.assign(source, to: nil)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { source in
+                Text("Choose a folder for \(source.title)")
+            }
+
+            FloatingRefreshButton(isLoading: isRefreshingAll) {
+                guard !isRefreshingAll else { return }
+                isRefreshingAll = true
+                Task {
+                    // Load all feeds concurrently and wait for completion
+                    await refreshAll()
+                    // Now that network loads finished, bump refreshID so destination views update
+                    await MainActor.run {
+                        refreshID = UUID()
+                        isRefreshingAll = false
+                    }
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { source in
-            Text("Choose a folder for \(source.title)")
+            .padding(.trailing, 16)
+            .padding(.bottom, 24)
         }
     }
 
