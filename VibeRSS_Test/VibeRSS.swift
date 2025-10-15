@@ -2211,6 +2211,7 @@ struct ContentView: View {
     @State private var isRefreshingAll = false
     @State private var refreshTotal: Int = 0
     @State private var refreshCompleted: Int = 0
+    @State private var refreshArticlesCachedThisRun: Int = 0
     private let refreshService = FeedService()
 
     private func refreshAll() async {
@@ -2218,6 +2219,7 @@ struct ContentView: View {
         await MainActor.run {
             refreshTotal = feeds.count
             refreshCompleted = 0
+            refreshArticlesCachedThisRun = 0
         }
         await withTaskGroup(of: Void.self) { group in
             for feed in feeds {
@@ -2235,6 +2237,7 @@ struct ContentView: View {
                                             let text = ArticleSummarizer.shared.extractReadableText(from: limited)
                                             if !text.isEmpty {
                                                 await ArticleTextCache.shared.storeText(text, for: item.link)
+                                                await MainActor.run { refreshArticlesCachedThisRun += 1 }
                                             }
                                         } catch {
                                             // ignore
@@ -2385,12 +2388,13 @@ struct ContentView: View {
                 guard !isRefreshingAll else { return }
                 isRefreshingAll = true
                 Task {
-                    await MainActor.run { refreshCompleted = 0; refreshTotal = store.feeds.count }
+                    await MainActor.run { refreshCompleted = 0; refreshTotal = store.feeds.count; refreshArticlesCachedThisRun = 0 }
                     await refreshAll()
                     // Now that network loads finished, bump refreshID so destination views update
                     await MainActor.run {
                         refreshID = UUID()
                         isRefreshingAll = false
+                        // Keep the final count visible until next refresh starts
                     }
                 }
             }
@@ -2405,9 +2409,12 @@ struct ContentView: View {
                         ProgressView(value: Double(refreshCompleted), total: Double(refreshTotal))
                             .progressViewStyle(.linear)
                             .tint(.accentColor)
-                        Text("Refreshing \(refreshCompleted)/\(refreshTotal)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Refreshing \(refreshCompleted)/\(refreshTotal)")
+                            Text("Cached articles: \(refreshArticlesCachedThisRun)")
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -2762,5 +2769,4 @@ actor ArticleSummarizer {
         return result
     }
 }
-
 
