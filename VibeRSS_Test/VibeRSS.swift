@@ -1474,6 +1474,9 @@ struct FeedDetailView: View {
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearCache() }
                     }
+                    Button("Clear Article Text Cache", role: .destructive) {
+                        Task { await ArticleTextCache.shared.clear() }
+                    }
                 } label: {
                     Image(systemName: "sparkles")
                 }
@@ -1726,6 +1729,9 @@ struct FolderDetailView: View {
                         expandedSummaries.removeAll()
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearCache() }
+                    }
+                    Button("Clear Article Text Cache", role: .destructive) {
+                        Task { await ArticleTextCache.shared.clear() }
                     }
                 } label: {
                     Image(systemName: "sparkles")
@@ -1983,6 +1989,9 @@ struct AllArticlesView: View {
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearCache() }
                     }
+                    Button("Clear Article Text Cache", role: .destructive) {
+                        Task { await ArticleTextCache.shared.clear() }
+                    }
                 } label: {
                     Image(systemName: "sparkles")
                 }
@@ -2214,7 +2223,27 @@ struct ContentView: View {
             for feed in feeds {
                 group.addTask {
                     do {
-                        _ = try await refreshService.loadItems(from: feed.url)
+                        let items = try await refreshService.loadItems(from: feed.url)
+                        // Prefetch article text for each item concurrently; ignore failures
+                        await withTaskGroup(of: Void.self) { inner in
+                            for item in items {
+                                inner.addTask {
+                                    if await ArticleTextCache.shared.cachedText(for: item.link) == nil {
+                                        do {
+                                            let html = try await ArticleSummarizer.shared.fetchHTML(url: item.link)
+                                            let limited = String(html.prefix(250_000))
+                                            let text = ArticleSummarizer.shared.extractReadableText(from: limited)
+                                            if !text.isEmpty {
+                                                await ArticleTextCache.shared.storeText(text, for: item.link)
+                                            }
+                                        } catch {
+                                            // ignore
+                                        }
+                                    }
+                                }
+                            }
+                            for await _ in inner { }
+                        }
                     } catch {
                         // Ignore individual failures for the global refresh
                     }
@@ -2421,6 +2450,47 @@ struct VibeRSSApp: App {
     }
 }
 
+// Inserted actor ArticleTextCache immediately above MARK: - ArticleSummarizer
+actor ArticleTextCache {
+    static let shared = ArticleTextCache()
+
+    private var cache: [String: String] = [:] // key: url.absoluteString
+    private let storeKey = "viberss.articleTextCache"
+    private var saveDebounceTask: Task<Void, Never>? = nil
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: storeKey),
+           let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+            cache = dict
+        }
+    }
+
+    func cachedText(for url: URL) -> String? {
+        cache[url.absoluteString]
+    }
+
+    func storeText(_ text: String, for url: URL) {
+        cache[url.absoluteString] = text
+        debounceSave()
+    }
+
+    func clear() {
+        cache.removeAll()
+        UserDefaults.standard.removeObject(forKey: storeKey)
+    }
+
+    private func debounceSave() {
+        saveDebounceTask?.cancel()
+        let snapshot = cache
+        saveDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if let data = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(data, forKey: storeKey)
+            }
+        }
+    }
+}
+
 // MARK: - ArticleSummarizer
 actor ArticleSummarizer {
     static let shared = ArticleSummarizer()
@@ -2537,17 +2607,24 @@ actor ArticleSummarizer {
                     return
                 }
 
-                // Single-phase streaming summary over extracted article text
-                guard let html = try? await fetchHTML(url: url) else {
-                    continuation.finish()
-                    return
-                }
-
-                let limitedHTML = String(html.prefix(250_000))
-                let text = extractReadableText(from: limitedHTML)
-                if text.isEmpty {
-                    continuation.finish()
-                    return
+                // Try preloaded readable text first; otherwise fetch and extract
+                let cachedText = await ArticleTextCache.shared.cachedText(for: url)
+                let baseText: String
+                if let cachedText, !cachedText.isEmpty {
+                    baseText = String(cachedText.prefix(250_000))
+                } else {
+                    guard let html = try? await fetchHTML(url: url) else {
+                        continuation.finish()
+                        return
+                    }
+                    let limitedHTML = String(html.prefix(250_000))
+                    let extracted = extractReadableText(from: limitedHTML)
+                    if extracted.isEmpty {
+                        continuation.finish()
+                        return
+                    }
+                    baseText = extracted
+                    await ArticleTextCache.shared.storeText(extracted, for: url)
                 }
 
                 let instructions: String = {
@@ -2567,7 +2644,7 @@ actor ArticleSummarizer {
                     let s = String(seed.prefix(900))
                     prompt += "Preview/context from feed:\n\(s)\n\n"
                 }
-                let body = String(text.prefix(12_000))
+                let body = String(baseText.prefix(12_000))
                 prompt += body
 
                 do {
@@ -2623,13 +2700,13 @@ actor ArticleSummarizer {
         }
     }
 
-    private func fetchHTML(url: URL) async throws -> String {
+    func fetchHTML(url: URL) async throws -> String {
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
         let (data, _) = try await URLSession.shared.data(for: request)
         return String(decoding: data, as: UTF8.self)
     }
 
-    private func extractReadableText(from html: String) -> String {
+    nonisolated func extractReadableText(from html: String) -> String {
         // Work on a limited slice to speed up regex processing
         var s = String(html.prefix(250_000))
         // Remove comments
@@ -2685,4 +2762,5 @@ actor ArticleSummarizer {
         return result
     }
 }
+
 
