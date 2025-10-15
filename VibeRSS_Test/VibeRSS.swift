@@ -253,7 +253,10 @@ enum FeedError: Error, LocalizedError { case badURL, requestFailed, parseFailed
 // MARK: - Networking & Parsing
 actor FeedService {
     func loadItems(from url: URL) async throws -> [FeedItem] {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
+        try Task.checkCancellation()
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FeedError.requestFailed
         }
@@ -610,13 +613,18 @@ actor FaviconService {
     private func urlExists(_ url: URL) async -> Bool {
         var req = URLRequest(url: url)
         req.httpMethod = "HEAD"
+        req.timeoutInterval = 3
         do {
+            try Task.checkCancellation()
             let (_, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse { return (200..<400).contains(http.statusCode) }
         } catch {}
         // Some servers reject HEAD—fallback to GET small
         do {
-            let (_, resp) = try await URLSession.shared.data(from: url)
+            try Task.checkCancellation()
+            var getReq = URLRequest(url: url)
+            getReq.timeoutInterval = 3
+            let (_, resp) = try await URLSession.shared.data(for: getReq)
             if let http = resp as? HTTPURLResponse { return (200..<400).contains(http.statusCode) }
         } catch {}
         return false
@@ -624,7 +632,10 @@ actor FaviconService {
 
     private func fetchHTML(from url: URL) async -> String? {
         do {
-            let (data, resp) = try await URLSession.shared.data(from: url)
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 5
+            try Task.checkCancellation()
+            let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
             return String(data: data, encoding: .utf8)
         } catch { return nil }
@@ -726,7 +737,10 @@ actor ImageDiskCache {
             return image
         }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 5
+            try Task.checkCancellation()
+            let (data, response) = try await URLSession.shared.data(for: req)
             if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
                 try? data.write(to: file, options: [.atomic])
                 if let image = UIImage(data: data) {
@@ -2288,6 +2302,15 @@ actor ConcurrencyGate {
         }
     }
 
+    func reset() {
+        // Clear all waiters and release the counter so a new run starts fresh
+        for cont in waiters {
+            cont.resume()
+        }
+        waiters.removeAll()
+        current = 0
+    }
+
     // Convenience helper to avoid calling leave() from non-async contexts
     func withPermit<T>(operation: () async throws -> T) async rethrows -> T {
         await enter()
@@ -2309,32 +2332,49 @@ struct ContentView: View {
     @State private var refreshTotal: Int = 0
     @State private var refreshCompleted: Int = 0
     @State private var refreshArticlesCachedThisRun: Int = 0
+    @State private var refreshArticlesSkippedThisRun: Int = 0
+    @State private var currentRefreshRunID = UUID()
+    @State private var cooldownUntil: Date? = nil
+
     private let refreshService = FeedService()
 
     // Concurrency limits and gates for controlled caching
-    private let maxConcurrentFeeds = 3
-    private let maxPrefetchPerFeed = 10
-    private let maxConcurrentArticlePrefetch = 4
+    private let maxConcurrentFeeds = 2
+    private let maxPrefetchPerFeed = 6
+    private let maxConcurrentArticlePrefetch = 1
     private let interBatchDelayNs: UInt64 = 150_000_000 // 150ms
 
-    private let feedGate = ConcurrencyGate(limit: 3)
-    private let articleGate = ConcurrencyGate(limit: 4)
+    private let feedGate = ConcurrencyGate(limit: 2)
+    private let articleGate = ConcurrencyGate(limit: 3)
 
     private func refreshAll() async {
+        let runID = currentRefreshRunID
         let feeds = store.feeds
+        let snapshotFeeds = feeds
+        if Task.isCancelled { return }
         await MainActor.run {
+            // Initialize counters for new run
             refreshTotal = feeds.count
             refreshCompleted = 0
             refreshArticlesCachedThisRun = 0
+            refreshArticlesSkippedThisRun = 0
         }
 
         await withTaskGroup(of: Void.self) { group in
-            for feed in feeds {
+            for feed in snapshotFeeds {
                 group.addTask {
                     if Task.isCancelled { return }
                     await feedGate.withPermit {
+                        defer {
+                            Task { @MainActor in
+                                if isRefreshingAll && runID == currentRefreshRunID {
+                                    refreshCompleted += 1
+                                }
+                            }
+                        }
                         do {
                             let items = try await refreshService.loadItems(from: feed.url)
+                            try Task.checkCancellation()
                             if Task.isCancelled { return }
 
                             // Limit how many we prefetch per feed
@@ -2352,45 +2392,67 @@ struct ContentView: View {
                                     for item in batch {
                                         inner.addTask {
                                             if Task.isCancelled { return }
+                                            if Task.isCancelled { return }
                                             await articleGate.withPermit {
                                                 // Skip if already cached
                                                 if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
+                                                    await MainActor.run { refreshArticlesSkippedThisRun += 1 }
                                                     return
                                                 }
-
                                                 if Task.isCancelled { return }
                                                 do {
-                                                    // Lower priority work: fetch and extract
-                                                    let html = try await ArticleSummarizer.shared.fetchHTML(url: item.link)
-                                                    if Task.isCancelled { return }
-                                                    let limitedHTML = String(html.prefix(200_000))
-                                                    let text = ArticleSummarizer.shared.extractReadableText(from: limitedHTML)
-                                                    if !text.isEmpty {
-                                                        await ArticleTextCache.shared.storeText(text, for: item.link)
-                                                        await MainActor.run { refreshArticlesCachedThisRun += 1 }
+                                                    try Task.checkCancellation()
+                                                    try await withTimeout(5.0) {
+                                                        try Task.checkCancellation()
+                                                        let html = try await ArticleSummarizer.shared.fetchHTML(url: item.link)
+                                                        try Task.checkCancellation()
+                                                        let limitedHTML = String(html.prefix(160_000))
+                                                        let text = ArticleSummarizer.shared.extractReadableText(from: limitedHTML)
+                                                        try Task.checkCancellation()
+                                                        if !text.isEmpty {
+                                                            await ArticleTextCache.shared.storeText(text, for: item.link)
+                                                            await MainActor.run { refreshArticlesCachedThisRun += 1 }
+                                                        }
                                                     }
                                                 } catch {
-                                                    // Ignore per-item errors
+                                                    // Ignore per-item errors (including timeouts)
                                                 }
                                             }
                                         }
                                     }
                                     for await _ in inner { }
+                                    if Task.isCancelled { return }
                                 }
 
                                 // Small pause between batches to keep UI responsive
                                 try? await Task.sleep(nanoseconds: interBatchDelayNs)
+                                try Task.checkCancellation()
+                                if Task.isCancelled { return }
                                 index = end
                             }
                         } catch {
                             // Ignore individual failures for the global refresh
                         }
-
-                        await MainActor.run { refreshCompleted += 1 }
                     }
                 }
             }
             for await _ in group { }
+        }
+    }
+
+    private func withTimeout<T>(_ seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw URLError(.timedOut)
+            }
+            guard let result = try await group.next() else {
+                group.cancelAll()
+                throw URLError(.unknown)
+            }
+            group.cancelAll()
+            return result
         }
     }
 
@@ -2522,17 +2584,43 @@ struct ContentView: View {
             }
 
             FloatingRefreshButton(isLoading: isRefreshingAll) {
+                // Cooldown: prevent immediate re-entry for 1.5s after a run
+                if let until = cooldownUntil, until > Date() { return }
                 guard !isRefreshingAll else { return }
                 isRefreshingAll = true
+                currentRefreshRunID = UUID()
+                let localRunID = currentRefreshRunID
                 Task {
-                    await MainActor.run { refreshCompleted = 0; refreshTotal = store.feeds.count; refreshArticlesCachedThisRun = 0 }
-                    await refreshAll()
-                    // Now that network loads finished, bump refreshID so destination views update
+                    await feedGate.reset()
+                    await articleGate.reset()
                     await MainActor.run {
-                        refreshID = UUID()
-                        isRefreshingAll = false
-                        // Keep the final count visible until next refresh starts
+                        // Initialize counters for new run
+                        refreshCompleted = 0
+                        refreshTotal = store.feeds.count
+                        refreshArticlesCachedThisRun = 0
+                        refreshArticlesSkippedThisRun = 0
                     }
+                    do {
+                        try await withTimeout(30.0) { await refreshAll() }
+                    } catch {
+                        await feedGate.reset()
+                        await articleGate.reset()
+                        // Watchdog fired; continue to reset UI state
+                    }
+                    // Bump ID so destination views update
+                    await MainActor.run {
+                        // Bump ID so destination views update
+                        refreshID = UUID()
+                        // Mark refresh finished and immediately reset counters
+                        isRefreshingAll = false
+                        refreshCompleted = 0
+                        refreshTotal = 0
+                        refreshArticlesCachedThisRun = 0
+                        refreshArticlesSkippedThisRun = 0
+                        // Set cooldown 1.5s to avoid overlapping runs
+                        cooldownUntil = Date().addingTimeInterval(1.5)
+                    }
+                    // Removed delayed reset and second MainActor.run block
                 }
             }
             .padding(.trailing, 16)
@@ -2541,14 +2629,15 @@ struct ContentView: View {
             // Bottom linear progress bar for global refresh
             VStack {
                 Spacer()
-                if isRefreshingAll && refreshTotal > 0 {
+                if isRefreshingAll {
                     HStack(spacing: 10) {
                         ProgressView(value: Double(refreshCompleted), total: Double(refreshTotal))
                             .progressViewStyle(.linear)
                             .tint(.accentColor)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Refreshing \(refreshCompleted)/\(refreshTotal)")
-                            Text("Cached articles: \(refreshArticlesCachedThisRun)")
+                            Text("Refreshing feeds: \(refreshCompleted)/\(refreshTotal)")
+                            Text("Cached (new): \(refreshArticlesCachedThisRun)")
+                            Text("Skipped (already cached): \(refreshArticlesSkippedThisRun)")
                         }
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -2743,6 +2832,7 @@ actor ArticleSummarizer {
                     continuation.finish()
                     return
                 }
+                if Task.isCancelled { continuation.finish(); return }
 
 #if canImport(FoundationModels)
                 let model = SystemLanguageModel.default
@@ -2845,14 +2935,19 @@ actor ArticleSummarizer {
     }
 
     func fetchHTML(url: URL) async throws -> String {
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        try Task.checkCancellation()
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 3)
         let (data, _) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
         return String(decoding: data, as: UTF8.self)
     }
 
     nonisolated func extractReadableText(from html: String) -> String {
+        if html.isEmpty { return "" }
+        if Task.isCancelled { return "" }
         // Work on a limited slice to speed up regex processing
-        var s = String(html.prefix(250_000))
+        var s = String(html.prefix(200_000))
+        if Task.isCancelled { return "" }
         // Remove comments
         s = s.replacingOccurrences(of: "<!--[\\s\\S]*?-->", with: " ", options: .regularExpression)
 
@@ -2860,6 +2955,7 @@ actor ArticleSummarizer {
         if let range = s.range(of: "<article[\\n\\r\\s\\S]*?</article>", options: .regularExpression) {
             s = String(s[range])
         }
+        if Task.isCancelled { return "" }
 
         // Remove common boilerplate blocks
         let blocks = ["nav", "header", "footer", "aside"]
@@ -2873,6 +2969,7 @@ actor ArticleSummarizer {
         if let regex = try? NSRegularExpression(pattern: "<script[\\n\\r\\s\\S]*?</script>", options: [.caseInsensitive]) {
             s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
         }
+        if Task.isCancelled { return "" }
         if let regex = try? NSRegularExpression(pattern: "<style[\\n\\r\\s\\S]*?</style>", options: [.caseInsensitive]) {
             s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
         }
@@ -2881,6 +2978,7 @@ actor ArticleSummarizer {
         if let regex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) {
             s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
         }
+        if Task.isCancelled { return "" }
 
         // Decode HTML entities roughly by letting AttributedString handle some
         let attr = try? AttributedString(markdown: s)
@@ -2888,6 +2986,7 @@ actor ArticleSummarizer {
 
         // Collapse whitespace
         let collapsed = plain.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression, range: nil)
+        if Task.isCancelled { return "" }
         return collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -2906,4 +3005,5 @@ actor ArticleSummarizer {
         return result
     }
 }
+
 
