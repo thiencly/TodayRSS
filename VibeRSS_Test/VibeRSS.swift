@@ -2200,11 +2200,16 @@ struct ContentView: View {
     @State private var showingMoveDialog = false
     @State private var refreshID = UUID()
     @State private var isRefreshingAll = false
+    @State private var refreshTotal: Int = 0
+    @State private var refreshCompleted: Int = 0
     private let refreshService = FeedService()
 
     private func refreshAll() async {
-        // Run all feed loads concurrently and wait for completion.
         let feeds = store.feeds
+        await MainActor.run {
+            refreshTotal = feeds.count
+            refreshCompleted = 0
+        }
         await withTaskGroup(of: Void.self) { group in
             for feed in feeds {
                 group.addTask {
@@ -2213,9 +2218,9 @@ struct ContentView: View {
                     } catch {
                         // Ignore individual failures for the global refresh
                     }
+                    await MainActor.run { refreshCompleted += 1 }
                 }
             }
-            // Wait for all
             for await _ in group { }
         }
     }
@@ -2351,7 +2356,7 @@ struct ContentView: View {
                 guard !isRefreshingAll else { return }
                 isRefreshingAll = true
                 Task {
-                    // Load all feeds concurrently and wait for completion
+                    await MainActor.run { refreshCompleted = 0; refreshTotal = store.feeds.count }
                     await refreshAll()
                     // Now that network loads finished, bump refreshID so destination views update
                     await MainActor.run {
@@ -2362,6 +2367,29 @@ struct ContentView: View {
             }
             .padding(.trailing, 16)
             .padding(.bottom, 24)
+
+            // Bottom linear progress bar for global refresh
+            VStack {
+                Spacer()
+                if isRefreshingAll && refreshTotal > 0 {
+                    HStack(spacing: 10) {
+                        ProgressView(value: Double(refreshCompleted), total: Double(refreshTotal))
+                            .progressViewStyle(.linear)
+                            .tint(.accentColor)
+                        Text("Refreshing \(refreshCompleted)/\(refreshTotal)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(Color.secondary.opacity(0.2))
+                    )
+                    .padding(.bottom, 8)
+                }
+            }
+            .allowsHitTesting(false)
         }
     }
 
