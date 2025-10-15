@@ -1293,6 +1293,7 @@ struct FeedDetailView: View {
     @State private var inlineSummaries: [UUID: String] = [:]
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
+    @State private var hasCachedText: Set<UUID> = [] // <-- Inserted here
     
     // Removed @State private var measuredSummaryHeights: [UUID: CGFloat] = [:]
 
@@ -1321,42 +1322,52 @@ struct FeedDetailView: View {
                                 let isError = summaryErrors.contains(item.id)
                                 let aiSummary = inlineSummaries[item.id]
 
-                                // Modified SummarizeButton per instruction
-                                SummarizeButton(
-                                    state: { () -> SummarizeButton.ButtonState in
-                                        if summarizingID == item.id {
-                                            return .generating
-                                        }
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
-                                        if hasCached {
-                                            return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
-                                        } else {
-                                            return .none
-                                        }
-                                    }()
-                                ) {
-                                    // Toggle expand/collapse if summary exists; otherwise start summarization
-                                    suppressNextRowTap = true
-                                    let hasSummary = (aiSummary != nil)
-                                    if hasSummary {
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        if expandedSummaries.contains(item.id) {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.remove(item.id)
+                                // Modified SummarizeButton per instruction wrapped in HStack with indicator
+                                HStack(spacing: 6) {
+                                    SummarizeButton(
+                                        state: { () -> SummarizeButton.ButtonState in
+                                            if summarizingID == item.id {
+                                                return .generating
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
-                                        } else {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.insert(item.id)
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
+                                            if hasCached {
+                                                return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
+                                            } else {
+                                                return .none
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                        }()
+                                    ) {
+                                        // Toggle expand/collapse if summary exists; otherwise start summarization
+                                        suppressNextRowTap = true
+                                        let hasSummary = (aiSummary != nil)
+                                        if hasSummary {
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            if expandedSummaries.contains(item.id) {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.remove(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
+                                            } else {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.insert(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                            }
+                                        } else if summarizingID != item.id {
+                                            Task { await summarize(item) }
                                         }
-                                    } else if summarizingID != item.id {
-                                        Task { await summarize(item) }
+                                    }
+                                    .disabled(isError)
+
+                                    // Tiny indicator when readable text is cached for this article
+                                    if hasCachedText.contains(item.id) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 6, height: 6)
+                                            .accessibilityLabel("Cached text available")
                                     }
                                 }
-                                .disabled(isError)
 
                                 // Stable summary container prevents title jump by reserving height
                                 ZStack(alignment: .topLeading) {
@@ -1489,6 +1500,8 @@ struct FeedDetailView: View {
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
+            var cachedFlags = hasCachedText // <-- Added
+
             for item in items {
                 if updated[item.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: item.link, length: length) {
                     updated[item.id] = cached
@@ -1499,9 +1512,16 @@ struct FeedDetailView: View {
                 } else {
                     expanded.remove(item.id)
                 }
+                // Update cached text indicator
+                if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
+                    cachedFlags.insert(item.id)
+                } else {
+                    cachedFlags.remove(item.id)
+                }
             }
             inlineSummaries = updated
             expandedSummaries = expanded
+            hasCachedText = cachedFlags // <-- Added
         }
     }
 
@@ -1546,6 +1566,7 @@ struct FolderDetailView: View {
     @State private var inlineSummaries: [UUID: String] = [:]
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
+    @State private var hasCachedText: Set<UUID> = [] // <-- Inserted here
     
     // Removed @State private var measuredSummaryHeights: [UUID: CGFloat] = [:]
 
@@ -1574,42 +1595,52 @@ struct FolderDetailView: View {
                                 let isError = summaryErrors.contains(item.id)
                                 let aiSummary = inlineSummaries[item.id]
 
-                                // Modified SummarizeButton per instruction
-                                SummarizeButton(
-                                    state: { () -> SummarizeButton.ButtonState in
-                                        if summarizingID == item.id {
-                                            return .generating
-                                        }
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
-                                        if hasCached {
-                                            return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
-                                        } else {
-                                            return .none
-                                        }
-                                    }()
-                                ) {
-                                    // Toggle expand/collapse if summary exists; otherwise start summarization
-                                    suppressNextRowTap = true
-                                    let hasSummary = (aiSummary != nil)
-                                    if hasSummary {
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        if expandedSummaries.contains(item.id) {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.remove(item.id)
+                                // Modified SummarizeButton per instruction wrapped in HStack with indicator
+                                HStack(spacing: 6) {
+                                    SummarizeButton(
+                                        state: { () -> SummarizeButton.ButtonState in
+                                            if summarizingID == item.id {
+                                                return .generating
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
-                                        } else {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.insert(item.id)
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
+                                            if hasCached {
+                                                return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
+                                            } else {
+                                                return .none
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                        }()
+                                    ) {
+                                        // Toggle expand/collapse if summary exists; otherwise start summarization
+                                        suppressNextRowTap = true
+                                        let hasSummary = (aiSummary != nil)
+                                        if hasSummary {
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            if expandedSummaries.contains(item.id) {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.remove(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
+                                            } else {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.insert(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                            }
+                                        } else if summarizingID != item.id {
+                                            Task { await summarize(item) }
                                         }
-                                    } else if summarizingID != item.id {
-                                        Task { await summarize(item) }
+                                    }
+                                    .disabled(isError)
+
+                                    // Tiny indicator when readable text is cached for this article
+                                    if hasCachedText.contains(item.id) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 6, height: 6)
+                                            .accessibilityLabel("Cached text available")
                                     }
                                 }
-                                .disabled(isError)
 
                                 // Stable summary container prevents title jump by reserving height
                                 ZStack(alignment: .topLeading) {
@@ -1754,6 +1785,8 @@ struct FolderDetailView: View {
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
+            var cachedFlags = hasCachedText // <-- Added
+
             for item in items {
                 if updated[item.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: item.link, length: length) {
                     updated[item.id] = cached
@@ -1764,9 +1797,16 @@ struct FolderDetailView: View {
                 } else {
                     expanded.remove(item.id)
                 }
+                // Update cached text indicator
+                if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
+                    cachedFlags.insert(item.id)
+                } else {
+                    cachedFlags.remove(item.id)
+                }
             }
             inlineSummaries = updated
             expandedSummaries = expanded
+            hasCachedText = cachedFlags // <-- Added
         }
     }
 
@@ -1808,6 +1848,7 @@ struct AllArticlesView: View {
     @State private var inlineSummaries: [UUID: String] = [:]
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
+    @State private var hasCachedText: Set<UUID> = [] // <-- Inserted here
     
     // Removed @State private var measuredSummaryHeights: [UUID: CGFloat] = [:]
 
@@ -1836,42 +1877,52 @@ struct AllArticlesView: View {
                                 let isError = summaryErrors.contains(item.id)
                                 let aiSummary = inlineSummaries[item.id]
 
-                                // Modified SummarizeButton per instruction
-                                SummarizeButton(
-                                    state: { () -> SummarizeButton.ButtonState in
-                                        if summarizingID == item.id {
-                                            return .generating
-                                        }
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
-                                        if hasCached {
-                                            return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
-                                        } else {
-                                            return .none
-                                        }
-                                    }()
-                                ) {
-                                    // Toggle expand/collapse if summary exists; otherwise start summarization
-                                    suppressNextRowTap = true
-                                    let hasSummary = (aiSummary != nil)
-                                    if hasSummary {
-                                        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
-                                        if expandedSummaries.contains(item.id) {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.remove(item.id)
+                                // Modified SummarizeButton per instruction wrapped in HStack with indicator
+                                HStack(spacing: 6) {
+                                    SummarizeButton(
+                                        state: { () -> SummarizeButton.ButtonState in
+                                            if summarizingID == item.id {
+                                                return .generating
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
-                                        } else {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedSummaries.insert(item.id)
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
+                                            if hasCached {
+                                                return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
+                                            } else {
+                                                return .none
                                             }
-                                            Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                        }()
+                                    ) {
+                                        // Toggle expand/collapse if summary exists; otherwise start summarization
+                                        suppressNextRowTap = true
+                                        let hasSummary = (aiSummary != nil)
+                                        if hasSummary {
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            if expandedSummaries.contains(item.id) {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.remove(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
+                                            } else {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    expandedSummaries.insert(item.id)
+                                                }
+                                                Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+                                            }
+                                        } else if summarizingID != item.id {
+                                            Task { await summarize(item) }
                                         }
-                                    } else if summarizingID != item.id {
-                                        Task { await summarize(item) }
+                                    }
+                                    .disabled(isError)
+
+                                    // Tiny indicator when readable text is cached for this article
+                                    if hasCachedText.contains(item.id) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 6, height: 6)
+                                            .accessibilityLabel("Cached text available")
                                     }
                                 }
-                                .disabled(isError)
 
                                 // Stable summary container prevents title jump by reserving height
                                 ZStack(alignment: .topLeading) {
@@ -2004,6 +2055,8 @@ struct AllArticlesView: View {
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
+            var cachedFlags = hasCachedText // <-- Added
+
             for item in items {
                 if updated[item.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: item.link, length: length) {
                     updated[item.id] = cached
@@ -2014,9 +2067,16 @@ struct AllArticlesView: View {
                 } else {
                     expanded.remove(item.id)
                 }
+                // Update cached text indicator
+                if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
+                    cachedFlags.insert(item.id)
+                } else {
+                    cachedFlags.remove(item.id)
+                }
             }
             inlineSummaries = updated
             expandedSummaries = expanded
+            hasCachedText = cachedFlags // <-- Added
         }
     }
 
@@ -2199,6 +2259,43 @@ struct FloatingDayChip: View {
     }
 }
 
+// MARK: - Concurrency control gate (semaphore-like)
+actor ConcurrencyGate {
+    private let limit: Int
+    private var current: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) { self.limit = max(1, limit) }
+
+    func enter() async {
+        if current < limit {
+            current += 1
+            return
+        }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            waiters.append(cont)
+        }
+        // Woken up by leave(); a slot is now ours
+        current += 1
+    }
+
+    func leave() {
+        if !waiters.isEmpty {
+            let cont = waiters.removeFirst()
+            cont.resume()
+        } else {
+            current = max(0, current - 1)
+        }
+    }
+
+    // Convenience helper to avoid calling leave() from non-async contexts
+    func withPermit<T>(operation: () async throws -> T) async rethrows -> T {
+        await enter()
+        defer { leave() }
+        return try await operation()
+    }
+}
+
 // MARK: - App entry
 struct ContentView: View {
     @StateObject private var store = FeedStore()
@@ -2214,6 +2311,15 @@ struct ContentView: View {
     @State private var refreshArticlesCachedThisRun: Int = 0
     private let refreshService = FeedService()
 
+    // Concurrency limits and gates for controlled caching
+    private let maxConcurrentFeeds = 3
+    private let maxPrefetchPerFeed = 10
+    private let maxConcurrentArticlePrefetch = 4
+    private let interBatchDelayNs: UInt64 = 150_000_000 // 150ms
+
+    private let feedGate = ConcurrencyGate(limit: 3)
+    private let articleGate = ConcurrencyGate(limit: 4)
+
     private func refreshAll() async {
         let feeds = store.feeds
         await MainActor.run {
@@ -2221,36 +2327,67 @@ struct ContentView: View {
             refreshCompleted = 0
             refreshArticlesCachedThisRun = 0
         }
+
         await withTaskGroup(of: Void.self) { group in
             for feed in feeds {
                 group.addTask {
-                    do {
-                        let items = try await refreshService.loadItems(from: feed.url)
-                        // Prefetch article text for each item concurrently; ignore failures
-                        await withTaskGroup(of: Void.self) { inner in
-                            for item in items {
-                                inner.addTask {
-                                    if await ArticleTextCache.shared.cachedText(for: item.link) == nil {
-                                        do {
-                                            let html = try await ArticleSummarizer.shared.fetchHTML(url: item.link)
-                                            let limited = String(html.prefix(250_000))
-                                            let text = ArticleSummarizer.shared.extractReadableText(from: limited)
-                                            if !text.isEmpty {
-                                                await ArticleTextCache.shared.storeText(text, for: item.link)
-                                                await MainActor.run { refreshArticlesCachedThisRun += 1 }
+                    if Task.isCancelled { return }
+                    await feedGate.withPermit {
+                        do {
+                            let items = try await refreshService.loadItems(from: feed.url)
+                            if Task.isCancelled { return }
+
+                            // Limit how many we prefetch per feed
+                            let limited = Array(items.prefix(maxPrefetchPerFeed))
+
+                            // Process in small batches to avoid spikes
+                            let batchSize = max(1, maxConcurrentArticlePrefetch)
+                            var index = 0
+                            while index < limited.count {
+                                if Task.isCancelled { return }
+                                let end = min(index + batchSize, limited.count)
+                                let batch = limited[index..<end]
+
+                                await withTaskGroup(of: Void.self) { inner in
+                                    for item in batch {
+                                        inner.addTask {
+                                            if Task.isCancelled { return }
+                                            await articleGate.withPermit {
+                                                // Skip if already cached
+                                                if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
+                                                    return
+                                                }
+
+                                                if Task.isCancelled { return }
+                                                do {
+                                                    // Lower priority work: fetch and extract
+                                                    let html = try await ArticleSummarizer.shared.fetchHTML(url: item.link)
+                                                    if Task.isCancelled { return }
+                                                    let limitedHTML = String(html.prefix(200_000))
+                                                    let text = ArticleSummarizer.shared.extractReadableText(from: limitedHTML)
+                                                    if !text.isEmpty {
+                                                        await ArticleTextCache.shared.storeText(text, for: item.link)
+                                                        await MainActor.run { refreshArticlesCachedThisRun += 1 }
+                                                    }
+                                                } catch {
+                                                    // Ignore per-item errors
+                                                }
                                             }
-                                        } catch {
-                                            // ignore
                                         }
                                     }
+                                    for await _ in inner { }
                                 }
+
+                                // Small pause between batches to keep UI responsive
+                                try? await Task.sleep(nanoseconds: interBatchDelayNs)
+                                index = end
                             }
-                            for await _ in inner { }
+                        } catch {
+                            // Ignore individual failures for the global refresh
                         }
-                    } catch {
-                        // Ignore individual failures for the global refresh
+
+                        await MainActor.run { refreshCompleted += 1 }
                     }
-                    await MainActor.run { refreshCompleted += 1 }
                 }
             }
             for await _ in group { }
