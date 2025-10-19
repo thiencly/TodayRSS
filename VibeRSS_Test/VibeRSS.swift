@@ -1330,7 +1330,14 @@ struct FeedDetailView: View {
                 List(vm.items) { item in
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
 
                             Group {
                                 let isError = summaryErrors.contains(item.id)
@@ -1415,6 +1422,10 @@ struct FeedDetailView: View {
                         Spacer(minLength: 12)
                         if let thumb = item.thumbnailURL {
                             ArticleThumbnailView(url: thumb)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1603,7 +1614,14 @@ struct FolderDetailView: View {
                 List(vm.items) { item in
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
 
                             Group {
                                 let isError = summaryErrors.contains(item.id)
@@ -1688,6 +1706,10 @@ struct FolderDetailView: View {
                         Spacer(minLength: 12)
                         if let thumb = item.thumbnailURL {
                             ArticleThumbnailView(url: thumb)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1885,7 +1907,14 @@ struct AllArticlesView: View {
                 List(vm.items) { item in
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
 
                             Group {
                                 let isError = summaryErrors.contains(item.id)
@@ -1970,6 +1999,10 @@ struct AllArticlesView: View {
                         Spacer(minLength: 12)
                         if let thumb = item.thumbnailURL {
                             ArticleThumbnailView(url: thumb)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    webLink = WebLink(url: item.link)
+                                }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
