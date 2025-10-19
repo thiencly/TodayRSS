@@ -1343,7 +1343,7 @@ struct FeedDetailView: View {
                                             if summarizingID == item.id {
                                                 return .generating
                                             }
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
                                             if hasCached {
                                                 return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
@@ -1356,7 +1356,7 @@ struct FeedDetailView: View {
                                         suppressNextRowTap = true
                                         let hasSummary = (aiSummary != nil)
                                         if hasSummary {
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             if expandedSummaries.contains(item.id) {
                                                 withAnimation(.easeInOut(duration: 0.2)) {
                                                     expandedSummaries.remove(item.id)
@@ -1484,11 +1484,11 @@ struct FeedDetailView: View {
                             }
                         }
                         Button {
-                            summaryLengthRaw = "medium"
+                            summaryLengthRaw = "long"
                         } label: {
                             HStack {
-                                Text("Medium")
-                                if summaryLengthRaw == "medium" { Image(systemName: "checkmark") }
+                                Text("Long")
+                                if summaryLengthRaw == "long" { Image(systemName: "checkmark") }
                             }
                         }
                     }
@@ -1510,7 +1510,7 @@ struct FeedDetailView: View {
     }
 
     private func preloadSummaries(for items: [Article]) {
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
@@ -1542,7 +1542,7 @@ struct FeedDetailView: View {
     @MainActor private func summarize(_ item: Article) async {
         summaryErrors.remove(item.id)
         summarizingID = item.id
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
 
         if !expandedSummaries.contains(item.id) {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -1616,7 +1616,7 @@ struct FolderDetailView: View {
                                             if summarizingID == item.id {
                                                 return .generating
                                             }
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
                                             if hasCached {
                                                 return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
@@ -1629,7 +1629,7 @@ struct FolderDetailView: View {
                                         suppressNextRowTap = true
                                         let hasSummary = (aiSummary != nil)
                                         if hasSummary {
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             if expandedSummaries.contains(item.id) {
                                                 withAnimation(.easeInOut(duration: 0.2)) {
                                                     expandedSummaries.remove(item.id)
@@ -1760,11 +1760,11 @@ struct FolderDetailView: View {
                             }
                         }
                         Button {
-                            summaryLengthRaw = "medium"
+                            summaryLengthRaw = "long"
                         } label: {
                             HStack {
-                                Text("Medium")
-                                if summaryLengthRaw == "medium" { Image(systemName: "checkmark") }
+                                Text("Long")
+                                if summaryLengthRaw == "long" { Image(systemName: "checkmark") }
                             }
                         }
                     }
@@ -1795,7 +1795,7 @@ struct FolderDetailView: View {
     }
 
     private func preloadSummaries(for items: [Article]) {
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
@@ -1827,7 +1827,7 @@ struct FolderDetailView: View {
     @MainActor private func summarize(_ item: Article) async {
         summaryErrors.remove(item.id)
         summarizingID = item.id
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
 
         if !expandedSummaries.contains(item.id) {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -1898,7 +1898,7 @@ struct AllArticlesView: View {
                                             if summarizingID == item.id {
                                                 return .generating
                                             }
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
                                             if hasCached {
                                                 return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
@@ -1911,7 +1911,7 @@ struct AllArticlesView: View {
                                         suppressNextRowTap = true
                                         let hasSummary = (aiSummary != nil)
                                         if hasSummary {
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
                                             if expandedSummaries.contains(item.id) {
                                                 withAnimation(.easeInOut(duration: 0.2)) {
                                                     expandedSummaries.remove(item.id)
@@ -2039,11 +2039,11 @@ struct AllArticlesView: View {
                             }
                         }
                         Button {
-                            summaryLengthRaw = "medium"
+                            summaryLengthRaw = "long"
                         } label: {
                             HStack {
-                                Text("Medium")
-                                if summaryLengthRaw == "medium" { Image(systemName: "checkmark") }
+                                Text("Long")
+                                if summaryLengthRaw == "long" { Image(systemName: "checkmark") }
                             }
                         }
                     }
@@ -2065,7 +2065,7 @@ struct AllArticlesView: View {
     }
 
     private func preloadSummaries(for items: [Article]) {
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
@@ -2097,7 +2097,7 @@ struct AllArticlesView: View {
     @MainActor private func summarize(_ item: Article) async {
         summaryErrors.remove(item.id)
         summarizingID = item.id
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "medium") ? .medium : .short
+        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
 
         if !expandedSummaries.contains(item.id) {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -2729,7 +2729,7 @@ actor ArticleSummarizer {
     static let shared = ArticleSummarizer()
 
     enum Length {
-        case short, medium
+        case short, long
     }
 
     private var cache: [String: String] = [:] // key: "<url>#<length>"
@@ -2743,7 +2743,7 @@ actor ArticleSummarizer {
     // Nonisolated hint to quickly know if a cached summary likely exists (read-only from UserDefaults)
     nonisolated static func hasCachedSummary(url: URL, length: Length) -> Bool {
         // Reconstruct the key format used for storage
-        let len = (length == .medium) ? "medium" : "short"
+        let len = (length == .long) ? "long" : "short"
         let key = url.absoluteString + "#" + len
         // Read the serialized cache dictionary directly (avoids awaiting the actor)
         if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
@@ -2819,7 +2819,7 @@ actor ArticleSummarizer {
     }
 
     private func makeCacheKey(url: URL, length: Length) -> String {
-        let len = (length == .medium) ? "medium" : "short"
+        let len = (length == .long) ? "long" : "short"
         return url.absoluteString + "#" + len
     }
 
@@ -2981,7 +2981,7 @@ actor ArticleSummarizer {
                     switch length {
                     case .short:
                         return "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
-                    case .medium:
+                    case .long:
                         return "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. No fluff. Avoid repetition."
                     }
                 }()
@@ -3069,7 +3069,7 @@ actor ArticleSummarizer {
                     }
                     continuation.finish()
                     return
-                case .medium:
+                case .long:
                     let session = LanguageModelSession(instructions: instructions)
 
                     // Build a prompt using extracted text, optionally including a small portion of the feed's seed text for context.
