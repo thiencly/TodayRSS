@@ -1462,9 +1462,11 @@ struct FeedDetailView: View {
                             FloatingDayChip(date: d)
                             Spacer()
                         }
-                        .padding(.top, 4)
-                        .padding(.leading, 8)
-                        .padding(.trailing, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 0)
+                        .padding(.leading, 16)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 6)
                         .allowsHitTesting(false)
                     }
                 }
@@ -1746,9 +1748,11 @@ struct FolderDetailView: View {
                             FloatingDayChip(date: d)
                             Spacer()
                         }
-                        .padding(.top, 4)
-                        .padding(.leading, 8)
-                        .padding(.trailing, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 0)
+                        .padding(.leading, 16)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 6)
                         .allowsHitTesting(false)
                     }
                 }
@@ -2039,9 +2043,11 @@ struct AllArticlesView: View {
                             FloatingDayChip(date: d)
                             Spacer()
                         }
-                        .padding(.top, 4)
-                        .padding(.leading, 8)
-                        .padding(.trailing, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 0)
+                        .padding(.leading, 16)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 6)
                         .allowsHitTesting(false)
                     }
                 }
@@ -2373,6 +2379,7 @@ struct ContentView: View {
     @State private var refreshArticlesSkippedThisRun: Int = 0
     @State private var currentRefreshRunID = UUID()
     @State private var cooldownUntil: Date? = nil
+    @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0 // seconds since 1970
 
     private let refreshService = FeedService()
 
@@ -2494,6 +2501,23 @@ struct ContentView: View {
         }
     }
 
+    private func relativeTimeString(since date: Date) -> String {
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 {
+            return "just now"
+        }
+        let minutes = (seconds + 59) / 60 // round up
+        if minutes < 60 {
+            return minutes == 1 ? "1 minute ago" : "\(minutes) minutes ago"
+        }
+        let hours = (minutes + 59) / 60 // round up
+        if hours < 24 {
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        }
+        let days = (hours + 23) / 24 // round up
+        return days == 1 ? "1 day ago" : "\(days) days ago"
+    }
+
     @ViewBuilder private var sidebar: some View {
         ZStack(alignment: .bottomTrailing) {
             List {
@@ -2583,6 +2607,27 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("VibeRSS")
+            .safeAreaInset(edge: .top) {
+                HStack {
+                    let label: String = {
+                        if lastRefreshAllDate > 0 {
+                            let last = Date(timeIntervalSince1970: lastRefreshAllDate)
+                            return "Updated \(relativeTimeString(since: last))"
+                        } else {
+                            return "Never updated"
+                        }
+                    }()
+                    Text(label)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 0)
+                .padding(.leading, 16)
+                .padding(.trailing, 16)
+                .padding(.bottom, 6)
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
@@ -2656,6 +2701,7 @@ struct ContentView: View {
                         refreshArticlesCachedThisRun = 0
                         refreshArticlesSkippedThisRun = 0
                         // Set cooldown 1.5s to avoid overlapping runs
+                        lastRefreshAllDate = Date().timeIntervalSince1970
                         cooldownUntil = Date().addingTimeInterval(1.5)
                     }
                     // Removed delayed reset and second MainActor.run block
