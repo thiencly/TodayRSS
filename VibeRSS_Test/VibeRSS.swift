@@ -2823,6 +2823,94 @@ actor ArticleSummarizer {
         return url.absoluteString + "#" + len
     }
 
+    // Inserted helper function as requested:
+    private func selectStructureAwareSlice(from text: String, targetChars: Int) -> String {
+        guard !text.isEmpty, targetChars > 0 else { return "" }
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let normalizedBreaks = normalized.replacingOccurrences(of: "\\n{2,}", with: "\\n\\n", options: .regularExpression)
+
+        let rawParas = normalizedBreaks.components(separatedBy: "\n\n")
+        // Trim, then drop boilerplate-y, too-short, or too-long paragraphs to reduce noise
+        let paragraphs: [String] = rawParas
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { p in
+                let lower = p.lowercased()
+                if lower.contains("related posts") || lower.contains("read more") || lower.contains("subscribe") || lower.contains("newsletter") || lower.contains("sponsored") || lower.contains("advertisement") {
+                    return false
+                }
+                let count = p.count
+                if count < 30 { return false }
+                if count > 1200 { return false }
+                return true
+            }
+        let paragraphsCapped = Array(paragraphs.prefix(60))
+
+        if paragraphsCapped.isEmpty { return String(text.prefix(targetChars)) }
+
+        func isHeading(_ s: String) -> Bool {
+            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return false }
+            if trimmed.count <= 80 && trimmed.last == ":" { return true }
+            let words = trimmed.split(separator: " ")
+            let capCount = words.filter { w in
+                guard let f = w.first else { return false }
+                return String(f).uppercased() == String(f) && w.count > 2
+            }.count
+            if words.count > 0 && capCount * 2 >= words.count { return true }
+            let letters = trimmed.filter { $0.isLetter }
+            if !letters.isEmpty {
+                let upper = letters.filter { String($0) == String($0).uppercased() }
+                if letters.count <= 80 && upper.count * 3 >= letters.count * 2 { return true }
+            }
+            return false
+        }
+
+        let n = paragraphsCapped.count
+        var selected = Set<Int>()
+        if n >= 1 { selected.insert(0) }
+        if n >= 2 { selected.insert(1) }
+        if n >= 3 { selected.insert(n - 1) }
+        for i in 0..<n where isHeading(paragraphsCapped[i]) {
+            if i > 0 { selected.insert(i - 1) }
+            selected.insert(i)
+            if i + 1 < n { selected.insert(i + 1) }
+        }
+        func currentLength(_ indices: Set<Int>) -> Int {
+            indices.sorted().map { paragraphsCapped[$0] }.reduce(0) { $0 + $1.count + 2 }
+        }
+        var lengthNow = currentLength(selected)
+        if lengthNow >= targetChars {
+            let ordered = selected.sorted().map { paragraphsCapped[$0] }
+            let joined = ordered.joined(separator: "\n\n")
+            return joined.count <= targetChars ? joined : String(joined.prefix(targetChars))
+        }
+        var candidates: [Int] = []
+        if n > 4 {
+            let start = 2, end = n - 2
+            if start < end {
+                let span = end - start
+                let step = max(1, span / 8)
+                var i = start
+                while i < end {
+                    if !selected.contains(i) { candidates.append(i) }
+                    i += step
+                }
+            }
+        }
+        if candidates.isEmpty {
+            for i in 0..<n where !selected.contains(i) { candidates.append(i) }
+        }
+        for idx in candidates {
+            if lengthNow >= targetChars { break }
+            selected.insert(idx)
+            lengthNow = currentLength(selected)
+        }
+        let ordered = selected.sorted().map { paragraphsCapped[$0] }
+        let joined = ordered.joined(separator: "\n\n")
+        return joined.count <= targetChars ? joined : String(joined.prefix(targetChars))
+    }
+
     func streamSummary(url: URL, length: Length, seedText: String?) async -> AsyncStream<String> {
         AsyncStream { continuation in
             let worker = Task {
@@ -2864,7 +2952,7 @@ actor ArticleSummarizer {
                 let instructions: String = {
                     switch length {
                     case .short:
-                        return "Summarize for busy readers in 1–3 sentences (<80 words). Focus on key facts. No fluff. Avoid repetition."
+                        return "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
                     case .medium:
                         return "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. No fluff. Avoid repetition."
                     }
@@ -2878,7 +2966,14 @@ actor ArticleSummarizer {
                     let s = String(seed.prefix(900))
                     prompt += "Preview/context from feed:\n\(s)\n\n"
                 }
-                let body = String(baseText.prefix(12_000))
+                let body: String
+                switch length {
+                case .short:
+                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 6000)
+                    body = String(selected.prefix(6000))
+                case .medium:
+                    body = String(baseText.prefix(12_000))
+                }
                 prompt += body
 
                 do {
@@ -3005,5 +3100,4 @@ actor ArticleSummarizer {
         return result
     }
 }
-
 
