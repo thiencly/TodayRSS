@@ -2911,6 +2911,34 @@ actor ArticleSummarizer {
         return joined.count <= targetChars ? joined : String(joined.prefix(targetChars))
     }
 
+    // Insert the new helper method selectPrimerSlice as requested:
+    private func selectPrimerSlice(from text: String, maxChars: Int) -> String {
+        guard !text.isEmpty, maxChars > 0 else { return "" }
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let normalizedBreaks = normalized.replacingOccurrences(of: "\\n{2,}", with: "\\n\\n", options: .regularExpression)
+        let rawParas = normalizedBreaks.components(separatedBy: "\n\n")
+        // Very lightweight filtering: trim and drop empty; keep modest length ranges only
+        let paragraphs: [String] = rawParas
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { p in
+                let c = p.count
+                return c >= 30 && c <= 1200
+            }
+        if paragraphs.isEmpty { return String(text.prefix(maxChars)) }
+        // Take the first 2–3 paragraphs that fit within maxChars
+        var picked: [String] = []
+        var total = 0
+        for p in paragraphs.prefix(3) {
+            if total + p.count + (picked.isEmpty ? 0 : 2) > maxChars { break }
+            picked.append(p)
+            total += p.count + (picked.count > 1 ? 2 : 0)
+        }
+        if picked.isEmpty { return String(paragraphs.first!.prefix(maxChars)) }
+        let joined = picked.joined(separator: "\n\n")
+        return joined.count <= maxChars ? joined : String(joined.prefix(maxChars))
+    }
+
     func streamSummary(url: URL, length: Length, seedText: String?) async -> AsyncStream<String> {
         AsyncStream { continuation in
             let worker = Task {
@@ -2958,66 +2986,144 @@ actor ArticleSummarizer {
                     }
                 }()
 
-                let session = LanguageModelSession(instructions: instructions)
-
                 // Build a prompt using extracted text, optionally including a small portion of the feed's seed text for context.
                 var prompt = "Summarize this article:\n\n"
                 if let seed = seedText?.trimmingCharacters(in: .whitespacesAndNewlines), !seed.isEmpty {
                     let s = String(seed.prefix(900))
                     prompt += "Preview/context from feed:\n\(s)\n\n"
                 }
-                let body: String
+
+                // Replace the switch on length with the new code for .short:
                 switch length {
                 case .short:
+                    // Stage 1: quick primer slice to reduce time-to-first-token
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1000)
+                    let promptPrimer = prompt + primer
+                    do {
+                        let sessionPrimer = LanguageModelSession(instructions: instructions)
+                        let streamPrimer = sessionPrimer.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalTextPrimer: String = ""
+                        var revealedCountPrimer: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                        for try await partial in streamPrimer {
+                            if Task.isCancelled { continuation.finish(); return }
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalTextPrimer = t
+                            if t.count <= revealedCountPrimer { continue }
+                            var target = min(revealedCountPrimer + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                revealedCountPrimer = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCountPrimer + step, t.count)
+                            }
+                            continuation.yield(t)
+                            revealedCountPrimer = t.count
+                        }
+                        if !finalTextPrimer.isEmpty {
+                            self.cache[key] = finalTextPrimer
+                            self.saveCache()
+                            // If the primer result is reasonably sized, finish here for speed
+                            if finalTextPrimer.count >= 120 { // heuristic threshold
+                                continuation.finish()
+                                return
+                            }
+                        }
+                    } catch {
+                        // Ignore primer stage errors and fall back to full body
+                    }
+                    // Stage 2: full short body (structure-aware ~6000 chars) if primer was too weak
                     let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 6000)
-                    body = String(selected.prefix(6000))
-                case .medium:
-                    body = String(baseText.prefix(12_000))
-                }
-                prompt += body
-
-                do {
-                    let stream = session.streamResponse(to: prompt, generating: InlineSummary.self)
-                    var finalText: String = ""
-                    var revealedCount: Int = 0
+                    let fullBody = String(selected.prefix(6000))
+                    let sessionFull = LanguageModelSession(instructions: instructions)
+                    let streamFull = sessionFull.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
+                    var finalTextFull: String = ""
+                    var revealedCountFull: Int = 0
                     let step = 2
                     let stepDelay: UInt64 = 30_000_000 // 30 ms
-
-                    for try await partial in stream {
+                    for try await partial in streamFull {
                         if Task.isCancelled { continuation.finish(); return }
                         guard let t = partial.content.text, !t.isEmpty else { continue }
-                        finalText = t
-
-                        // Skip if we've already revealed up to this length
-                        if t.count <= revealedCount { continue }
-
-                        // Reveal the new delta in small steps to feel faster
-                        var target = min(revealedCount + step, t.count)
+                        finalTextFull = t
+                        if t.count <= revealedCountFull { continue }
+                        var target = min(revealedCountFull + step, t.count)
                         while target < t.count {
                             let idx = t.index(t.startIndex, offsetBy: target)
                             let prefix = String(t[..<idx])
                             continuation.yield(prefix)
-                            revealedCount = target
-                            // Small delay to simulate typing while keeping UI responsive
+                            revealedCountFull = target
                             try? await Task.sleep(nanoseconds: stepDelay)
                             if Task.isCancelled { continuation.finish(); return }
-                            target = min(revealedCount + step, t.count)
+                            target = min(revealedCountFull + step, t.count)
                         }
-
-                        // Ensure we yield the full current text for this partial
                         continuation.yield(t)
-                        revealedCount = t.count
+                        revealedCountFull = t.count
                     }
-
-                    if !finalText.isEmpty {
-                        self.cache[key] = finalText
+                    if !finalTextFull.isEmpty {
+                        self.cache[key] = finalTextFull
                         self.saveCache()
                     }
                     continuation.finish()
                     return
-                } catch {
-                    continuation.finish()
-                    return
+                case .medium:
+                    let session = LanguageModelSession(instructions: instructions)
+
+                    // Build a prompt using extracted text, optionally including a small portion of the feed's seed text for context.
+                    var prompt = "Summarize this article:\n\n"
+                    if let seed = seedText?.trimmingCharacters(in: .whitespacesAndNewlines), !seed.isEmpty {
+                        let s = String(seed.prefix(900))
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
+                    }
+                    let body = String(baseText.prefix(12_000))
+                    prompt += body
+
+                    do {
+                        let stream = session.streamResponse(to: prompt, generating: InlineSummary.self)
+                        var finalText: String = ""
+                        var revealedCount: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+
+                        for try await partial in stream {
+                            if Task.isCancelled { continuation.finish(); return }
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalText = t
+
+                            // Skip if we've already revealed up to this length
+                            if t.count <= revealedCount { continue }
+
+                            // Reveal the new delta in small steps to feel faster
+                            var target = min(revealedCount + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                revealedCount = target
+                                // Small delay to simulate typing while keeping UI responsive
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCount + step, t.count)
+                            }
+
+                            // Ensure we yield the full current text for this partial
+                            continuation.yield(t)
+                            revealedCount = t.count
+                        }
+
+                        if !finalText.isEmpty {
+                            self.cache[key] = finalText
+                            self.saveCache()
+                        }
+                        continuation.finish()
+                        return
+                    } catch {
+                        continuation.finish()
+                        return
+                    }
                 }
 #else
                 continuation.finish()
