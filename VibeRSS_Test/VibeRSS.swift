@@ -2429,6 +2429,7 @@ struct ContentView: View {
     @State private var currentRefreshRunID = UUID()
     @State private var cooldownUntil: Date? = nil
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0 // seconds since 1970
+    @State private var areSourcesCollapsed: Bool = false
 
     private let refreshService = FeedService()
 
@@ -2604,56 +2605,73 @@ struct ContentView: View {
                         }
                     }
                 }
-                Section("Sources") {
-                    ForEach(store.feeds) { source in
-                        NavigationLink {
-                            FeedDetailView(source: source, refreshID: refreshID)
-                        } label: {
-                            HStack(spacing: 12) {
-                                FeedIconView(iconURL: source.iconURL)
-                                Text(source.title)
+                Section {
+                    if !areSourcesCollapsed {
+                        ForEach(store.feeds) { source in
+                            NavigationLink {
+                                FeedDetailView(source: source, refreshID: refreshID)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    FeedIconView(iconURL: source.iconURL)
+                                    Text(source.title)
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
-                        }
-                        // Removed .simultaneousGesture to fix tap target and refresh bug
-                        .contextMenu {
-                            Button("Refresh Icon") {
-                                Task { await store.refreshIcon(for: source) }
-                            }
-                            Menu("Move to Folder") {
-                                ForEach(store.folders) { folder in
-                                    Button(folder.name) {
-                                        store.assign(source, to: folder)
+                            .contextMenu {
+                                Button("Refresh Icon") {
+                                    Task { await store.refreshIcon(for: source) }
+                                }
+                                Menu("Move to Folder") {
+                                    ForEach(store.folders) { folder in
+                                        Button(folder.name) {
+                                            store.assign(source, to: folder)
+                                        }
+                                    }
+                                    if source.folderID != nil {
+                                        Button("Remove from Folder") {
+                                            store.assign(source, to: nil)
+                                        }
                                     }
                                 }
+                            }
+                            .swipeActions {
                                 if source.folderID != nil {
-                                    Button("Remove from Folder") {
+                                    Button("Remove", role: .destructive) {
                                         store.assign(source, to: nil)
                                     }
                                 }
-                            }
-                        }
-                        .swipeActions {
-                            if source.folderID != nil {
-                                Button("Remove", role: .destructive) {
-                                    store.assign(source, to: nil)
+                                Button("Move") {
+                                    movingSource = source
+                                    showingMoveDialog = true
                                 }
-                            }
-                            Button("Move") {
-                                movingSource = source
-                                showingMoveDialog = true
-                            }
-                            Button("Delete", role: .destructive) {
-                                if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                    store.feeds.remove(at: idx)
-                                    if selectedSource?.id == source.id {
-                                        selectedSource = store.feeds.first
+                                Button("Delete", role: .destructive) {
+                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                        store.feeds.remove(at: idx)
+                                        if selectedSource?.id == source.id {
+                                            selectedSource = store.feeds.first
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } header: {
+                    HStack(spacing: 8) {
+                        Image(systemName: areSourcesCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text("Sources")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(store.feeds.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { areSourcesCollapsed.toggle() }
                 }
+                .headerProminence(.increased)
             }
             .navigationTitle("VibeRSS")
             .safeAreaInset(edge: .top) {
@@ -3386,6 +3404,4 @@ Avoid repetition and adjectives.
         return result
     }
 }
-
-
 
