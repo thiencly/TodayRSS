@@ -2571,7 +2571,7 @@ struct ContentView: View {
     @ViewBuilder private var sidebar: some View {
         ZStack(alignment: .bottomTrailing) {
             List {
-                Section("Folders") {
+                Section {
                     NavigationLink {
                         AllArticlesView(refreshID: refreshID)
                             .environmentObject(store)
@@ -2605,6 +2605,22 @@ struct ContentView: View {
                         }
                     }
                 }
+                header: {
+                    HStack(spacing: 8) {
+                        Text("Folders")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(0))
+                        Spacer()
+                    }
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { }
+                }
+
                 Section {
                     if !areSourcesCollapsed {
                         ForEach(store.feeds) { source in
@@ -2657,21 +2673,24 @@ struct ContentView: View {
                     }
                 } header: {
                     HStack(spacing: 8) {
-                        Image(systemName: areSourcesCollapsed ? "chevron.right" : "chevron.down")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
                         Text("Sources")
-                            .font(.footnote.weight(.semibold))
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(areSourcesCollapsed ? 0 : 90))
+                            .animation(.snappy(duration: 0.2), value: areSourcesCollapsed)
                         Spacer()
                         Text("\(store.feeds.count)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .padding(.vertical, 2)
                     .contentShape(Rectangle())
                     .onTapGesture { areSourcesCollapsed.toggle() }
                 }
-                .headerProminence(.increased)
+                // Removed .headerProminence(.increased)
             }
             .navigationTitle("VibeRSS")
             .safeAreaInset(edge: .top) {
