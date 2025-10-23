@@ -1191,16 +1191,21 @@ struct SummarizeButton: View {
                 Text(title)
                     .font(.callout.weight(.semibold))
 
-                Spacer(minLength: 4)
-
-                if showChevron {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .transition(.opacity)
+                Group {
+                    if showChevron {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .transition(.opacity)
+                    } else {
+                        // Reserve the same width as a chevron to keep the button width stable
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .opacity(0)
+                    }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .contentShape(Capsule())
         }
