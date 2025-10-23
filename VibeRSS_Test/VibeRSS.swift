@@ -2608,15 +2608,16 @@ struct ContentView: View {
                 header: {
                     HStack(spacing: 8) {
                         Text("Folders")
-                            .font(.headline.weight(.semibold))
+                            .font(.title2.bold())
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.right")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .imageScale(.medium)
                             .rotationEffect(.degrees(0))
                         Spacer()
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 6)
                     .contentShape(Rectangle())
                     .onTapGesture { }
                 }
@@ -2674,11 +2675,12 @@ struct ContentView: View {
                 } header: {
                     HStack(spacing: 8) {
                         Text("Sources")
-                            .font(.headline.weight(.semibold))
+                            .font(.title2.bold())
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.right")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .imageScale(.medium)
                             .rotationEffect(.degrees(areSourcesCollapsed ? 0 : 90))
                             .animation(.snappy(duration: 0.2), value: areSourcesCollapsed)
                         Spacer()
@@ -2686,7 +2688,7 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .onTapGesture { areSourcesCollapsed.toggle() }
                 }
