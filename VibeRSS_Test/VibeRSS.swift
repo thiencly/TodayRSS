@@ -2623,55 +2623,61 @@ struct ContentView: View {
                 }
 
                 Section {
-                    if !areSourcesCollapsed {
-                        ForEach(store.feeds) { source in
-                            NavigationLink {
-                                FeedDetailView(source: source, refreshID: refreshID)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    FeedIconView(iconURL: source.iconURL)
-                                    Text(source.title)
+                    Group {
+                        if !areSourcesCollapsed {
+                            ForEach(store.feeds) { source in
+                                NavigationLink {
+                                    FeedDetailView(source: source, refreshID: refreshID)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        FeedIconView(iconURL: source.iconURL)
+                                        Text(source.title)
+                                    }
+                                    .contentShape(Rectangle())
                                 }
-                                .contentShape(Rectangle())
-                            }
-                            .contextMenu {
-                                Button("Refresh Icon") {
-                                    Task { await store.refreshIcon(for: source) }
-                                }
-                                Menu("Move to Folder") {
-                                    ForEach(store.folders) { folder in
-                                        Button(folder.name) {
-                                            store.assign(source, to: folder)
+                                .contextMenu {
+                                    Button("Refresh Icon") {
+                                        Task { await store.refreshIcon(for: source) }
+                                    }
+                                    Menu("Move to Folder") {
+                                        ForEach(store.folders) { folder in
+                                            Button(folder.name) {
+                                                store.assign(source, to: folder)
+                                            }
+                                        }
+                                        if source.folderID != nil {
+                                            Button("Remove from Folder") {
+                                                store.assign(source, to: nil)
+                                            }
                                         }
                                     }
+                                }
+                                .swipeActions {
                                     if source.folderID != nil {
-                                        Button("Remove from Folder") {
+                                        Button("Remove", role: .destructive) {
                                             store.assign(source, to: nil)
                                         }
                                     }
-                                }
-                            }
-                            .swipeActions {
-                                if source.folderID != nil {
-                                    Button("Remove", role: .destructive) {
-                                        store.assign(source, to: nil)
+                                    Button("Move") {
+                                        movingSource = source
+                                        showingMoveDialog = true
                                     }
-                                }
-                                Button("Move") {
-                                    movingSource = source
-                                    showingMoveDialog = true
-                                }
-                                Button("Delete", role: .destructive) {
-                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                        store.feeds.remove(at: idx)
-                                        if selectedSource?.id == source.id {
-                                            selectedSource = store.feeds.first
+                                    Button("Delete", role: .destructive) {
+                                        if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                            store.feeds.remove(at: idx)
+                                            if selectedSource?.id == source.id {
+                                                selectedSource = store.feeds.first
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
                 } header: {
                     HStack(spacing: 8) {
                         Text("Sources")
@@ -2690,9 +2696,9 @@ struct ContentView: View {
                     }
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
-                    .onTapGesture { areSourcesCollapsed.toggle() }
+                    .onTapGesture { withAnimation(.snappy(duration: 0.25)) { areSourcesCollapsed.toggle() } }
                 }
-                // Removed .headerProminence(.increased)
+                .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
             .navigationTitle("VibeRSS")
             .safeAreaInset(edge: .top) {
