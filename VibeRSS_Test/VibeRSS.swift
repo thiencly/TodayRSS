@@ -2215,6 +2215,157 @@ struct AllArticlesView: View {
     }
 }
 
+// MARK: - Today View (latest per source with 1-line summaries)
+struct TodayView: View {
+    @EnvironmentObject private var store: FeedStore
+    var refreshID: UUID = UUID()
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var cards: [TodayCard] = []
+
+    private let service = FeedService()
+
+    struct TodayCard: Identifiable, Hashable {
+        let id = UUID()
+        let source: Source
+        let latest: Article
+        var oneLine: String
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 16, pinnedViews: []) {
+                ForEach(cards) { card in
+                    TodayCardView(card: card)
+                        .onTapGesture {
+                            // Open article in Safari like elsewhere
+                            UIApplication.shared.open(card.latest.link)
+                        }
+                        .padding(.horizontal, 16)
+                }
+                if isLoading && cards.isEmpty {
+                    ProgressView().padding()
+                }
+                if let errorMessage, cards.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text(errorMessage).multilineTextAlignment(.center)
+                    }.padding()
+                }
+            }
+        }
+        .navigationTitle("Today")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { Task { await load() } }) {
+                    Image(systemName: "arrow.clockwise")
+                }.disabled(isLoading)
+            }
+        }
+        .task(id: refreshID) { await load() }
+        .refreshable { await load() }
+    }
+
+    @MainActor private func load() async {
+        guard !isLoading else { return }
+        isLoading = true; errorMessage = nil
+        let feeds = store.feeds
+        var built: [TodayCard] = []
+        await withTaskGroup(of: TodayCard?.self) { group in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        let items = try await self.service.loadItems(from: feed.url)
+                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
+                            return nil
+                        }
+                        // Try cached summary first; otherwise stream a quick short one and take first line
+                        let length: ArticleSummarizer.Length = .short
+                        if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
+                            let one = Self.firstSentence(from: cached)
+                            return TodayCard(source: feed, latest: latest, oneLine: one)
+                        } else {
+                            // Attempt fast primer summary synchronously by consuming initial stream tokens
+                            var collected = ""
+                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .short, seedText: latest.summary)
+                            var tokenCount = 0
+                            for await partial in stream {
+                                collected = partial
+                                tokenCount += 1
+                                if tokenCount >= 40 { // small budget; we only need a line
+                                    break
+                                }
+                            }
+                            let one = Self.firstSentence(from: collected)
+                            return TodayCard(source: feed, latest: latest, oneLine: one)
+                        }
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            for await result in group {
+                if let card = result { built.append(card) }
+            }
+        }
+        // Stable order: by source title
+        built.sort { $0.source.title.localizedCaseInsensitiveCompare($1.source.title) == .orderedAscending }
+        cards = built
+        isLoading = false
+    }
+
+    private static func firstSentence(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        // Take up to the first period or 100 characters as a fallback
+        if let dot = trimmed.firstIndex(of: ".") {
+            let first = String(trimmed[..<trimmed.index(after: dot)])
+            return String(first.prefix(140))
+        }
+        return String(trimmed.prefix(140))
+    }
+}
+
+private struct TodayCardView: View {
+    let card: TodayView.TodayCard
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                        .blendMode(.overlay)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    FeedIconView(iconURL: card.source.iconURL)
+                        .frame(width: 26, height: 26)
+                    Text(card.source.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                }
+                Text(card.oneLine.isEmpty ? "Tap to open latest article" : card.oneLine)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .padding(16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 110)
+    }
+}
+
 // MARK: - Add Source UI (auto-favicon)
 struct AddFeedView: View {
     @Environment(\.dismiss) private var dismiss
@@ -2577,6 +2728,14 @@ struct ContentView: View {
         ZStack(alignment: .bottomTrailing) {
             List {
                 Section {
+                    NavigationLink {
+                        TodayView(refreshID: refreshID)
+                            .environmentObject(store)
+                    } label: {
+                        Label("Today", systemImage: "sparkles.rectangle.stack")
+                            .contentShape(Rectangle())
+                    }
+
                     NavigationLink {
                         AllArticlesView(refreshID: refreshID)
                             .environmentObject(store)
