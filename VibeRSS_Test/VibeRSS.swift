@@ -2366,6 +2366,68 @@ private struct TodayCardView: View {
     }
 }
 
+private struct SidebarHeroCardView: View {
+    struct Entry: Identifiable, Hashable {
+        let id = UUID()
+        let source: Source
+        let title: String
+        let oneLine: String
+        let link: URL
+    }
+
+    let entries: [Entry]
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                        .blendMode(.overlay)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
+                    Text("Today Highlights")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                }
+
+                ForEach(entries.prefix(5)) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            FeedIconView(iconURL: entry.source.iconURL)
+                                .frame(width: 20, height: 20)
+                            Text(entry.source.title)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                        }
+                        Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { UIApplication.shared.open(entry.link) }
+                }
+            }
+            .padding(16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 140)
+    }
+}
+
 // MARK: - Add Source UI (auto-favicon)
 struct AddFeedView: View {
     @Environment(\.dismiss) private var dismiss
@@ -2587,6 +2649,10 @@ struct ContentView: View {
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0 // seconds since 1970
     @State private var areSourcesCollapsed: Bool = false
 
+    // Sidebar hero card data
+    @State private var heroEntries: [SidebarHeroCardView.Entry] = []
+    @State private var isLoadingHero: Bool = false
+
     private let refreshService = FeedService()
 
     // Concurrency limits and gates for controlled caching
@@ -2722,6 +2788,59 @@ struct ContentView: View {
         }
         let days = (hours + 23) / 24 // round up
         return days == 1 ? "1 day ago" : "\(days) days ago"
+    }
+
+    private func oneSentence(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        if let dot = trimmed.firstIndex(of: ".") {
+            let first = String(trimmed[..<trimmed.index(after: dot)])
+            return String(first.prefix(140))
+        }
+        return String(trimmed.prefix(140))
+    }
+
+    @MainActor private func loadHeroEntries() async {
+        guard !isLoadingHero else { return }
+        isLoadingHero = true
+        defer { isLoadingHero = false }
+        let feeds = Array(store.feeds.prefix(5))
+        var built: [SidebarHeroCardView.Entry] = []
+        await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        let items = try await self.refreshService.loadItems(from: feed.url)
+                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
+                            return nil
+                        }
+                        let length: ArticleSummarizer.Length = .short
+                        if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
+                            let one = self.oneSentence(from: cached)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
+                        } else {
+                            var collected = ""
+                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .short, seedText: latest.summary)
+                            var tokenCount = 0
+                            for await partial in stream {
+                                collected = partial
+                                tokenCount += 1
+                                if tokenCount >= 40 { break }
+                            }
+                            let one = self.oneSentence(from: collected)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
+                        }
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            for await result in group {
+                if let entry = result { built.append(entry) }
+            }
+        }
+        built.sort { $0.source.title.localizedCaseInsensitiveCompare($1.source.title) == .orderedAscending }
+        heroEntries = built
     }
 
     @ViewBuilder private var sidebar: some View {
@@ -2866,25 +2985,33 @@ struct ContentView: View {
             }
             .navigationTitle("VibeRSS")
             .safeAreaInset(edge: .top) {
-                HStack {
-                    let label: String = {
-                        if lastRefreshAllDate > 0 {
-                            let last = Date(timeIntervalSince1970: lastRefreshAllDate)
-                            return "Updated \(relativeTimeString(since: last))"
-                        } else {
-                            return "Never updated"
-                        }
-                    }()
-                    Text(label)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        let label: String = {
+                            if lastRefreshAllDate > 0 {
+                                let last = Date(timeIntervalSince1970: lastRefreshAllDate)
+                                return "Updated \(relativeTimeString(since: last))"
+                            } else {
+                                return "Never updated"
+                            }
+                        }()
+                        Text(label)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 0)
+                    .padding(.leading, 16)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 6)
+
+                    if !heroEntries.isEmpty {
+                        SidebarHeroCardView(entries: heroEntries)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 0)
-                .padding(.leading, 16)
-                .padding(.trailing, 16)
-                .padding(.bottom, 6)
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -2952,6 +3079,7 @@ struct ContentView: View {
                     await MainActor.run {
                         // Bump ID so destination views update
                         refreshID = UUID()
+                        Task { await loadHeroEntries() }
                         // Mark refresh finished and immediately reset counters
                         isRefreshingAll = false
                         refreshCompleted = 0
@@ -3014,7 +3142,11 @@ struct ContentView: View {
         .navigationDestination(for: Source.self) { source in
             FeedDetailView(source: source, refreshID: refreshID)
         }
-        .onAppear { selectedSource = store.feeds.first; store.backfillIcons() }
+        .onAppear {
+            selectedSource = store.feeds.first
+            store.backfillIcons()
+            Task { await loadHeroEntries() }
+        }
     }
 }
 
@@ -3595,4 +3727,5 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
