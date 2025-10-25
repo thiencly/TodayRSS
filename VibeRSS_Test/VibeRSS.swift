@@ -2367,7 +2367,7 @@ private struct TodayCardView: View {
 }
 
 private struct SidebarHeroCardView: View {
-    struct Entry: Identifiable, Hashable {
+    struct Entry: Identifiable, Hashable, Codable {
         let id = UUID()
         let source: Source
         let title: String
@@ -2652,6 +2652,7 @@ struct ContentView: View {
     // Sidebar hero card data
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
+    private let heroCacheKey = "viberss.heroEntries"
 
     private let refreshService = FeedService()
 
@@ -2800,6 +2801,23 @@ struct ContentView: View {
         return String(trimmed.prefix(140))
     }
 
+    private func saveHeroEntriesToCache() {
+        do {
+            let data = try JSONEncoder().encode(heroEntries)
+            UserDefaults.standard.set(data, forKey: heroCacheKey)
+        } catch {
+            // Ignore cache write errors
+        }
+    }
+
+    private func loadHeroEntriesFromCache() {
+        if let data = UserDefaults.standard.data(forKey: heroCacheKey) {
+            if let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) {
+                heroEntries = decoded
+            }
+        }
+    }
+    
     @MainActor private func loadHeroEntries() async {
         guard !isLoadingHero else { return }
         isLoadingHero = true
@@ -2841,6 +2859,7 @@ struct ContentView: View {
         }
         built.sort { $0.source.title.localizedCaseInsensitiveCompare($1.source.title) == .orderedAscending }
         heroEntries = built
+        saveHeroEntriesToCache()
     }
 
     @ViewBuilder private var sidebar: some View {
@@ -3145,7 +3164,12 @@ struct ContentView: View {
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()
-            Task { await loadHeroEntries() }
+            // Load cached hero entries first so the card shows immediately on launch
+            loadHeroEntriesFromCache()
+            // If no cache exists (first launch), build once and cache
+            if heroEntries.isEmpty {
+                Task { await loadHeroEntries() }
+            }
         }
     }
 }
