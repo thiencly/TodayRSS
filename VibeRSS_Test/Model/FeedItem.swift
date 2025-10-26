@@ -1,3 +1,11 @@
+//
+//  FeedItem.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: Models/FeedItem.swift
 // PURPOSE: Represents an article/post item parsed from a feed
 // SAFE TO EDIT: Yes, keep fields consistent with parsing and UI

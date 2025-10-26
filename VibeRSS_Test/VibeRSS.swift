@@ -46,58 +46,8 @@ extension View {
 let unifiedAnimation: Animation = .linear(duration: 0.9).repeatForever(autoreverses: false)
 
 // MARK: - Models
-struct Feed: Identifiable, Hashable, Codable {
-    let id: UUID
-    var title: String
-    var url: URL
-    var iconURL: URL? // optional feed icon
-    var folderID: UUID? // optional folder assignment
 
-    init(id: UUID = UUID(), title: String, url: URL, iconURL: URL? = nil, folderID: UUID? = nil) {
-        self.id = id
-        self.title = title
-        self.url = url
-        self.iconURL = iconURL
-        self.folderID = folderID
-    }
-}
 
-struct FeedItem: Identifiable, Hashable, Equatable {
-    let id = UUID()
-    var title: String
-    var link: URL
-    var summary: String
-    var pubDate: Date?
-    var author: String?
-    var thumbnailURL: URL?
-    // Source attribution (set by view models after parsing)
-    var sourceID: UUID? = nil
-    var sourceTitle: String? = nil
-    var sourceIconURL: URL? = nil
-
-    static func == (lhs: FeedItem, rhs: FeedItem) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.title == rhs.title &&
-        lhs.link == rhs.link &&
-        lhs.summary == rhs.summary &&
-        lhs.pubDate == rhs.pubDate &&
-        lhs.author == rhs.author &&
-        lhs.thumbnailURL == rhs.thumbnailURL &&
-        lhs.sourceID == rhs.sourceID &&
-        lhs.sourceTitle == rhs.sourceTitle &&
-        lhs.sourceIconURL == rhs.sourceIconURL
-    }
-}
-
-struct Folder: Identifiable, Codable, Hashable {
-    let id: UUID
-    var name: String
-
-    init(id: UUID = UUID(), name: String) {
-        self.id = id
-        self.name = name
-    }
-}
 
 #if canImport(FoundationModels)
 @Generable(description: "A concise inline summary for streaming")
@@ -108,8 +58,7 @@ struct InlineSummary {
 #endif
 
 // MARK: - Terminology aliases
-typealias Source = Feed
-typealias Article = FeedItem
+
 
 // MARK: - Persistence (simple)
 @MainActor
@@ -240,231 +189,20 @@ final class FeedStore: ObservableObject {
 }
 
 // MARK: - Errors
-enum FeedError: Error, LocalizedError { case badURL, requestFailed, parseFailed
-    var errorDescription: String? {
-        switch self {
-        case .badURL: return "Invalid feed URL"
-        case .requestFailed: return "Network request failed"
-        case .parseFailed: return "Couldn't parse feed"
-        }
-    }
-}
+
 
 // MARK: - Networking & Parsing
-actor FeedService {
-    func loadItems(from url: URL) async throws -> [FeedItem] {
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
-        try Task.checkCancellation()
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try Task.checkCancellation()
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw FeedError.requestFailed
-        }
-        if let xml = String(data: data, encoding: .utf8), xml.contains("<feed") { // Atom heuristic
-            return try await parseAtom(data)
-        } else {
-            return try await parseRSS(data)
-        }
-    }
 
-    @MainActor private func parseRSS(_ data: Data) throws -> [FeedItem] {
-        let parser = RSSParser()
-        return try parser.parse(data: data)
-    }
-
-    @MainActor private func parseAtom(_ data: Data) throws -> [FeedItem] {
-        let parser = AtomParser()
-        return try parser.parse(data: data)
-    }
-}
 
 // MARK: - XML Parsers
-final class RSSParser: NSObject, XMLParserDelegate {
-    private var items: [FeedItem] = []
-    private var currentTitle = ""
-    private var currentLink: URL?
-    private var currentDescription = ""
-    private var currentPubDate: Date?
-    private var currentAuthor: String?
-    private var currentThumbnail: URL?
-    private var currentElement = ""
 
-    func parse(data: Data) throws -> [FeedItem] {
-        let parser = XMLParser(data: data)
-        parser.delegate = self
-        guard parser.parse() else { throw FeedError.parseFailed }
-        return items
-    }
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
-        currentElement = elementName.lowercased()
-        if currentElement == "item" { resetItem() }
-        if currentElement == "link", let href = attributeDict["href"], let url = URL(string: href) {
-            currentLink = url // some feeds put link in <link href="..."/>
-        }
-        if currentElement == "enclosure" {
-            if let type = attributeDict["type"], type.lowercased().hasPrefix("image"),
-               let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            }
-        }
-        if currentElement == "media:thumbnail" {
-            if let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            }
-        }
-        if currentElement == "media:content" {
-            if let type = attributeDict["type"], type.lowercased().hasPrefix("image"),
-               let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            } else if let medium = attributeDict["medium"], medium.lowercased() == "image",
-                      let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            }
-        }
-    }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
-        switch currentElement {
-        case "title": currentTitle += string
-        case "link": if currentLink == nil { currentLink = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        case "description", "summary", "content:encoded": currentDescription += string
-        case "pubdate": currentPubDate = DateFormatter.rfc822.date(from: string.trimmingCharacters(in: .whitespacesAndNewlines))
-        case "author", "dc:creator": currentAuthor = (currentAuthor ?? "") + string
-        default: break
-        }
-    }
-
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName.lowercased() == "item" {
-            if let link = currentLink {
-                var thumb = currentThumbnail
-                if thumb == nil {
-                    thumb = extractFirstImageURL(from: currentDescription, relativeTo: link)
-                }
-                let title = currentTitle.trimmed()
-                let desc = currentDescription.trimmedHTML()
-                let author = currentAuthor?.trimmed()
-                items.append(FeedItem(title: title, link: link, summary: desc, pubDate: currentPubDate, author: author, thumbnailURL: thumb))
-            }
-            resetItem()
-        }
-        currentElement = ""
-    }
-
-    private func resetItem() {
-        currentTitle = ""; currentLink = nil; currentDescription = ""; currentPubDate = nil; currentAuthor = nil; currentThumbnail = nil
-    }
-}
-
-final class AtomParser: NSObject, XMLParserDelegate {
-    private var items: [FeedItem] = []
-    private var currentTitle = ""
-    private var currentLink: URL?
-    private var currentSummary = ""
-    private var currentUpdated: Date?
-    private var currentAuthor: String?
-    private var currentThumbnail: URL?
-    private var currentElement = ""
-
-    func parse(data: Data) throws -> [FeedItem] {
-        let parser = XMLParser(data: data)
-        parser.delegate = self
-        guard parser.parse() else { throw FeedError.parseFailed }
-        return items
-    }
-
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
-        currentElement = elementName.lowercased()
-        if currentElement == "entry" { resetItem() }
-        if currentElement == "link" {
-            if let rel = attributeDict["rel"], rel.lowercased() == "enclosure",
-               let type = attributeDict["type"], type.lowercased().hasPrefix("image"),
-               let href = attributeDict["href"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            } else if let href = attributeDict["href"], let url = URL(string: href) {
-                currentLink = currentLink ?? url
-            }
-        }
-        if currentElement == "media:thumbnail" {
-            if let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            }
-        }
-        if currentElement == "media:content" {
-            if let type = attributeDict["type"], type.lowercased().hasPrefix("image"),
-               let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            } else if let medium = attributeDict["medium"], medium.lowercased() == "image",
-                      let href = attributeDict["url"], let u = URL(string: href) {
-                currentThumbnail = currentThumbnail ?? u
-            }
-        }
-    }
-
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
-        switch currentElement {
-        case "title": currentTitle += string
-        case "summary", "content": currentSummary += string
-        case "updated", "published": currentUpdated = ISO8601DateFormatter().date(from: string.trimmingCharacters(in: .whitespacesAndNewlines))
-        case "name": currentAuthor = (currentAuthor ?? "") + string
-        default: break
-        }
-    }
-
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName.lowercased() == "entry" {
-            if let link = currentLink {
-                var thumb = currentThumbnail
-                if thumb == nil {
-                    thumb = extractFirstImageURL(from: currentSummary, relativeTo: link)
-                }
-                let title = currentTitle.trimmed()
-                let summary = currentSummary.trimmedHTML()
-                let author = currentAuthor?.trimmed()
-                items.append(FeedItem(title: title, link: link, summary: summary, pubDate: currentUpdated, author: author, thumbnailURL: thumb))
-            }
-            resetItem()
-        }
-        currentElement = ""
-    }
-
-    private func resetItem() {
-        currentTitle = ""; currentLink = nil; currentSummary = ""; currentUpdated = nil; currentAuthor = nil; currentThumbnail = nil
-    }
-}
 
 // MARK: - Date formats & helpers
-extension DateFormatter {
-    static let rfc822: DateFormatter = {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
-        return df
-    }()
-}
 
-extension String {
-    func trimmed() -> String { trimmingCharacters(in: .whitespacesAndNewlines) }
-    func trimmedHTML() -> String {
-        let s = self.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-        return s.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmed()
-    }
-}
 
-func extractFirstImageURL(from html: String, relativeTo base: URL?) -> URL? {
-    let pattern = "<img[^>]*src=[\"']([^\"']+)[\"']"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
-    let ns = html as NSString
-    let range = NSRange(location: 0, length: ns.length)
-    if let m = regex.firstMatch(in: html, options: [], range: range) {
-        let r = m.range(at: 1)
-        let src = ns.substring(with: r)
-        if let base { return URL(string: src, relativeTo: base)?.absoluteURL }
-        return URL(string: src)
-    }
-    return nil
-}
+
 
 // MARK: - ViewModels
 @MainActor

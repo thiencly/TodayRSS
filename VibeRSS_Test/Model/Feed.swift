@@ -1,3 +1,11 @@
+//
+//  Feed.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: Models/Feed.swift
 // PURPOSE: Core data model for a feed/source in VibeRSS
 // SAFE TO EDIT: Yes, but keep properties consistent with persistence

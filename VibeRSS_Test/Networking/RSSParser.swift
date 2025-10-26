@@ -1,3 +1,11 @@
+//
+//  RSSParser.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: Networking/RSSParser.swift
 // PURPOSE: XMLParser-based RSS parser -> [FeedItem]
 // SAFE TO EDIT: Yes, but be careful with tag handling and heuristics

@@ -1,3 +1,11 @@
+//
+//  Folder.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: Models/Folder.swift
 // PURPOSE: Represents a folder that can contain multiple feeds
 // SAFE TO EDIT: Yes, but keep fields consistent with persistence

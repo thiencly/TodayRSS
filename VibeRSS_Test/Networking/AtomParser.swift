@@ -1,3 +1,11 @@
+//
+//  AtomParser.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: Networking/AtomParser.swift
 // PURPOSE: XMLParser-based Atom parser -> [FeedItem]
 // SAFE TO EDIT: Yes, but be careful with tag handling and heuristics
