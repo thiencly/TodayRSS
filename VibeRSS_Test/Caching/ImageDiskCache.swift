@@ -1,3 +1,10 @@
+//
+//  ImageDiskCache.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
 // FILE: Caching/ImageDiskCache.swift
 // PURPOSE: On-disk + in-memory image cache actor
 // SAFE TO EDIT: Yes, keep public API stable for CachedAsyncImage
@@ -5,6 +12,7 @@
 import Foundation
 import UIKit
 import CryptoKit
+import UniformTypeIdentifiers
 
 actor ImageDiskCache {
     static let shared = ImageDiskCache()

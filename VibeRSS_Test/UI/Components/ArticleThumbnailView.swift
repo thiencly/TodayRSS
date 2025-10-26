@@ -1,3 +1,11 @@
+//
+//  ArticleThumbnailView.swift
+//  VibeRSS_Test
+//
+//  Created by Thien Ly on 10/26/25.
+//
+
+
 // FILE: UI/Components/ArticleThumbnailView.swift
 // PURPOSE: Small thumbnail view used in lists
 // SAFE TO EDIT: Yes
