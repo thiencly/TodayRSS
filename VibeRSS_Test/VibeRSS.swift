@@ -15,35 +15,13 @@ import FoundationModels
 #endif
 
 // MARK: - Shared Siri-like Gradient & Glow
-struct SiriGradient {
-    static let colors: [Color] = [
-        Color.cyan, Color.blue, Color.indigo, Color.purple, Color.pink, Color.cyan
-    ]
 
-    static func linear(start: UnitPoint = .leading, end: UnitPoint = .trailing) -> LinearGradient {
-        LinearGradient(colors: colors, startPoint: start, endPoint: end)
-    }
 
-    static func angular(center: UnitPoint = .center, angle: Angle = .degrees(0)) -> AngularGradient {
-        AngularGradient(colors: colors, center: .center, angle: angle)
-    }
-}
 
-struct UnifiedGlowStyle: ViewModifier {
-    var intensity: Double = 1.0
-    func body(content: Content) -> some View {
-        content
-            .shadow(color: .blue.opacity(0.25 * intensity), radius: 6)
-            .shadow(color: .purple.opacity(0.20 * intensity), radius: 10)
-            .shadow(color: .pink.opacity(0.15 * intensity), radius: 14)
-    }
-}
 
-extension View {
-    func unifiedGlow(intensity: Double = 1.0) -> some View { self.modifier(UnifiedGlowStyle(intensity: intensity)) }
-}
 
-let unifiedAnimation: Animation = .linear(duration: 0.9).repeatForever(autoreverses: false)
+
+
 
 // MARK: - Models
 
@@ -329,137 +307,18 @@ final class FolderItemsViewModel: ObservableObject {
 
 
 // REPLACED RainbowGlowText with subtle option
-struct RainbowGlowText: View {
-    let text: String
-    var font: Font = .subheadline
-    var subtle: Bool = false
-    @State private var animate = false
 
-    private var gradient: LinearGradient { SiriGradient.linear() }
 
-    var body: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(.clear)
-            .overlay {
-                gradient
-                    .hueRotation(.degrees(animate ? 360 : 0))
-                    .saturation(subtle ? 0.6 : 1.0)
-                    .opacity(subtle ? 0.85 : 1.0)
-                    .animation(.linear(duration: 3).repeatForever(autoreverses: false), value: animate)
-                    .mask(Text(text).font(font))
-            }
-            .shadow(color: .pink.opacity(subtle ? 0.18 : 0.35), radius: subtle ? 5 : 8, x: 0, y: 0)
-            .shadow(color: .blue.opacity(subtle ? 0.15 : 0.25), radius: subtle ? 8 : 12, x: 0, y: 0)
-            .shadow(color: .yellow.opacity(subtle ? 0.12 : 0.20), radius: subtle ? 12 : 16, x: 0, y: 0)
-            .onAppear { animate = true }
-    }
-}
 
-struct RainbowGlowSymbol: View {
-    let systemName: String
-    var font: Font = .caption2
-    var subtle: Bool = false
-    @State private var animate = false
-
-    private var gradient: LinearGradient { SiriGradient.linear() }
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(font)
-            .foregroundStyle(.clear)
-            .overlay {
-                gradient
-                    .hueRotation(.degrees(animate ? 360 : 0))
-                    .saturation(subtle ? 0.6 : 1.0)
-                    .opacity(subtle ? 0.85 : 1.0)
-                    .animation(unifiedAnimation, value: animate)
-                    .mask(Image(systemName: systemName).font(font))
-            }
-            .shadow(color: .pink.opacity(subtle ? 0.18 : 0.35), radius: subtle ? 4 : 6, x: 0, y: 0)
-            .shadow(color: .blue.opacity(subtle ? 0.15 : 0.25), radius: subtle ? 6 : 10, x: 0, y: 0)
-            .shadow(color: .yellow.opacity(subtle ? 0.12 : 0.20), radius: subtle ? 8 : 12, x: 0, y: 0)
-            .onAppear { animate = true }
-            .scaleEffect(glows ? (pulse ? 1.12 : 1.0) : 1.0)
-    }
-
-    @State private var glows: Bool = false
-    @State private var pulse: Bool = false
-}
 
 // We will fix scaleEffect in SummarizeButton below instead, removing here
 
-struct SourceBadge: View {
-    var iconURL: URL?
-    var name: String
-    var body: some View {
-        HStack(spacing: 6) {
-            Group {
-                if let iconURL {
-                    CachedAsyncImage(url: iconURL) {
-                        Color.clear
-                    }
-                } else {
-                    Image(systemName: "dot.radiowaves.left.and.right").resizable().scaledToFit().foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 17, height: 17)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            Text(name)
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-    }
-}
 
-struct FeedIconView: View {
-    var iconURL: URL?
-    var body: some View {
-        Group {
-            if let iconURL {
-                CachedAsyncImage(url: iconURL) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(width: 24, height: 24)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
+
+
 
 // Unified SummaryControl (replaces separate pill + badge)
-struct SummaryBadge: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            RainbowGlowSymbol(systemName: "sparkles", font: .caption2, subtle: true)
-            Text("Summary")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(minHeight: 28)
-        .background(
-            ZStack {
-                Capsule().fill(.ultraThinMaterial)
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-            }
-        )
-        .overlay(
-            Capsule().strokeBorder(Color.secondary.opacity(0.15))
-        )
-        .unifiedGlow(intensity: 0.6)
-    }
-}
+
 
 // REPLACE SpinningSmokeyGlow with TimelineView-driven rotation and stronger smoke
 private struct SpinningSmokeyGlow: View {
@@ -709,94 +568,10 @@ struct SummarizeButton: View {
     }
 }
 
-private struct GlassPillStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            // Disable implicit animations so press feedback is instantaneous
-            .transaction { $0.animation = nil }
-            // System-like immediate press response
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.98 : 1.0)
-            // Luminance lift on press (no animation)
-            .overlay(
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(configuration.isPressed ? 0.22 : 0.00),
-                                Color.white.opacity(configuration.isPressed ? 0.10 : 0.00)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .blendMode(.plusLighter)
-            )
-            // Soft outer halo on press (no animation)
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(configuration.isPressed ? 0.35 : 0.0),
-                                Color.white.opacity(configuration.isPressed ? 0.06 : 0.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: configuration.isPressed ? 1.0 : 0.0
-                    )
-                    .blur(radius: configuration.isPressed ? 0.8 : 0.0)
-            )
-            // Gentle inner highlight rim
-            .overlay(
-                Capsule()
-                    .strokeBorder(Color.white.opacity(configuration.isPressed ? 0.20 : 0.0), lineWidth: 1)
-                    .blendMode(.overlay)
-            )
-            // Subtle shadow tweak on press
-            .shadow(color: Color.white.opacity(configuration.isPressed ? 0.20 : 0.0), radius: configuration.isPressed ? 6 : 0, x: 0, y: 0)
-            .shadow(color: Color.black.opacity(configuration.isPressed ? 0.08 : 0.0), radius: configuration.isPressed ? 5 : 0, x: 0, y: 2)
-    }
-}
 
-struct FloatingRefreshButton: View {
-    var isLoading: Bool
-    var action: () -> Void
 
-    var body: some View {
-        Button(action: { action() }) {
-            Group {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 18, weight: .semibold))
-                }
-            }
-            .frame(width: 52, height: 52)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .background(.ultraThinMaterial, in: Circle())
-        .overlay(
-            Circle().strokeBorder(Color.secondary.opacity(0.2))
-        )
-        .shadow(radius: 2, x: 0, y: 1)
-        .disabled(isLoading)
-        .accessibilityLabel("Refresh")
-    }
-}
 
-struct ContentPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 48))
-            Text("Add a source to start vibing").font(.headline).foregroundStyle(.secondary)
-        }.padding()
-    }
-}
+
 
 // Inserted CollapsibleText view before FeedDetailView
 struct CollapsibleText: View {
@@ -1990,19 +1765,10 @@ struct AddFolderView: View {
 }
 
 // MARK: - Safari wrapper
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let config = SFSafariViewController.Configuration()
-        config.entersReaderIfAvailable = true
-        let vc = SFSafariViewController(url: url, configuration: config)
-        return vc
-    }
-    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
-}
+
 
 // MARK: - WebLink for sheet(item:)
-struct WebLink: Identifiable { let id = UUID(); let url: URL }
+
 
 // MARK: - Floating Day Indicator support
 struct DayAnchor: Equatable {
