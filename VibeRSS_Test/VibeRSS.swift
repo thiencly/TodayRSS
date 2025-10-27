@@ -2206,45 +2206,7 @@ struct VibeRSSApp: App {
 }
 
 // Inserted actor ArticleTextCache immediately above MARK: - ArticleSummarizer
-actor ArticleTextCache {
-    static let shared = ArticleTextCache()
 
-    private var cache: [String: String] = [:] // key: url.absoluteString
-    private let storeKey = "viberss.articleTextCache"
-    private var saveDebounceTask: Task<Void, Never>? = nil
-
-    init() {
-        if let data = UserDefaults.standard.data(forKey: storeKey),
-           let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-            cache = dict
-        }
-    }
-
-    func cachedText(for url: URL) -> String? {
-        cache[url.absoluteString]
-    }
-
-    func storeText(_ text: String, for url: URL) {
-        cache[url.absoluteString] = text
-        debounceSave()
-    }
-
-    func clear() {
-        cache.removeAll()
-        UserDefaults.standard.removeObject(forKey: storeKey)
-    }
-
-    private func debounceSave() {
-        saveDebounceTask?.cancel()
-        let snapshot = cache
-        saveDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if let data = try? JSONEncoder().encode(snapshot) {
-                UserDefaults.standard.set(data, forKey: storeKey)
-            }
-        }
-    }
-}
 
 // MARK: - ArticleSummarizer
 actor ArticleSummarizer {
