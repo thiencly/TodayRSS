@@ -1644,58 +1644,7 @@ struct AddFolderView: View {
 
 
 // MARK: - Floating Day Indicator support
-struct DayAnchor: Equatable {
-    let dayStart: Date
-    let minY: CGFloat
-}
 
-struct DayAnchorsKey: PreferenceKey {
-    static var defaultValue: [DayAnchor] = []
-    static func reduce(value: inout [DayAnchor], nextValue: () -> [DayAnchor]) {
-        value.append(contentsOf: nextValue())
-    }
-}
-
-// Inserted helper view for per-row day anchor reporting
-struct DayAnchorReporter: View {
-    let date: Date?
-    let coordinateSpaceName: String
-    var body: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .preference(key: DayAnchorsKey.self, value: {
-                    guard let date else { return [] }
-                    let dayStart = Calendar.current.startOfDay(for: date)
-                    let minY = proxy.frame(in: .named(coordinateSpaceName)).minY
-                    return [DayAnchor(dayStart: dayStart, minY: minY)]
-                }())
-        }
-    }
-}
-
-struct FloatingDayChip: View {
-    let date: Date
-    var body: some View {
-        Text(dayLabel(for: date))
-            .font(.callout.bold())
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(Color.secondary.opacity(0.2))
-            )
-    }
-
-    private func dayLabel(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInYesterday(date) { return "Yesterday" }
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        return df.string(from: date)
-    }
-}
 
 // MARK: - Concurrency control gate (semaphore-like)
 actor ConcurrencyGate {
