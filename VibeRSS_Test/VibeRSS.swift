@@ -1627,53 +1627,51 @@ private struct SidebarHeroCardView: View {
     let entries: [Entry]
 
     var body: some View {
-        ZStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
+                Text("Today Highlights")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+
+            ForEach(entries.prefix(5)) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        FeedIconView(iconURL: entry.source.iconURL)
+                            .frame(width: 20, height: 20)
+                        Text(entry.source.title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { UIApplication.shared.open(entry.link) }
+            }
+        }
+        .padding(16)
+        .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                        .blendMode(.overlay)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
-                    Text("Today Highlights")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                }
-
-                ForEach(entries.prefix(5)) { entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            FeedIconView(iconURL: entry.source.iconURL)
-                                .frame(width: 20, height: 20)
-                            Text(entry.source.title)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                        }
-                        Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { UIApplication.shared.open(entry.link) }
-                }
-            }
-            .padding(16)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 140)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                .blendMode(.overlay)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -2991,5 +2989,4 @@ Avoid repetition and adjectives.
         return result
     }
 }
-
 
