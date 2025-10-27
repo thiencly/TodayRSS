@@ -75,9 +75,9 @@ final class AtomParser: NSObject, XMLParserDelegate {
                 if thumb == nil {
                     thumb = extractFirstImageURL(from: currentSummary, relativeTo: link)
                 }
-                let title = currentTitle.trimmed()
-                let summary = currentSummary.trimmedHTML()
-                let author = currentAuthor?.trimmed()
+                let title = currentTitle.vr_trimmed()
+                let summary = currentSummary.vr_trimmedHTML()
+                let author = currentAuthor?.vr_trimmed()
                 items.append(FeedItem(title: title, link: link, summary: summary, pubDate: currentUpdated, author: author, thumbnailURL: thumb))
             }
             resetItem()

@@ -35,16 +35,6 @@
 			path = VibeRSS_Test;
 			sourceTree = "<group>";
 		};
-		1191FA152E934A3B00738217 /* VibeRSS_TestTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VibeRSS_TestTests;
-			sourceTree = "<group>";
-		};
-		1191FA1F2E934A3B00738217 /* VibeRSS_TestUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VibeRSS_TestUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,8 +66,6 @@
 			isa = PBXGroup;
 			children = (
 				1191FA052E934A3900738217 /* VibeRSS_Test */,
-				1191FA152E934A3B00738217 /* VibeRSS_TestTests */,
-				1191FA1F2E934A3B00738217 /* VibeRSS_TestUITests */,
 				1191FA042E934A3900738217 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -130,9 +118,6 @@
 			dependencies = (
 				1191FA142E934A3B00738217 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				1191FA152E934A3B00738217 /* VibeRSS_TestTests */,
-			);
 			name = VibeRSS_TestTests;
 			packageProductDependencies = (
 			);
@@ -152,9 +137,6 @@
 			);
 			dependencies = (
 				1191FA1E2E934A3B00738217 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				1191FA1F2E934A3B00738217 /* VibeRSS_TestUITests */,
 			);
 			name = VibeRSS_TestUITests;
 			packageProductDependencies = (

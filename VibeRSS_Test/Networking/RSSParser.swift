@@ -67,7 +67,7 @@ final class RSSParser: NSObject, XMLParserDelegate {
         case "description", "summary", "content:encoded":
             currentDescription += string
         case "pubdate":
-            currentPubDate = DateFormatter.rfc822.date(from: string.trimmingCharacters(in: .whitespacesAndNewlines))
+            currentPubDate = DateFormatter.vr_rfc822.dateFromCommonRSS(string.trimmingCharacters(in: .whitespacesAndNewlines))
         case "author", "dc:creator":
             currentAuthor = (currentAuthor ?? "") + string
         default: break
@@ -81,9 +81,9 @@ final class RSSParser: NSObject, XMLParserDelegate {
                 if thumb == nil {
                     thumb = extractFirstImageURL(from: currentDescription, relativeTo: link)
                 }
-                let title = currentTitle.trimmed()
-                let desc = currentDescription.trimmedHTML()
-                let author = currentAuthor?.trimmed()
+                let title = currentTitle.vr_trimmed()
+                let desc = currentDescription.vr_trimmedHTML()
+                let author = currentAuthor?.vr_trimmed()
                 items.append(FeedItem(title: title, link: link, summary: desc, pubDate: currentPubDate, author: author, thumbnailURL: thumb))
             }
             resetItem()
@@ -100,3 +100,4 @@ final class RSSParser: NSObject, XMLParserDelegate {
         currentThumbnail = nil
     }
 }
+
