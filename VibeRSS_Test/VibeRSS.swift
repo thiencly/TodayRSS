@@ -2240,7 +2240,7 @@ struct ContentView: View {
                 }
                 .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
-            .navigationTitle("VibeRSS")
+            .navigationTitle("TodayRSS")
             .safeAreaInset(edge: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
