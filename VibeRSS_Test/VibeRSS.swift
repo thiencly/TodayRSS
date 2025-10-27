@@ -1210,6 +1210,54 @@ struct TodayView: View {
 
 
 
+private struct SiriGlow: View {
+    @State private var phase: Double = 0
+    var cornerRadius: CGFloat = 22
+    var opacity: Double = 0.35
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let p = t.remainder(dividingBy: 6.0) / 6.0 // 6s loop
+
+            ZStack {
+                // Base soft blur background
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.clear)
+                    .background(.clear)
+
+                // Animated multi-color radial spots that drift slowly
+                glowSpot(color: .purple, x: cos(2 * .pi * (p + 0.00)) * 0.35, y: sin(2 * .pi * (p + 0.00)) * 0.25, radius: 160)
+                glowSpot(color: .blue,   x: cos(2 * .pi * (p + 0.33)) * 0.30, y: sin(2 * .pi * (p + 0.33)) * 0.30, radius: 170)
+                glowSpot(color: .pink,   x: cos(2 * .pi * (p + 0.66)) * 0.25, y: sin(2 * .pi * (p + 0.66)) * 0.35, radius: 150)
+            }
+            .compositingGroup()
+            .blur(radius: 40)
+            .opacity(opacity)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .drawingGroup()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func glowSpot(color: Color, x: Double, y: Double, radius: CGFloat) -> some View {
+        GeometryReader { proxy in
+            let w = proxy.size.width
+            let h = proxy.size.height
+            let cx = w * 0.5 + CGFloat(x) * w * 0.6
+            let cy = h * 0.5 + CGFloat(y) * h * 0.6
+            Circle()
+                .fill(
+                    RadialGradient(colors: [color.opacity(0.8), color.opacity(0.0)], center: .center, startRadius: 0, endRadius: radius)
+                )
+                .frame(width: radius * 2, height: radius * 2)
+                .position(x: cx, y: cy)
+                .blendMode(.screen)
+        }
+    }
+}
+
 private struct SidebarHeroCardView: View {
     struct Entry: Identifiable, Hashable, Codable {
         let id = UUID()
@@ -1253,8 +1301,13 @@ private struct SidebarHeroCardView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
+            ZStack {
+                // Subtle Siri-like animated glow behind the card
+                SiriGlow(cornerRadius: 22, opacity: 0.32)
+                // Card material on top of glow
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
