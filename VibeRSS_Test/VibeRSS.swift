@@ -1171,7 +1171,7 @@ private struct SidebarHeroCardView: View {
                 Spacer()
             }
 
-            ForEach(entries.prefix(5)) { entry in
+            ForEach(entries.prefix(3)) { entry in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         FeedIconView(iconURL: entry.source.iconURL)
@@ -1515,7 +1515,7 @@ struct ContentView: View {
         isLoadingHero = true
         UserDefaults.standard.removeObject(forKey: heroCacheKey)
         defer { isLoadingHero = false }
-        let feeds = Array(store.feeds.prefix(5))
+        let feeds = Array(store.feeds.prefix(3))
         var built: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
             for feed in feeds {
