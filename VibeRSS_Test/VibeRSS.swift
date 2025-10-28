@@ -1098,115 +1098,7 @@ struct AllArticlesView: View {
 }
 
 // MARK: - Today View (latest per source with 1-line summaries)
-struct TodayView: View {
-    @EnvironmentObject private var store: FeedStore
-    var refreshID: UUID = UUID()
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var cards: [TodayCard] = []
 
-    private let service = FeedService()
-
-    struct TodayCard: Identifiable, Hashable {
-        let id = UUID()
-        let source: Source
-        let latest: Article
-        var oneLine: String
-    }
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16, pinnedViews: []) {
-                ForEach(cards) { card in
-                    TodayCardView(card: card)
-                        .onTapGesture {
-                            // Open article in Safari like elsewhere
-                            UIApplication.shared.open(card.latest.link)
-                        }
-                        .padding(.horizontal, 16)
-                }
-                if isLoading && cards.isEmpty {
-                    ProgressView().padding()
-                }
-                if let errorMessage, cards.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle")
-                        Text(errorMessage).multilineTextAlignment(.center)
-                    }.padding()
-                }
-            }
-        }
-        .navigationTitle("Today")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { Task { await load() } }) {
-                    Image(systemName: "arrow.clockwise")
-                }.disabled(isLoading)
-            }
-        }
-        .task(id: refreshID) { await load() }
-        .refreshable { await load() }
-    }
-
-    @MainActor private func load() async {
-        guard !isLoading else { return }
-        isLoading = true; errorMessage = nil
-        let feeds = store.feeds
-        var built: [TodayCard] = []
-        await withTaskGroup(of: TodayCard?.self) { group in
-            for feed in feeds {
-                group.addTask {
-                    do {
-                        let items = try await self.service.loadItems(from: feed.url)
-                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
-                            return nil
-                        }
-                        // Try cached summary first; otherwise stream a quick short one and take first line
-                        let length: ArticleSummarizer.Length = .short
-                        if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
-                            let one = Self.firstSentence(from: cached)
-                            return TodayCard(source: feed, latest: latest, oneLine: one)
-                        } else {
-                            // Attempt fast primer summary synchronously by consuming initial stream tokens
-                            var collected = ""
-                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .short, seedText: latest.summary)
-                            var tokenCount = 0
-                            for await partial in stream {
-                                collected = partial
-                                tokenCount += 1
-                                if tokenCount >= 40 { // small budget; we only need a line
-                                    break
-                                }
-                            }
-                            let one = Self.firstSentence(from: collected)
-                            return TodayCard(source: feed, latest: latest, oneLine: one)
-                        }
-                    } catch {
-                        return nil
-                    }
-                }
-            }
-            for await result in group {
-                if let card = result { built.append(card) }
-            }
-        }
-        // Stable order: by source title
-        built.sort { $0.source.title.localizedCaseInsensitiveCompare($1.source.title) == .orderedAscending }
-        cards = built
-        isLoading = false
-    }
-
-    private static func firstSentence(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-        // Take up to the first period or 100 characters as a fallback
-        if let dot = trimmed.firstIndex(of: ".") {
-            let first = String(trimmed[..<trimmed.index(after: dot)])
-            return String(first.prefix(140))
-        }
-        return String(trimmed.prefix(140))
-    }
-}
 
 
 
@@ -1293,7 +1185,7 @@ private struct SidebarHeroCardView: View {
                     Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture { UIApplication.shared.open(entry.link) }
@@ -1586,11 +1478,19 @@ struct ContentView: View {
     private func oneSentence(from text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
-        if let dot = trimmed.firstIndex(of: ".") {
-            let first = String(trimmed[..<trimmed.index(after: dot)])
-            return String(first.prefix(140))
+        // Look for ., !, or ? as sentence terminators
+        if let idx = trimmed.firstIndex(where: { [".", "!", "?"].contains($0) }) {
+            return String(trimmed[..<trimmed.index(after: idx)])
         }
-        return String(trimmed.prefix(140))
+        // If no terminator, softly cap at a reasonable length but break at whitespace
+        let softCap = 280
+        if trimmed.count > softCap {
+            let capIndex = trimmed.index(trimmed.startIndex, offsetBy: softCap, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
+            if let spaceIdx = trimmed[..<capIndex].lastIndex(of: " ") {
+                return String(trimmed[..<spaceIdx])
+            }
+        }
+        return trimmed
     }
 
     private func saveHeroEntriesToCache() {
@@ -1613,6 +1513,7 @@ struct ContentView: View {
     @MainActor private func loadHeroEntries() async {
         guard !isLoadingHero else { return }
         isLoadingHero = true
+        UserDefaults.standard.removeObject(forKey: heroCacheKey)
         defer { isLoadingHero = false }
         let feeds = Array(store.feeds.prefix(5))
         var built: [SidebarHeroCardView.Entry] = []
