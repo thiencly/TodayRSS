@@ -1164,33 +1164,37 @@ private struct SidebarHeroCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
-                Text("Today Highlights")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Spacer()
-            }
-
-            ForEach(entries.prefix(3)) { entry in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        FeedIconView(iconURL: entry.source.iconURL)
-                            .frame(width: 20, height: 20)
-                        Text(entry.source.title)
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                    }
-                    Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            // Inner content that should blur while loading
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
+                    Text("Today Highlights")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Spacer()
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { UIApplication.shared.open(entry.link) }
+
+                ForEach(entries.prefix(3)) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            FeedIconView(iconURL: entry.source.iconURL)
+                                .frame(width: 20, height: 20)
+                            Text(entry.source.title)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                        }
+                        Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { UIApplication.shared.open(entry.link) }
+                }
             }
+            .blur(radius: isUpdating ? 8 : 0)
         }
         .padding(16)
         .background(
@@ -1213,7 +1217,6 @@ private struct SidebarHeroCardView: View {
         )
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .blur(radius: isUpdating ? 8 : 0)
         .animation(.snappy(duration: 0.2), value: isUpdating)
     }
 }
