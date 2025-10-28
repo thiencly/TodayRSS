@@ -1160,6 +1160,7 @@ private struct SidebarHeroCardView: View {
     }
 
     let entries: [Entry]
+    var isUpdating: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1212,6 +1213,8 @@ private struct SidebarHeroCardView: View {
         )
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .blur(radius: isUpdating ? 8 : 0)
+        .animation(.snappy(duration: 0.2), value: isUpdating)
     }
 }
 
@@ -1513,8 +1516,16 @@ struct ContentView: View {
     @MainActor private func loadHeroEntries() async {
         guard !isLoadingHero else { return }
         isLoadingHero = true
-        UserDefaults.standard.removeObject(forKey: heroCacheKey)
-        defer { isLoadingHero = false }
+        let start = Date()
+        defer {
+            let elapsed = Date().timeIntervalSince(start)
+            let minDuration = 0.25
+            if elapsed < minDuration {
+                Task { try? await Task.sleep(nanoseconds: UInt64((minDuration - elapsed) * 1_000_000_000)); isLoadingHero = false }
+            } else {
+                isLoadingHero = false
+            }
+        }
         let feeds = Array(store.feeds.prefix(3))
         var built: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
@@ -1717,7 +1728,7 @@ struct ContentView: View {
                     .padding(.bottom, 6)
 
                     if !heroEntries.isEmpty {
-                        SidebarHeroCardView(entries: heroEntries)
+                        SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 8)
                     }
@@ -2460,5 +2471,4 @@ Avoid repetition and adjectives.
         return result
     }
 }
-
 
