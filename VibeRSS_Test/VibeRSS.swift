@@ -1525,20 +1525,18 @@ struct ContentView: View {
                         guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
                             return nil
                         }
-                        let length: ArticleSummarizer.Length = .short
+                        let length: ArticleSummarizer.Length = .quick
                         if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
-                            let one = self.oneSentence(from: cached)
+                            let one = cached
                             return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
                         } else {
                             var collected = ""
-                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .short, seedText: latest.summary)
-                            var tokenCount = 0
+                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .quick, seedText: latest.summary)
+                            // Removed tokenCount and break to allow full streaming
                             for await partial in stream {
                                 collected = partial
-                                tokenCount += 1
-                                if tokenCount >= 40 { break }
                             }
-                            let one = self.oneSentence(from: collected)
+                            let one = collected
                             return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
                         }
                     } catch {
@@ -1882,6 +1880,7 @@ actor ArticleSummarizer {
     static let shared = ArticleSummarizer()
 
     enum Length {
+        case quick
         case short, long
     }
 
@@ -1896,7 +1895,12 @@ actor ArticleSummarizer {
     // Nonisolated hint to quickly know if a cached summary likely exists (read-only from UserDefaults)
     nonisolated static func hasCachedSummary(url: URL, length: Length) -> Bool {
         // Reconstruct the key format used for storage
-        let len = (length == .long) ? "long" : "short"
+        let len: String
+        switch length {
+        case .quick: len = "quick"
+        case .short: len = "short"
+        case .long:  len = "long"
+        }
         let key = url.absoluteString + "#" + len
         // Read the serialized cache dictionary directly (avoids awaiting the actor)
         if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
@@ -1972,7 +1976,12 @@ actor ArticleSummarizer {
     }
 
     private func makeCacheKey(url: URL, length: Length) -> String {
-        let len = (length == .long) ? "long" : "short"
+        let len: String
+        switch length {
+        case .quick: len = "quick"
+        case .short: len = "short"
+        case .long:  len = "long"
+        }
         return url.absoluteString + "#" + len
     }
 
@@ -2130,25 +2139,70 @@ actor ArticleSummarizer {
                     await ArticleTextCache.shared.storeText(extracted, for: url)
                 }
 
-                let instructions: String = {
-                    switch length {
-                    case .short:
-                        return "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
-                    case .long:
-                        return "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. No fluff. Avoid repetition."
-                    }
-                }()
-
-                // Build a prompt using extracted text, optionally including a small portion of the feed's seed text for context.
-                var prompt = "Summarize this article:\n\n"
-                if let seed = seedText?.trimmingCharacters(in: .whitespacesAndNewlines), !seed.isEmpty {
-                    let s = String(seed.prefix(900))
-                    prompt += "Preview/context from feed:\n\(s)\n\n"
-                }
-
-                // Replace the switch on length with the new code for .short:
                 switch length {
+                case .quick:
+                    let instructions = "Summarize the article in 20 words or fewer. Use a single sentence. Focus on the single most important point. No lists, no emojis."
+                    var prompt = "Summarize this article:\n\n"
+                    if let seed = seedText?.trimmingCharacters(in: .whitespacesAndNewlines), !seed.isEmpty {
+                        let s = String(seed.prefix(900))
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
+                    }
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 600)
+                    let promptPrimer = prompt + primer
+                    do {
+                        let sessionPrimer = LanguageModelSession(instructions: instructions)
+                        let streamPrimer = sessionPrimer.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalTextPrimer: String = ""
+                        var revealedCountPrimer: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                        for try await partial in streamPrimer {
+                            if Task.isCancelled { continuation.finish(); return }
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalTextPrimer = t
+                            if t.count <= revealedCountPrimer { continue }
+                            var target = min(revealedCountPrimer + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                revealedCountPrimer = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCountPrimer + step, t.count)
+                            }
+                            continuation.yield(t)
+                            revealedCountPrimer = t.count
+                        }
+                        if !finalTextPrimer.isEmpty {
+                            self.cache[key] = finalTextPrimer
+                            self.saveCache()
+                            continuation.finish()
+                            return
+                        }
+                    } catch {
+                        continuation.finish()
+                        return
+                    }
                 case .short:
+                    let instructions: String = {
+                        switch length {
+                        case .short:
+                            return "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
+                        case .long:
+                            return "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. No fluff. Avoid repetition."
+                        default:
+                            return ""
+                        }
+                    }()
+
+                    // Build a prompt using extracted text, optionally including a small portion of the feed's seed text for context.
+                    var prompt = "Summarize this article:\n\n"
+                    if let seed = seedText?.trimmingCharacters(in: .whitespacesAndNewlines), !seed.isEmpty {
+                        let s = String(seed.prefix(900))
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
+                    }
+
                     // Stage 1: quick primer slice to reduce time-to-first-token
                     let primer = self.selectPrimerSlice(from: baseText, maxChars: 1000)
                     let promptPrimer = prompt + primer
@@ -2406,4 +2460,5 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 

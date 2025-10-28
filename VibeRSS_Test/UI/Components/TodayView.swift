@@ -5,7 +5,6 @@
 //  Created by Thien Ly on 10/27/25.
 //
 
-
 //
 // TodayView.swift
 // Extracted from VibeRSS.swift to keep the main app file focused.
@@ -71,24 +70,21 @@ struct TodayView: View {
                         }
 
                         // Prefer cached summary to minimize latency; otherwise stream a short one
-                        let length: ArticleSummarizer.Length = .short
+                        let length: ArticleSummarizer.Length = .quick
                         if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
-                            let one = Self.firstSentence(from: cached)
+                            let one = cached
                             return TodayCard(source: feed, latest: latest, oneLine: one)
                         } else {
                             var collected = ""
                             let stream = await ArticleSummarizer.shared.streamSummary(
                                 url: latest.link,
-                                length: .short,
+                                length: .quick,
                                 seedText: latest.summary
                             )
-                            var tokenCount = 0
                             for await partial in stream {
                                 collected = partial
-                                tokenCount += 1
-                                if tokenCount >= 40 { break } // keep it snappy
                             }
-                            let one = Self.firstSentence(from: collected)
+                            let one = collected
                             return TodayCard(source: feed, latest: latest, oneLine: one)
                         }
                     } catch {
@@ -142,23 +138,5 @@ struct TodayView: View {
         .task(id: refreshID) { await load() }
         .refreshable { await load() }
     }
-
-    // MARK: - Helpers
-    private static func firstSentence(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-        // Look for ., !, or ? as sentence terminators
-        if let idx = trimmed.firstIndex(where: { [".", "!", "?"].contains($0) }) {
-            return String(trimmed[..<trimmed.index(after: idx)])
-        }
-        // If no terminator, softly cap at a reasonable length but break at whitespace
-        let softCap = 280
-        if trimmed.count > softCap {
-            let capIndex = trimmed.index(trimmed.startIndex, offsetBy: softCap, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
-            if let spaceIdx = trimmed[..<capIndex].lastIndex(of: " ") {
-                return String(trimmed[..<spaceIdx])
-            }
-        }
-        return trimmed
-    }
 }
+
