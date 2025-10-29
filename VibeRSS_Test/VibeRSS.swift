@@ -268,8 +268,10 @@ struct FeedDetailView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title)
                                 .font(.headline)
-                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(2)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     webLink = WebLink(url: item.link)
@@ -341,6 +343,7 @@ struct FeedDetailView: View {
                                 }
                                 // Removed .animation(.snappy(duration: 0.25), value: expandedSummaries.contains(item.id))
                             }
+                            .padding(.top, 4)
 
                             HStack(alignment: .center, spacing: 6) {
                                 SourceBadge(iconURL: item.sourceIconURL ?? source.iconURL, name: item.sourceTitle ?? source.title)
@@ -554,8 +557,10 @@ struct FolderDetailView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title)
                                 .font(.headline)
-                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(2)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     webLink = WebLink(url: item.link)
@@ -627,6 +632,7 @@ struct FolderDetailView: View {
                                 }
                                 // Removed .animation(.snappy(duration: 0.25), value: expandedSummaries.contains(item.id))
                             }
+                            .padding(.top, 4)
 
                             HStack(alignment: .center, spacing: 6) {
                                 SourceBadge(iconURL: item.sourceIconURL, name: item.sourceTitle ?? "Source")
@@ -849,8 +855,10 @@ struct AllArticlesView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title)
                                 .font(.headline)
-                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(2)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     webLink = WebLink(url: item.link)
@@ -922,6 +930,7 @@ struct AllArticlesView: View {
                                 }
                                 // Removed .animation(.snappy(duration: 0.25), value: expandedSummaries.contains(item.id))
                             }
+                            .padding(.top, 4)
 
                             HStack(alignment: .center, spacing: 6) {
                                 SourceBadge(iconURL: item.sourceIconURL, name: item.sourceTitle ?? "Source")
