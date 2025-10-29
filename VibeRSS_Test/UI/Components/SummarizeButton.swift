@@ -1,4 +1,3 @@
-
 //
 //  SummarizeButton.swift
 //  Extracted UI component for the summarization control button with glow overlay.
@@ -167,11 +166,11 @@ struct SummarizeButton: View {
         )
     }
 
-    private var title: String {
-        switch state {
-        case .none, .generating: return "Summarize"
-        case .hasSummary: return "Summary"
-        }
+    private var title: String { "Summary" }
+
+    private var isGenerating: Bool {
+        if case .generating = state { return true }
+        return false
     }
 
     private var showChevron: Bool {
@@ -184,14 +183,9 @@ struct SummarizeButton: View {
         return false
     }
 
-    private var isGenerating: Bool {
-        if case .generating = state { return true }
-        return false
-    }
-
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 Group {
                     if isGenerating {
                         ProgressView()
@@ -203,6 +197,7 @@ struct SummarizeButton: View {
                         Image(systemName: "sparkles")
                             .font(.subheadline.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
+                            .frame(width: 16, height: 16)
                             .scaleEffect(1.0)
                     }
                 }
@@ -213,19 +208,21 @@ struct SummarizeButton: View {
                 Group {
                     if showChevron {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption2.weight(.semibold))
+                            .font(.caption.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
-                            .transition(.opacity)
+                            .frame(width: 12, height: 12, alignment: .center)
                     } else {
-                        // Reserve the same width as a chevron to keep the button width stable
-                        Image(systemName: "chevron.down")
-                            .font(.caption2.weight(.semibold))
-                            .opacity(0)
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .opacity(1.0)
+                            .frame(width: 12, height: 12, alignment: .center)
                     }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(minWidth: 110)
             .contentShape(Capsule())
         }
         .buttonStyle(GlassPillStyle())
@@ -248,3 +245,4 @@ struct SummarizeButton: View {
         .accessibilityLabel(title)
     }
 }
+
