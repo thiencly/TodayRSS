@@ -1157,6 +1157,7 @@ private struct SidebarHeroCardView: View {
         let title: String
         let oneLine: String
         let link: URL
+        let isNew: Bool
     }
 
     let entries: [Entry]
@@ -1183,6 +1184,12 @@ private struct SidebarHeroCardView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .lineLimit(1)
                                 .foregroundStyle(.primary)
+                            if entry.isNew {
+                                Circle()
+                                    .fill(Color.blue)
+                                    .frame(width: 6, height: 6)
+                                    .accessibilityLabel("New article")
+                            }
                             Spacer()
                         }
                         Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
@@ -1530,6 +1537,8 @@ struct ContentView: View {
             }
         }
         let feeds = Array(store.feeds.prefix(3))
+        // Capture previously seen links from cached hero entries to determine "new" status
+        let previouslySeenLinks: Set<URL> = Set(heroEntries.map { $0.link })
         var built: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
             for feed in feeds {
@@ -1542,7 +1551,8 @@ struct ContentView: View {
                         let length: ArticleSummarizer.Length = .quick
                         if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
                             let one = cached
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
+                            let isNew = !previouslySeenLinks.contains(latest.link)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew)
                         } else {
                             var collected = ""
                             let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .quick, seedText: latest.summary)
@@ -1551,7 +1561,8 @@ struct ContentView: View {
                                 collected = partial
                             }
                             let one = collected
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link)
+                            let isNew = !previouslySeenLinks.contains(latest.link)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew)
                         }
                     } catch {
                         return nil
