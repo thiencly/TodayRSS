@@ -1369,6 +1369,8 @@ struct ContentView: View {
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0 // seconds since 1970
     @State private var areSourcesCollapsed: Bool = false
 
+    @Environment(\.scenePhase) private var scenePhase
+
     // Sidebar hero card data
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
@@ -1908,12 +1910,18 @@ struct ContentView: View {
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()
-            // Load cached hero entries first so the card shows immediately on launch
+            // Always show cached hero entries immediately (if any)
             loadHeroEntriesFromCache()
-            // If no cache exists (first launch), build once and cache
-            if heroEntries.isEmpty {
+            // Always refresh hero entries on app open to fetch latest
+            Task { await loadHeroEntries() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
                 Task { await loadHeroEntries() }
             }
+        }
+        .onChange(of: store.feeds) { _, _ in
+            Task { await loadHeroEntries() }
         }
     }
 }
