@@ -1171,6 +1171,7 @@ private struct SidebarHeroCardView: View {
 
     let entries: [Entry]
     var isUpdating: Bool = false
+    var onTapLink: ((URL) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1207,7 +1208,7 @@ private struct SidebarHeroCardView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture { UIApplication.shared.open(entry.link) }
+                    .onTapGesture { onTapLink?(entry.link) }
                 }
             }
             .blur(radius: isUpdating ? 8 : 0)
@@ -1326,6 +1327,18 @@ struct AddFolderView: View {
 
 // MARK: - Safari wrapper
 
+struct ReaderSafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = true
+        let vc = SFSafariViewController(url: url, configuration: config)
+        vc.dismissButtonStyle = .close
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+}
+
 
 // MARK: - WebLink for sheet(item:)
 
@@ -1352,6 +1365,7 @@ struct ContentView: View {
     @State private var refreshArticlesSkippedThisRun: Int = 0
     @State private var currentRefreshRunID = UUID()
     @State private var cooldownUntil: Date? = nil
+    @State private var heroWebLink: WebLink? = nil
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0 // seconds since 1970
     @State private var areSourcesCollapsed: Bool = false
 
@@ -1751,7 +1765,9 @@ struct ContentView: View {
                     .padding(.bottom, 6)
 
                     if !heroEntries.isEmpty {
-                        SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero)
+                        SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero, onTapLink: { url in
+                            heroWebLink = WebLink(url: url)
+                        })
                             .padding(.horizontal, 16)
                             .padding(.bottom, 8)
                     }
@@ -1778,6 +1794,9 @@ struct ContentView: View {
                     store.folders.append(newFolder)
                 }
                 .presentationDetents([.medium])
+            }
+            .sheet(item: $heroWebLink) { w in
+                ReaderSafariView(url: w.url).ignoresSafeArea()
             }
             .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in
@@ -2494,4 +2513,5 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
