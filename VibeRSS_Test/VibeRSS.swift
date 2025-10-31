@@ -421,7 +421,7 @@ struct FeedDetailView: View {
         .task(id: refreshID) { await vm.load(for: source) }
         .navigationTitle(source.title)
         .sheet(item: $webLink) { w in
-            SafariView(url: w.url).ignoresSafeArea()
+            ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -710,7 +710,7 @@ struct FolderDetailView: View {
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
         .navigationTitle(folder.name)
         .sheet(item: $webLink) { w in
-            SafariView(url: w.url).ignoresSafeArea()
+            ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -1008,7 +1008,7 @@ struct AllArticlesView: View {
         .task(id: refreshID) { await vm.loadAll(feeds: store.feeds) }
         .navigationTitle("All Articles")
         .sheet(item: $webLink) { w in
-            SafariView(url: w.url).ignoresSafeArea()
+            ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -1111,53 +1111,53 @@ struct AllArticlesView: View {
 
 
 
-private struct SiriGlow: View {
-    @State private var phase: Double = 0
-    var cornerRadius: CGFloat = 22
-    var opacity: Double = 0.35
-
-    var body: some View {
-        TimelineView(.animation) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            let p = t.remainder(dividingBy: 6.0) / 6.0 // 6s loop
-
-            ZStack {
-                // Base soft blur background
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.clear)
-                    .background(.clear)
-
-                // Animated multi-color radial spots that drift slowly
-                glowSpot(color: .purple, x: cos(2 * .pi * (p + 0.00)) * 0.35, y: sin(2 * .pi * (p + 0.00)) * 0.25, radius: 160)
-                glowSpot(color: .blue,   x: cos(2 * .pi * (p + 0.33)) * 0.30, y: sin(2 * .pi * (p + 0.33)) * 0.30, radius: 170)
-                glowSpot(color: .pink,   x: cos(2 * .pi * (p + 0.66)) * 0.25, y: sin(2 * .pi * (p + 0.66)) * 0.35, radius: 150)
+// Simple shimmer modifier for loading placeholders
+private struct Shimmer: ViewModifier {
+    @State private var phase: CGFloat = -1
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { proxy in
+                    let gradient = LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.0),
+                            Color.white.opacity(0.35),
+                            Color.white.opacity(0.0)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    Rectangle()
+                        .fill(gradient)
+                        .rotationEffect(.degrees(20))
+                        .offset(x: proxy.size.width * phase)
+                        .frame(width: proxy.size.width * 0.6)
+                        .blendMode(.plusLighter)
+                }
+                .clipped()
+                .allowsHitTesting(false)
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+                    phase = 1.6
+                }
             }
-            .compositingGroup()
-            .blur(radius: 40)
-            .opacity(opacity)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .drawingGroup()
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
+}
 
-    private func glowSpot(color: Color, x: Double, y: Double, radius: CGFloat) -> some View {
-        GeometryReader { proxy in
-            let w = proxy.size.width
-            let h = proxy.size.height
-            let cx = w * 0.5 + CGFloat(x) * w * 0.6
-            let cy = h * 0.5 + CGFloat(y) * h * 0.6
-            Circle()
-                .fill(
-                    RadialGradient(colors: [color.opacity(0.8), color.opacity(0.0)], center: .center, startRadius: 0, endRadius: radius)
-                )
-                .frame(width: radius * 2, height: radius * 2)
-                .position(x: cx, y: cy)
-                .blendMode(.screen)
+private extension View {
+    @ViewBuilder
+    func shimmer(if condition: Bool) -> some View {
+        if condition {
+            self.modifier(Shimmer())
+        } else {
+            self
         }
     }
 }
+
+// Identity modifier helper
+// REMOVED IdentityModifier struct as no longer needed
 
 private struct SidebarHeroCardView: View {
     struct Entry: Identifiable, Hashable, Codable {
@@ -1185,33 +1185,20 @@ private struct SidebarHeroCardView: View {
                     Spacer()
                 }
 
-                ForEach(entries.prefix(3)) { entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            FeedIconView(iconURL: entry.source.iconURL)
-                                .frame(width: 20, height: 20)
-                            Text(entry.source.title)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                                .foregroundStyle(.primary)
-                            if entry.isNew {
-                                Circle()
-                                    .fill(Color.blue)
-                                    .frame(width: 6, height: 6)
-                                    .accessibilityLabel("New article")
-                            }
-                            Spacer()
+                // Show real entries if present; otherwise show 3 placeholders
+                Group {
+                    if entries.isEmpty {
+                        ForEach(0..<3, id: \.self) { _ in
+                            placeholderRow
                         }
-                        Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(entries.prefix(3)) { entry in
+                            entryRow(entry)
+                        }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTapLink?(entry.link) }
                 }
             }
-            .blur(radius: isUpdating ? 8 : 0)
+            // Removed .blur(radius: isUpdating ? 8 : 0)
         }
         .padding(16)
         .background(
@@ -1235,6 +1222,53 @@ private struct SidebarHeroCardView: View {
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.snappy(duration: 0.2), value: isUpdating)
+    }
+
+    @ViewBuilder
+    private func entryRow(_ entry: Entry) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                FeedIconView(iconURL: entry.source.iconURL)
+                    .frame(width: 20, height: 20)
+                Text(entry.source.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+                if entry.isNew {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                        .accessibilityLabel("New article")
+                }
+                Spacer()
+            }
+            Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTapLink?(entry.link) }
+        .redacted(reason: isUpdating ? .placeholder : [])
+        .shimmer(if: isUpdating)
+    }
+
+    private var placeholderRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.2))
+                    .frame(width: 20, height: 20)
+                RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.2))
+                    .frame(width: 120, height: 12)
+                Spacer()
+            }
+            RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.2))
+                .frame(height: 10)
+            RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.2))
+                .frame(width: 180, height: 10)
+        }
+        .redacted(reason: .placeholder)
+        .shimmer(if: true)
     }
 }
 
