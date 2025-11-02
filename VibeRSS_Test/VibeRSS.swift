@@ -1816,6 +1816,22 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("Clear Hero Cache") {
+                            // Clear cached hero entries and persisted storage; then reload
+                            heroEntries.removeAll()
+                            UserDefaults.standard.removeObject(forKey: heroCacheKey)
+                            Task { await loadHeroEntries() }
+                        }
+                        Button("Clear All Summaries", role: .destructive) {
+                            Task { await ArticleSummarizer.shared.clearCache() }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .help("Cache Tools")
+                }
             }
             .sheet(isPresented: $showingAdd) {
                 AddFeedView { newSource in
@@ -2555,5 +2571,7 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
+
 
 
