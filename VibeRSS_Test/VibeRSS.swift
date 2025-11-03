@@ -1122,23 +1122,51 @@ private struct Shimmer: ViewModifier {
                 GeometryReader { proxy in
                     let width = max(1, proxy.size.width)
                     let height = max(1, proxy.size.height)
-                    // A narrow diagonal gradient band
-                    let gradient = LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.0),
-                            Color.white.opacity(0.55),
-                            Color.white.opacity(0.0)
+
+                    // Primary multi-stop gradient with soft edges and a subtle tint
+                    let primary = LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: Color.white.opacity(0.0), location: 0.00),
+                            .init(color: Color.white.opacity(0.08), location: 0.18),
+                            .init(color: Color.white.opacity(0.35), location: 0.50),
+                            .init(color: Color.white.opacity(0.08), location: 0.82),
+                            .init(color: Color.white.opacity(0.0), location: 1.00)
                         ]),
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    Rectangle()
-                        .fill(gradient)
-                        .rotationEffect(.degrees(20))
-                        .frame(width: width * 0.6, height: height * 1.6)
-                        .offset(x: width * phase)
-                        // Screen keeps the highlight bright without lifting the base
-                        .blendMode(.screen)
+
+                    // Subtle colored sheen layered under the primary for a more gradient look
+                    let tint = LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: Color.blue.opacity(0.00), location: 0.00),
+                            .init(color: Color.blue.opacity(0.10), location: 0.45),
+                            .init(color: Color.purple.opacity(0.10), location: 0.55),
+                            .init(color: Color.purple.opacity(0.00), location: 1.00)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+
+                    ZStack {
+                        // Secondary wider band for depth
+                        Rectangle()
+                            .fill(tint)
+                            .rotationEffect(.degrees(18))
+                            .frame(width: width * 0.78, height: height * 1.8)
+                            .offset(x: width * (phase - 0.12))
+                            .blur(radius: 8)
+                            .blendMode(.screen)
+
+                        // Primary crisp band
+                        Rectangle()
+                            .fill(primary)
+                            .rotationEffect(.degrees(20))
+                            .frame(width: width * 0.64, height: height * 1.7)
+                            .offset(x: width * phase)
+                            .blur(radius: 2)
+                            .blendMode(.screen)
+                    }
                 }
                 .clipped()
                 .allowsHitTesting(false)
@@ -2579,6 +2607,7 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
 
 
