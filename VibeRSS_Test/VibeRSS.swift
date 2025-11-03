@@ -1249,20 +1249,7 @@ struct CurrentView: View {
                         withAnimation(.easeInOut(duration: 0.15)) { currentDay = topDay }
                     }
                 }
-                .safeAreaInset(edge: .top) {
-                    if let d = currentDay {
-                        HStack {
-                            FloatingDayChip(date: d)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 0)
-                        .padding(.leading, 16)
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 6)
-                        .allowsHitTesting(false)
-                    }
-                }
+                // Removed safeAreaInset(edge: .top) from CurrentView as requested
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -2886,6 +2873,7 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
 
 
