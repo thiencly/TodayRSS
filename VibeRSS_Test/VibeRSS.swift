@@ -1115,13 +1115,18 @@ struct AllArticlesView: View {
 private struct Shimmer: ViewModifier {
     @State private var phase: CGFloat = -1
     func body(content: Content) -> some View {
+        // Mask-based shimmer: the moving highlight is drawn and then
+        // masked by the content so it only shows over the redacted shapes.
         content
             .overlay(
                 GeometryReader { proxy in
+                    let width = max(1, proxy.size.width)
+                    let height = max(1, proxy.size.height)
+                    // A narrow diagonal gradient band
                     let gradient = LinearGradient(
                         gradient: Gradient(colors: [
                             Color.white.opacity(0.0),
-                            Color.white.opacity(0.35),
+                            Color.white.opacity(0.55),
                             Color.white.opacity(0.0)
                         ]),
                         startPoint: .top,
@@ -1130,13 +1135,16 @@ private struct Shimmer: ViewModifier {
                     Rectangle()
                         .fill(gradient)
                         .rotationEffect(.degrees(20))
-                        .offset(x: proxy.size.width * phase)
-                        .frame(width: proxy.size.width * 0.6)
-                        .blendMode(.plusLighter)
+                        .frame(width: width * 0.6, height: height * 1.6)
+                        .offset(x: width * phase)
+                        // Screen keeps the highlight bright without lifting the base
+                        .blendMode(.screen)
                 }
                 .clipped()
                 .allowsHitTesting(false)
             )
+            // Ensure the shimmer only appears where the content is non-transparent
+            .mask(content)
             .onAppear {
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                     phase = 1.6
@@ -2571,6 +2579,7 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
 
 
