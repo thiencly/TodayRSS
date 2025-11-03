@@ -2030,6 +2030,15 @@ struct ContentView: View {
                                             }
                                         }
                                     }
+                                    Divider()
+                                    Button("Delete", role: .destructive) {
+                                        if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                            store.feeds.remove(at: idx)
+                                            if selectedSource?.id == source.id {
+                                                selectedSource = store.feeds.first
+                                            }
+                                        }
+                                    }
                                 }
                                 .swipeActions {
                                     if source.folderID != nil {
@@ -2873,6 +2882,7 @@ Avoid repetition and adjectives.
         return result
     }
 }
+
 
 
 
