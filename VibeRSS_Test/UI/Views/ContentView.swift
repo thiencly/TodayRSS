@@ -118,7 +118,8 @@ private struct SidebarHeroCardView: View {
         .padding(16)
         .background(
             ZStack {
-                SiriGlow(cornerRadius: 22, opacity: 0.32)
+                // Inner ambient glow
+                SiriGlow(cornerRadius: 22, opacity: 0.25)
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(.ultraThinMaterial)
             }
@@ -131,6 +132,10 @@ private struct SidebarHeroCardView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+        )
+        // Apple Intelligence glow effect (idle state)
+        .background(
+            AppleIntelligenceGlow(cornerRadius: 22, isActive: false)
         )
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -92,3 +92,103 @@ struct SiriGlow: View {
         }
     }
 }
+
+// MARK: - Apple Intelligence Glow Colors
+struct AppleIntelligenceColors {
+    static let colors: [Color] = [
+        Color(red: 0.74, green: 0.51, blue: 0.95),  // Purple #BC82F3
+        Color(red: 0.96, green: 0.73, blue: 0.92),  // Pink #F5B9EA
+        Color(red: 0.55, green: 0.62, blue: 1.0),   // Blue #8D9FFF
+        Color(red: 0.67, green: 0.43, blue: 0.93),  // Violet #AA6EEE
+        Color(red: 1.0, green: 0.40, blue: 0.47),   // Coral #FF6778
+        Color(red: 1.0, green: 0.73, blue: 0.44),   // Orange #FFBA71
+        Color(red: 0.78, green: 0.53, blue: 1.0),   // Light Purple #C686FF
+    ]
+
+    static func randomizedGradient() -> [Gradient.Stop] {
+        let shuffled = colors.shuffled()
+        var stops: [Gradient.Stop] = []
+        for (index, color) in shuffled.enumerated() {
+            let baseLocation = Double(index) / Double(shuffled.count)
+            let jitter = Double.random(in: -0.08...0.08)
+            let location = max(0, min(1, baseLocation + jitter))
+            stops.append(Gradient.Stop(color: color, location: location))
+        }
+        return stops.sorted { $0.location < $1.location }
+    }
+}
+
+// MARK: - Apple Intelligence Glow Effect
+struct AppleIntelligenceGlow<S: InsettableShape>: View {
+    let shape: S
+    var isActive: Bool = false
+
+    // Layer configuration: (lineWidth, blurRadius)
+    private var layers: [(CGFloat, CGFloat)] {
+        isActive ? [
+            (3, 0),     // Sharp edge
+            (5, 5),     // Close glow
+            (8, 14),    // Mid glow
+            (12, 26),   // Outer glow
+            (16, 40),   // Far outer glow
+        ] : [
+            (2, 0),     // Sharp edge
+            (3, 4),     // Close glow
+            (4, 10),    // Mid glow
+            (6, 18),    // Outer glow
+        ]
+    }
+
+    private var glowOpacity: Double { isActive ? 0.7 : 0.6 }
+    private var saturation: Double { isActive ? 1.5 : 1.0 }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            // Colors flow along the edge - phase controls starting angle
+            let speed: Double = isActive ? 6.0 : 18.0 // faster when active
+            let currentPhase = (seconds.truncatingRemainder(dividingBy: speed) / speed) * 360.0
+
+            ZStack {
+                // Render glow layers from outermost to innermost
+                ForEach(layers.indices.reversed(), id: \.self) { index in
+                    let (lineWidth, blur) = layers[index]
+                    let layerOpacity = glowOpacity * (isActive ? (0.6 + 0.1 * Double(index)) : (0.5 + 0.15 * Double(index)))
+
+                    shape
+                        .stroke(
+                            AngularGradient(
+                                colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
+                                center: .center,
+                                startAngle: .degrees(currentPhase),
+                                endAngle: .degrees(currentPhase + 360)
+                            ),
+                            lineWidth: lineWidth
+                        )
+                        .blur(radius: blur)
+                        .saturation(saturation)
+                        .opacity(layerOpacity)
+                        .blendMode(index == 0 ? .plusLighter : .screen)
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: isActive)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Convenience initializers for common shapes
+extension AppleIntelligenceGlow where S == Capsule {
+    init(isActive: Bool = false) {
+        self.shape = Capsule()
+        self.isActive = isActive
+    }
+}
+
+extension AppleIntelligenceGlow where S == RoundedRectangle {
+    init(cornerRadius: CGFloat, isActive: Bool = false) {
+        self.shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        self.isActive = isActive
+    }
+}
