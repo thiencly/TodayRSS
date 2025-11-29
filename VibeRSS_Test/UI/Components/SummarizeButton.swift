@@ -83,55 +83,91 @@ struct SummarizeButton: View {
     // Visual state
     @State private var pulse = false
 
-    // Rotating glow overlay
+    // iOS 18 Siri-style glow overlay with multi-layered bleeding glow
     @ViewBuilder
     private func rotatingGlowOverlay() -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 45.0)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate
-            // Faster spin when idle, slightly slower when generating to reduce distraction
-            let period: Double = isGenerating ? 2.0 : 6.0 // seconds per full rotation
-            // Brighter glow when idle
-            let baseGlowOpacity: Double = isGenerating ? 3 : 0.5
-            let blurFill: CGFloat = isGenerating ? 58 : 52
-            let blur1: CGFloat = isGenerating ? 44 : 40
-            let blur2: CGFloat = isGenerating ? 84 : 76
-            let saturationBoost: Double = isGenerating ? 1.55 : 1.35
 
-            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: period) / period) * 360.0)
+            // Idle: slow rotation, subtle glow. Working: fast rotation, intense glow
+            let rotationPeriod: Double = isGenerating ? 1.5 : 6.0
+            let rotation = Angle(degrees: (seconds.truncatingRemainder(dividingBy: rotationPeriod) / rotationPeriod) * 360.0)
+
+            // Breathing pulse animation (slower cycle)
+            let pulsePeriod: Double = isGenerating ? 1.2 : 3.0
+            let pulsePhase = seconds.truncatingRemainder(dividingBy: pulsePeriod) / pulsePeriod
+            let pulseScale = 1.0 + sin(pulsePhase * 2 * .pi) * (isGenerating ? 0.2 : 0.08)
+
+            // State-dependent glow intensity - working state is MUCH brighter
+            let glowIntensity: Double = isGenerating ? 2.5 : 0.3
+            let glowSaturation: Double = isGenerating ? 2.2 : 1.3
 
             ZStack {
+                // Outer diffuse glow (bleeds far outside)
                 Capsule()
                     .fill(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0))
+                        AngularGradient(
+                            colors: SiriGradient.colors,
+                            center: .center,
+                            angle: .degrees(0)
+                        )
                     )
-                    .saturation(saturationBoost)
-                    .opacity(baseGlowOpacity * 0.55)
-                    .blur(radius: blurFill)
-                    .blendMode(.plusLighter)
+                    .saturation(glowSaturation)
+                    .blur(radius: isGenerating ? 100 : 45)
+                    .opacity(glowIntensity * 0.5)
+                    .scaleEffect(pulseScale * (isGenerating ? 1.45 : 1.15))
+                    .blendMode(.screen)
 
+                // Mid-range glow layer
+                Capsule()
+                    .fill(
+                        AngularGradient(
+                            colors: SiriGradient.colors,
+                            center: .center,
+                            angle: .degrees(0)
+                        )
+                    )
+                    .saturation(glowSaturation)
+                    .blur(radius: isGenerating ? 65 : 28)
+                    .opacity(glowIntensity * 0.7)
+                    .scaleEffect(pulseScale * (isGenerating ? 1.28 : 1.1))
+                    .blendMode(.screen)
+
+                // Close glow layer
                 Capsule()
                     .strokeBorder(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
-                        lineWidth: 3
+                        AngularGradient(
+                            colors: SiriGradient.colors,
+                            center: .center,
+                            angle: .degrees(0)
+                        ),
+                        lineWidth: 4
                     )
-                    .saturation(saturationBoost)
-                    .opacity(baseGlowOpacity)
-                    .blur(radius: blur1)
-                    .blendMode(.plusLighter)
+                    .saturation(glowSaturation)
+                    .blur(radius: isGenerating ? 38 : 16)
+                    .opacity(glowIntensity * 0.9)
+                    .scaleEffect(pulseScale * 1.05)
+                    .blendMode(.screen)
 
+                // Sharp edge highlight
                 Capsule()
                     .strokeBorder(
-                        AngularGradient(colors: SiriGradient.colors, center: .center, angle: .degrees(0)),
-                        lineWidth: 2
+                        AngularGradient(
+                            colors: SiriGradient.colors,
+                            center: .center,
+                            angle: .degrees(0)
+                        ),
+                        lineWidth: 2.5
                     )
-                    .saturation(saturationBoost)
-                    .opacity(baseGlowOpacity * 0.9)
-                    .blur(radius: blur2)
+                    .saturation(glowSaturation * 1.15)
+                    .blur(radius: isGenerating ? 12 : 4)
+                    .opacity(glowIntensity)
                     .blendMode(.plusLighter)
             }
             .rotationEffect(rotation)
-            .padding(-22)
+            .padding(-40) // Allow glow to extend beyond border
             .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.7), value: isGenerating)
         }
     }
 
@@ -240,8 +276,8 @@ struct SummarizeButton: View {
         )
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-        .scaleEffect(isGenerating ? 1.01 : 1.0)
-        .animation(isGenerating ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: isGenerating)
+        .scaleEffect(isGenerating ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.5), value: isGenerating)
         .accessibilityLabel(title)
     }
 }
