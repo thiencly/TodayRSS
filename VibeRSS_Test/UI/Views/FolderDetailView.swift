@@ -185,7 +185,7 @@ struct FolderDetailView: View {
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
         .navigationTitle(folder.name)
         .navigationBarTitleDisplayMode(.large)
-        .sheet(item: $webLink) { w in
+        .fullScreenCover(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {

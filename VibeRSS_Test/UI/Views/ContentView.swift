@@ -908,9 +908,6 @@ struct ContentView: View {
         } detail: {
             detailView
         }
-        .navigationDestination(for: Source.self) { source in
-            FeedDetailView(source: source, refreshID: refreshID)
-        }
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()

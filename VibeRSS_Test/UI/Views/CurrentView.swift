@@ -157,7 +157,7 @@ struct CurrentView: View {
         .task(id: refreshID) { await loadLatestPerSource() }
         .navigationTitle("Current")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(item: $webLink) { w in
+        .fullScreenCover(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {

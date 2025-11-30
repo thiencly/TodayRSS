@@ -16,8 +16,80 @@ enum FeedError: Error, LocalizedError {
     }
 }
 
+// MARK: - RSS Response Cache with Request Coalescing
+
+private actor RSSCache {
+    static let shared = RSSCache()
+
+    private struct CachedResponse {
+        let items: [FeedItem]
+        let timestamp: Date
+    }
+
+    private var cache: [URL: CachedResponse] = [:]
+    private var inFlightRequests: [URL: Task<[FeedItem], Error>] = [:]
+    private let cacheDuration: TimeInterval = 60 // 1 minute cache
+
+    func get(for url: URL) -> [FeedItem]? {
+        guard let cached = cache[url] else { return nil }
+
+        // Check if cache is still valid
+        if Date().timeIntervalSince(cached.timestamp) < cacheDuration {
+            return cached.items
+        } else {
+            // Expired, remove it
+            cache.removeValue(forKey: url)
+            return nil
+        }
+    }
+
+    func set(_ items: [FeedItem], for url: URL) {
+        cache[url] = CachedResponse(items: items, timestamp: Date())
+    }
+
+    func clear() {
+        cache.removeAll()
+    }
+
+    /// Check if there's an in-flight request for this URL and return it, or register a new one
+    func getOrCreateInFlightRequest(for url: URL, factory: @escaping () async throws -> [FeedItem]) async throws -> [FeedItem] {
+        // Check cache first
+        if let cached = get(for: url) {
+            return cached
+        }
+
+        // Check if there's already an in-flight request
+        if let existingTask = inFlightRequests[url] {
+            return try await existingTask.value
+        }
+
+        // Create new request task
+        let task = Task {
+            try await factory()
+        }
+        inFlightRequests[url] = task
+
+        do {
+            let items = try await task.value
+            set(items, for: url)
+            inFlightRequests.removeValue(forKey: url)
+            return items
+        } catch {
+            inFlightRequests.removeValue(forKey: url)
+            throw error
+        }
+    }
+}
+
 actor FeedService {
     func loadItems(from url: URL) async throws -> [FeedItem] {
+        // Use cache with request coalescing to avoid duplicate simultaneous requests
+        return try await RSSCache.shared.getOrCreateInFlightRequest(for: url) {
+            try await self.fetchFromNetwork(url: url)
+        }
+    }
+
+    private func fetchFromNetwork(url: URL) async throws -> [FeedItem] {
         // Try HTTPS first, fall back to original URL if it fails
         var urlsToTry: [URL] = []
 
@@ -35,7 +107,6 @@ actor FeedService {
             do {
                 return try await loadItemsFromURL(effectiveURL)
             } catch {
-                print("[FeedService] Failed to load from \(effectiveURL): \(error)")
                 lastError = error
                 continue
             }
@@ -45,7 +116,6 @@ actor FeedService {
     }
 
     private func loadItemsFromURL(_ url: URL) async throws -> [FeedItem] {
-        print("[FeedService] Loading from: \(url)")
 
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         try Task.checkCancellation()
@@ -54,14 +124,10 @@ actor FeedService {
         try Task.checkCancellation()
 
         guard let http = response as? HTTPURLResponse else {
-            print("[FeedService] No HTTP response")
             throw FeedError.requestFailed
         }
 
-        print("[FeedService] Status: \(http.statusCode), Size: \(data.count) bytes")
-
         guard (200..<300).contains(http.statusCode) else {
-            print("[FeedService] Bad status code: \(http.statusCode)")
             throw FeedError.requestFailed
         }
 
@@ -71,11 +137,9 @@ actor FeedService {
             } else if xml.contains("<rss") || xml.contains("<channel") {
                 return try await parseRSS(data)
             } else {
-                print("[FeedService] Unknown feed format. First 500 chars: \(String(xml.prefix(500)))")
                 throw FeedError.parseFailed
             }
         } else {
-            print("[FeedService] Could not decode data as UTF-8")
             throw FeedError.parseFailed
         }
     }

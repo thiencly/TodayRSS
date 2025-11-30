@@ -46,7 +46,46 @@ actor ArticleSummarizer {
     private var saveCacheDebounceTask: Task<Void, Never>? = nil
     private var saveExpandedDebounceTask: Task<Void, Never>? = nil
 
-    // Nonisolated hint to quickly know if a cached summary likely exists (read-only from UserDefaults)
+    // In-memory set for fast O(1) lookup of cached keys (avoids JSON decode on every check)
+    private static var cachedKeysLookup: Set<String> = []
+    private static var lookupInitialized = false
+    private static let lookupLock = NSLock()
+
+    // Initialize lookup from UserDefaults - call this once at app startup on background thread
+    static func initializeLookupAsync() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            lookupLock.lock()
+            defer { lookupLock.unlock() }
+            guard !lookupInitialized else { return }
+
+            if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
+               let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+                cachedKeysLookup = Set(dict.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.keys)
+            }
+            lookupInitialized = true
+        }
+    }
+
+    // Update the lookup when cache changes
+    private static func addToLookup(_ key: String) {
+        lookupLock.lock()
+        cachedKeysLookup.insert(key)
+        lookupLock.unlock()
+    }
+
+    private static func removeFromLookup(_ key: String) {
+        lookupLock.lock()
+        cachedKeysLookup.remove(key)
+        lookupLock.unlock()
+    }
+
+    static func clearLookup() {
+        lookupLock.lock()
+        cachedKeysLookup.removeAll()
+        lookupLock.unlock()
+    }
+
+    // Fast O(1) check - no JSON decoding
     nonisolated static func hasCachedSummary(url: URL, length: Length) -> Bool {
         let len: String
         switch length {
@@ -55,11 +94,10 @@ actor ArticleSummarizer {
         case .long:  len = "long"
         }
         let key = url.absoluteString + "#" + len
-        if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
-           let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-            return dict[key] != nil
-        }
-        return false
+        lookupLock.lock()
+        let result = cachedKeysLookup.contains(key)
+        lookupLock.unlock()
+        return result
     }
 
     private var isWarmedUp = false
@@ -106,8 +144,12 @@ actor ArticleSummarizer {
     /// Fast summary for hero cards - optimized for speed
     func fastHeroSummary(url: URL, articleText: String?) async -> String? {
         let key = makeCacheKey(url: url, length: .quick)
-        if let cached = cache[key] {
+        if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return cached
+        } else if cache[key] != nil {
+            // Remove invalid empty cache entry
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
         }
 
         #if canImport(FoundationModels)
@@ -142,6 +184,7 @@ actor ArticleSummarizer {
             let text = result.content.text
             if !text.isEmpty {
                 cache[key] = text
+                Self.addToLookup(key)
                 saveCache()
                 return text
             }
@@ -156,7 +199,8 @@ actor ArticleSummarizer {
     private static func loadCacheFromDefaults() -> [String: String] {
         if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-            return dict
+            // Filter out any empty entries that may have been saved previously
+            return dict.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         }
         return [:]
     }
@@ -171,7 +215,9 @@ actor ArticleSummarizer {
 
     private func saveCache() {
         saveCacheDebounceTask?.cancel()
-        guard let data = try? JSONEncoder().encode(cache) else { return }
+        // Filter out empty entries before saving
+        let validCache = cache.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard let data = try? JSONEncoder().encode(validCache) else { return }
         saveCacheDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
             UserDefaults.standard.set(data, forKey: cacheStoreKey)
@@ -190,13 +236,22 @@ actor ArticleSummarizer {
     func clearCache() {
         cache.removeAll()
         expandedState.removeAll()
+        Self.clearLookup()
         UserDefaults.standard.removeObject(forKey: cacheStoreKey)
         UserDefaults.standard.removeObject(forKey: expandedStoreKey)
     }
 
     func cachedSummary(for url: URL, length: Length) -> String? {
         let key = makeCacheKey(url: url, length: length)
-        return cache[key]
+        if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return cached
+        }
+        // Remove invalid empty cache entry if present
+        if cache[key] != nil {
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
+        }
+        return nil
     }
 
     func isExpanded(url: URL, length: Length) async -> Bool {
@@ -340,10 +395,14 @@ actor ArticleSummarizer {
         AsyncStream { continuation in
             let worker = Task {
                 let key = makeCacheKey(url: url, length: length)
-                if let cached = cache[key] {
+                if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     continuation.yield(cached)
                     continuation.finish()
                     return
+                } else if cache[key] != nil {
+                    // Remove invalid empty cache entry
+                    cache.removeValue(forKey: key)
+                    Self.removeFromLookup(key)
                 }
                 if Task.isCancelled { continuation.finish(); return }
 
@@ -411,6 +470,7 @@ actor ArticleSummarizer {
                         }
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
+                            Self.addToLookup(key)
                             self.saveCache()
                             continuation.finish()
                             return
@@ -461,6 +521,7 @@ actor ArticleSummarizer {
                         }
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
+                            Self.addToLookup(key)
                             self.saveCache()
                             // Skip Stage 2 if primer covers enough content or result is sufficient
                             if finalTextPrimer.count >= 100 || primer.count >= baseText.count / 2 {
@@ -500,6 +561,7 @@ actor ArticleSummarizer {
                     }
                     if !finalTextFull.isEmpty {
                         self.cache[key] = finalTextFull
+                        Self.addToLookup(key)
                         self.saveCache()
                     }
                     continuation.finish()
@@ -552,6 +614,7 @@ Avoid repetition and adjectives.
                         }
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
+                            Self.addToLookup(key)
                             self.saveCache()
                             // Skip Stage 2 if primer covers enough content or result is sufficient
                             if finalTextPrimer.count >= 140 || primer.count >= baseText.count / 2 {
@@ -597,6 +660,7 @@ Avoid repetition and adjectives.
 
                     if !finalTextFull.isEmpty {
                         self.cache[key] = finalTextFull
+                        Self.addToLookup(key)
                         self.saveCache()
                     }
                     continuation.finish()

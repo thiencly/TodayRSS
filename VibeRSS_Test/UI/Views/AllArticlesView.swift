@@ -182,7 +182,7 @@ struct AllArticlesView: View {
         .task(id: refreshID) { await vm.loadAll(feeds: store.feeds) }
         .navigationTitle("All Articles")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(item: $webLink) { w in
+        .fullScreenCover(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()
         }
         .toolbar {

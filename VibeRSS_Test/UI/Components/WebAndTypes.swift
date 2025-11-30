@@ -14,10 +14,13 @@ import SafariServices
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
+    var entersReaderIfAvailable: Bool = true  // Auto-enter reader mode when available
+
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
-        config.entersReaderIfAvailable = true
+        config.entersReaderIfAvailable = entersReaderIfAvailable
         let vc = SFSafariViewController(url: url, configuration: config)
+        vc.dismissButtonStyle = .close
         return vc
     }
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
