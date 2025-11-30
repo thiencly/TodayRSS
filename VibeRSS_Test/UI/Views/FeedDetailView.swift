@@ -181,6 +181,7 @@ struct FeedDetailView: View {
         }
         .task(id: refreshID) { await vm.load(for: source) }
         .navigationTitle(source.title)
+        .navigationBarTitleDisplayMode(.large)
         .sheet(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()
         }

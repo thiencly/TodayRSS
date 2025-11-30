@@ -119,6 +119,7 @@ private struct SidebarHeroCardView: View {
     }
 
     let entries: [Entry]
+    var expectedCount: Int = 3
     var isUpdating: Bool = false
     var onTapLink: ((URL) -> Void)? = nil
 
@@ -135,7 +136,7 @@ private struct SidebarHeroCardView: View {
 
                 Group {
                     if entries.isEmpty {
-                        ForEach(0..<3, id: \.self) { _ in
+                        ForEach(0..<expectedCount, id: \.self) { _ in
                             placeholderRow
                         }
                     } else {
@@ -247,8 +248,32 @@ struct ContentView: View {
 
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
-    @State private var heroCardHeight: CGFloat = 250
+    @State private var heroCardHeight: CGFloat = 200
+    @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
     private let heroCacheKey = "viberss.heroEntries"
+
+    private var heroSourceIDs: Set<UUID> {
+        (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
+    }
+
+    private func saveHeroSourceIDs(_ ids: Set<UUID>) {
+        heroSourceIDsData = (try? JSONEncoder().encode(ids)) ?? Data()
+    }
+
+    private func toggleHeroSource(_ source: Source) {
+        var ids = heroSourceIDs
+        if ids.contains(source.id) {
+            ids.remove(source.id)
+        } else if ids.count < 3 {
+            ids.insert(source.id)
+        }
+        saveHeroSourceIDs(ids)
+        Task { await loadHeroEntries() }
+    }
+
+    private func isHeroSource(_ source: Source) -> Bool {
+        heroSourceIDs.contains(source.id)
+    }
 
     private let refreshService = FeedService()
 
@@ -419,7 +444,8 @@ struct ContentView: View {
                 isLoadingHero = false
             }
         }
-        let feeds = Array(store.feeds.prefix(3))
+        let selectedIDs = heroSourceIDs
+        let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
         let previouslySeenLinks: Set<URL> = Set(heroEntries.map { $0.link })
         var built: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
@@ -539,10 +565,29 @@ struct ContentView: View {
                                 HStack(spacing: 12) {
                                     FeedIconView(iconURL: source.iconURL)
                                     Text(source.title)
+                                    Spacer()
+                                    if isHeroSource(source) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.blue)
+                                            .font(.subheadline)
+                                    }
                                 }
                                 .contentShape(Rectangle())
                             }
                             .contextMenu {
+                                Button {
+                                    toggleHeroSource(source)
+                                } label: {
+                                    if isHeroSource(source) {
+                                        Label("Remove from Hero Card", systemImage: "star.slash")
+                                    } else if heroSourceIDs.count < 3 {
+                                        Label("Add to Hero Card", systemImage: "star")
+                                    } else {
+                                        Label("Hero Card Full (3 max)", systemImage: "star.slash")
+                                    }
+                                }
+                                .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
+
                                 Button("Refresh Icon") {
                                     Task { await store.refreshIcon(for: source) }
                                 }
@@ -612,8 +657,29 @@ struct ContentView: View {
                 }
                 .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
-            .contentMargins(.top, heroCardHeight + 16, for: .scrollContent)
             .navigationTitle("TodayRSS")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !heroSourceIDs.isEmpty {
+                    SidebarHeroCardView(entries: heroEntries, expectedCount: heroSourceIDs.count, isUpdating: isLoadingHero, onTapLink: { url in
+                        heroWebLink = WebLink(url: url)
+                    })
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { heroCardHeight = geo.size.height }
+                                .onChange(of: geo.size.height) { _, newHeight in
+                                    if !isLoadingHero {
+                                        heroCardHeight = newHeight
+                                    }
+                                }
+                        }
+                    )
+                    .frame(minHeight: isLoadingHero ? heroCardHeight : nil)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
@@ -713,27 +779,6 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {}
             } message: { source in
                 Text("Choose a folder for \(source.title)")
-            }
-
-            // Hero card overlay at top
-            VStack {
-                SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero, onTapLink: { url in
-                    heroWebLink = WebLink(url: url)
-                })
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: HeroCardHeightKey.self, value: geo.size.height)
-                    }
-                )
-                Spacer()
-            }
-            .onPreferenceChange(HeroCardHeightKey.self) { height in
-                if height > 0 {
-                    heroCardHeight = height
-                }
             }
 
             // Refresh progress overlay at bottom
