@@ -6,6 +6,13 @@ import SwiftUI
 
 @main
 struct VibeRSSApp: App {
+    init() {
+        // Warm up the on-device summarization model early
+        Task {
+            await ArticleSummarizer.shared.warmUp()
+        }
+    }
+
     var body: some Scene {
         WindowGroup { ContentView() }
     }

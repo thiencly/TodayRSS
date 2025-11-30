@@ -62,9 +62,30 @@ actor ArticleSummarizer {
         return false
     }
 
+    private var isWarmedUp = false
+
     init() {
         cache = Self.loadCacheFromDefaults()
         expandedState = Self.loadExpandedFromDefaults()
+    }
+
+    /// Call this early in app launch to pre-load the on-device model
+    func warmUp() async {
+        guard !isWarmedUp else { return }
+        isWarmedUp = true
+
+        #if canImport(FoundationModels)
+        let model = SystemLanguageModel.default
+        guard case .available = model.availability else { return }
+
+        // Create a session and run a tiny prompt to trigger model loading
+        let session = LanguageModelSession(instructions: "Be brief.")
+        do {
+            _ = try await session.respond(to: "Hi", generating: InlineSummary.self)
+        } catch {
+            // Warm-up failed, but that's okay - model will load on first real request
+        }
+        #endif
     }
 
     private static func loadCacheFromDefaults() -> [String: String] {

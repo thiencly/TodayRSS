@@ -465,21 +465,14 @@ struct ContentView: View {
     @MainActor private func loadHeroEntries() async {
         guard !isLoadingHero else { return }
         isLoadingHero = true
-        let start = Date()
-        defer {
-            let elapsed = Date().timeIntervalSince(start)
-            let minDuration = 0.25
-            if elapsed < minDuration {
-                Task { try? await Task.sleep(nanoseconds: UInt64((minDuration - elapsed) * 1_000_000_000)); isLoadingHero = false }
-            } else {
-                isLoadingHero = false
-            }
-        }
+
         let selectedIDs = heroSourceIDs
         let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
         let previouslySeenLinks: Set<URL> = Set(heroEntries.map { $0.link })
-        var built: [SidebarHeroCardView.Entry] = []
-        await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
+
+        // Step 1: Fetch all feeds in parallel (fast - just RSS parsing)
+        var feedArticles: [(feed: Feed, article: FeedItem)] = []
+        await withTaskGroup(of: (Feed, FeedItem)?.self) { group in
             for feed in feeds {
                 group.addTask {
                     do {
@@ -487,32 +480,59 @@ struct ContentView: View {
                         guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
                             return nil
                         }
-                        let length: ArticleSummarizer.Length = .quick
-                        if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
-                            let one = cached
-                            let isNew = !previouslySeenLinks.contains(latest.link)
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew, pubDate: latest.pubDate)
-                        } else {
-                            var collected = ""
-                            let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .quick, seedText: latest.summary)
-                            for await partial in stream {
-                                collected = partial
-                            }
-                            let one = collected
-                            let isNew = !previouslySeenLinks.contains(latest.link)
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew, pubDate: latest.pubDate)
-                        }
+                        return (feed, latest)
                     } catch {
                         return nil
                     }
                 }
             }
             for await result in group {
-                if let entry = result { built.append(entry) }
+                if let r = result { feedArticles.append(r) }
             }
         }
-        heroEntries = built
+
+        // Sort by most recent first
+        feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
+
+        // Step 2: Process summaries one by one, most recent first, updating UI after each
+        var builtEntries: [SidebarHeroCardView.Entry] = []
+
+        for (index, (feed, article)) in feedArticles.enumerated() {
+            let length: ArticleSummarizer.Length = .quick
+            let isNew = !previouslySeenLinks.contains(article.link)
+
+            var summary = ""
+            if let cached = await ArticleSummarizer.shared.cachedSummary(for: article.link, length: length) {
+                summary = cached
+            } else {
+                let stream = await ArticleSummarizer.shared.streamSummary(url: article.link, length: .quick, seedText: article.summary)
+                for await partial in stream {
+                    summary = partial
+                }
+            }
+
+            let entry = SidebarHeroCardView.Entry(
+                source: feed,
+                title: article.title,
+                oneLine: summary,
+                link: article.link,
+                isNew: isNew,
+                pubDate: article.pubDate
+            )
+            builtEntries.append(entry)
+
+            // Update UI after each entry is processed
+            heroEntries = builtEntries
+
+            // After first entry is ready, stop showing loading shimmer
+            // so collapsed view shows content immediately
+            if index == 0 {
+                isLoadingHero = false
+            }
+        }
+
         saveHeroEntriesToCache()
+        isLoadingHero = false
     }
 
     @ViewBuilder private var sidebar: some View {
