@@ -614,6 +614,45 @@ struct ContentView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
+                        Button {
+                            if let until = cooldownUntil, until > Date() { return }
+                            guard !isRefreshingAll else { return }
+                            isRefreshingAll = true
+                            currentRefreshRunID = UUID()
+                            Task {
+                                await feedGate.reset()
+                                await articleGate.reset()
+                                await MainActor.run {
+                                    refreshCompleted = 0
+                                    refreshTotal = store.feeds.count
+                                    refreshArticlesCachedThisRun = 0
+                                    refreshArticlesSkippedThisRun = 0
+                                }
+                                do {
+                                    try await withTimeout(30.0) { await refreshAll() }
+                                } catch {
+                                    await feedGate.reset()
+                                    await articleGate.reset()
+                                }
+                                await MainActor.run {
+                                    refreshID = UUID()
+                                    Task { await loadHeroEntries() }
+                                    isRefreshingAll = false
+                                    refreshCompleted = 0
+                                    refreshTotal = 0
+                                    refreshArticlesCachedThisRun = 0
+                                    refreshArticlesSkippedThisRun = 0
+                                    lastRefreshAllDate = Date().timeIntervalSince1970
+                                    cooldownUntil = Date().addingTimeInterval(1.5)
+                                }
+                            }
+                        } label: {
+                            Label("Refresh All Feeds", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(isRefreshingAll)
+
+                        Divider()
+
                         Button("Clear Hero Cache") {
                             heroEntries.removeAll()
                             UserDefaults.standard.removeObject(forKey: heroCacheKey)
@@ -623,9 +662,15 @@ struct ContentView: View {
                             Task { await ArticleSummarizer.shared.clearCache() }
                         }
                     } label: {
-                        Image(systemName: "arrow.counterclockwise")
+                        if isRefreshingAll {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                        }
                     }
-                    .help("Cache Tools")
+                    .help("Refresh & Cache Tools")
                 }
             }
             .sheet(isPresented: $showingAdd) {
@@ -660,43 +705,6 @@ struct ContentView: View {
             } message: { source in
                 Text("Choose a folder for \(source.title)")
             }
-
-            FloatingRefreshButton(isLoading: isRefreshingAll) {
-                if let until = cooldownUntil, until > Date() { return }
-                guard !isRefreshingAll else { return }
-                isRefreshingAll = true
-                currentRefreshRunID = UUID()
-                let localRunID = currentRefreshRunID
-                Task {
-                    await feedGate.reset()
-                    await articleGate.reset()
-                    await MainActor.run {
-                        refreshCompleted = 0
-                        refreshTotal = store.feeds.count
-                        refreshArticlesCachedThisRun = 0
-                        refreshArticlesSkippedThisRun = 0
-                    }
-                    do {
-                        try await withTimeout(30.0) { await refreshAll() }
-                    } catch {
-                        await feedGate.reset()
-                        await articleGate.reset()
-                    }
-                    await MainActor.run {
-                        refreshID = UUID()
-                        Task { await loadHeroEntries() }
-                        isRefreshingAll = false
-                        refreshCompleted = 0
-                        refreshTotal = 0
-                        refreshArticlesCachedThisRun = 0
-                        refreshArticlesSkippedThisRun = 0
-                        lastRefreshAllDate = Date().timeIntervalSince1970
-                        cooldownUntil = Date().addingTimeInterval(1.5)
-                    }
-                }
-            }
-            .padding(.trailing, 16)
-            .padding(.bottom, 24)
 
             VStack {
                 Spacer()
