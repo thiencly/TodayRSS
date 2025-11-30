@@ -288,7 +288,6 @@ struct ContentView: View {
     @State private var areSourcesCollapsed: Bool = false
     @State private var areFoldersCollapsed: Bool = false
     @State private var showingSettings: Bool = false
-    @Namespace private var settingsTransition
 
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
@@ -813,7 +812,7 @@ struct ContentView: View {
                     selectedSource = newSource
                 }
                 .environmentObject(store)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
             }
             .sheet(isPresented: $showingAddFolder) {
                 AddFolderView { newFolder in
@@ -883,16 +882,15 @@ struct ContentView: View {
                                 Circle().strokeBorder(Color.secondary.opacity(0.2))
                             )
                     }
-                    .matchedTransitionSource(id: "settings", in: settingsTransition)
                     .padding(.leading, 16)
                     .padding(.bottom, 16)
                     Spacer()
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingSettings) {
+        .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .navigationTransition(.zoom(sourceID: "settings", in: settingsTransition))
+                .presentationDetents([.large])
         }
     }
 
