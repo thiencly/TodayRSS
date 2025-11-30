@@ -12,7 +12,6 @@ struct FolderDetailView: View {
     @State private var inlineSummaries: [UUID: String] = [:]
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
-    @State private var hasCachedText: Set<UUID> = []
 
     @AppStorage("summaryLength") private var summaryLengthRaw: String = "short"
     @State private var aiSummarized: Set<UUID> = []
@@ -85,11 +84,11 @@ struct FolderDetailView: View {
                                     }
                                     .disabled(isError)
 
-                                    if hasCachedText.contains(item.id) {
+                                    if vm.newArticleIDs.contains(item.id) {
                                         Circle()
-                                            .fill(Color.green)
+                                            .fill(Color.blue)
                                             .frame(width: 6, height: 6)
-                                            .accessibilityLabel("Cached text available")
+                                            .accessibilityLabel("New article")
                                     }
                                 }
 
@@ -175,11 +174,13 @@ struct FolderDetailView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            FloatingRefreshButton(isLoading: vm.isLoading) {
-                Task { await vm.load(for: folder, feeds: store.feeds) }
+            if !vm.items.isEmpty {
+                FloatingRefreshButton(isLoading: vm.isLoading) {
+                    Task { await vm.load(for: folder, feeds: store.feeds) }
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 24)
             }
-            .padding(.trailing, 16)
-            .padding(.bottom, 24)
         }
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
         .navigationTitle(folder.name)
@@ -241,7 +242,6 @@ struct FolderDetailView: View {
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
-            var cachedFlags = hasCachedText
 
             for item in items {
                 if updated[item.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: item.link, length: length) {
@@ -252,15 +252,9 @@ struct FolderDetailView: View {
                 } else {
                     expanded.remove(item.id)
                 }
-                if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
-                    cachedFlags.insert(item.id)
-                } else {
-                    cachedFlags.remove(item.id)
-                }
             }
             inlineSummaries = updated
             expandedSummaries = expanded
-            hasCachedText = cachedFlags
         }
     }
 

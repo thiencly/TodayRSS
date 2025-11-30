@@ -6,8 +6,20 @@ final class FolderItemsViewModel: ObservableObject {
     @Published var items: [Article] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var newArticleIDs: Set<UUID> = []
 
     private let service = FeedService()
+    private var previousArticleIDs: Set<UUID> = []
+
+    private func updateNewArticles(from articles: [Article]) {
+        let currentIDs = Set(articles.map { $0.id })
+        if previousArticleIDs.isEmpty {
+            newArticleIDs = []
+        } else {
+            newArticleIDs = currentIDs.subtracting(previousArticleIDs)
+        }
+        previousArticleIDs = currentIDs
+    }
 
     func load(for folder: Folder, feeds: [Feed]) async {
         isLoading = true; errorMessage = nil
@@ -33,13 +45,17 @@ final class FolderItemsViewModel: ObservableObject {
         }
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
             // If date math fails, sort without filtering
-            items = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
             isLoading = false
             return
         }
         // Updated filter logic for pubDate nil items kept
         let filtered = all.filter { if let d = $0.pubDate { return d >= cutoff } else { return true } }
-        items = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        updateNewArticles(from: sorted)
+        items = sorted
         isLoading = false
     }
 
@@ -67,13 +83,17 @@ final class FolderItemsViewModel: ObservableObject {
         }
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
             // If date math fails, sort without filtering
-            items = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
             isLoading = false
             return
         }
         // Updated filter logic for pubDate nil items kept
         let filtered = all.filter { if let d = $0.pubDate { return d >= cutoff } else { return true } }
-        items = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        updateNewArticles(from: sorted)
+        items = sorted
         isLoading = false
     }
 }

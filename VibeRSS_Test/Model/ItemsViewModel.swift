@@ -6,8 +6,10 @@ final class ItemsViewModel: ObservableObject {
     @Published var items: [Article] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var newArticleIDs: Set<UUID> = []
 
     private let service = FeedService()
+    private var previousArticleIDs: Set<UUID> = []
 
     func load(for source: Source) async {
         isLoading = true; errorMessage = nil
@@ -20,7 +22,9 @@ final class ItemsViewModel: ObservableObject {
             }
             guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
                 // If date math fails, keep existing items order without filtering
-                items = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+                let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+                updateNewArticles(from: sorted)
+                items = sorted
                 isLoading = false
                 return
             }
@@ -28,10 +32,22 @@ final class ItemsViewModel: ObservableObject {
             result = result.filter { item in
                 if let d = item.pubDate { return d >= cutoff } else { return true }
             }
-            items = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func updateNewArticles(from articles: [Article]) {
+        let currentIDs = Set(articles.map { $0.id })
+        if previousArticleIDs.isEmpty {
+            newArticleIDs = []
+        } else {
+            newArticleIDs = currentIDs.subtracting(previousArticleIDs)
+        }
+        previousArticleIDs = currentIDs
     }
 }
