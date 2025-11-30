@@ -130,17 +130,22 @@ private struct SidebarHeroCardView: View {
         entries.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
     }
 
-    private var visibleEntries: [Entry] {
-        let sorted = sortedEntries
-        if isCollapsed {
-            return Array(sorted.prefix(1))
-        } else {
-            return Array(sorted.prefix(3))
-        }
+    private var visibleEntryCount: Int {
+        isCollapsed ? 1 : expectedCount
     }
 
-    private var visiblePlaceholderCount: Int {
-        isCollapsed ? 1 : expectedCount
+    private var visibleEntries: [Entry] {
+        let sorted = sortedEntries
+        return Array(sorted.prefix(visibleEntryCount))
+    }
+
+    private var remainingPlaceholderCount: Int {
+        if isCollapsed {
+            return entries.isEmpty ? 1 : 0
+        } else {
+            // Show placeholders for entries not yet loaded
+            return max(0, expectedCount - entries.count)
+        }
     }
 
     var body: some View {
@@ -165,17 +170,26 @@ private struct SidebarHeroCardView: View {
 
                 Group {
                     if entries.isEmpty {
-                        ForEach(0..<visiblePlaceholderCount, id: \.self) { _ in
+                        // No entries yet - show all placeholders
+                        ForEach(0..<visibleEntryCount, id: \.self) { _ in
                             placeholderRow
                         }
                     } else {
+                        // Show loaded entries
                         ForEach(visibleEntries) { entry in
                             entryRow(entry)
+                        }
+                        // Show shimmer placeholders for remaining entries still loading
+                        if !isCollapsed && remainingPlaceholderCount > 0 {
+                            ForEach(0..<remainingPlaceholderCount, id: \.self) { _ in
+                                placeholderRow
+                            }
                         }
                     }
                 }
             }
             .animation(.snappy(duration: 0.25), value: isCollapsed)
+            .animation(.snappy(duration: 0.25), value: entries.count)
         }
         .padding(16)
         .background(
