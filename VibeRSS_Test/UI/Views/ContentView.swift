@@ -116,12 +116,32 @@ private struct SidebarHeroCardView: View {
         let oneLine: String
         let link: URL
         let isNew: Bool
+        let pubDate: Date?
     }
 
     let entries: [Entry]
     var expectedCount: Int = 3
     var isUpdating: Bool = false
+    var isCollapsed: Bool = false
     var onTapLink: ((URL) -> Void)? = nil
+    var onToggleCollapse: (() -> Void)? = nil
+
+    private var sortedEntries: [Entry] {
+        entries.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+    }
+
+    private var visibleEntries: [Entry] {
+        let sorted = sortedEntries
+        if isCollapsed {
+            return Array(sorted.prefix(1))
+        } else {
+            return Array(sorted.prefix(3))
+        }
+    }
+
+    private var visiblePlaceholderCount: Int {
+        isCollapsed ? 1 : expectedCount
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -131,21 +151,31 @@ private struct SidebarHeroCardView: View {
                     Text("Today Highlights")
                         .font(.headline)
                         .foregroundStyle(.primary)
+                    Image(systemName: "chevron.right")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                        .animation(.snappy(duration: 0.25), value: isCollapsed)
                     Spacer()
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onToggleCollapse?()
                 }
 
                 Group {
                     if entries.isEmpty {
-                        ForEach(0..<expectedCount, id: \.self) { _ in
+                        ForEach(0..<visiblePlaceholderCount, id: \.self) { _ in
                             placeholderRow
                         }
                     } else {
-                        ForEach(entries.prefix(3)) { entry in
+                        ForEach(visibleEntries) { entry in
                             entryRow(entry)
                         }
                     }
                 }
             }
+            .animation(.snappy(duration: 0.25), value: isCollapsed)
         }
         .padding(16)
         .background(
@@ -249,6 +279,7 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var heroCardHeight: CGFloat = 200
+    @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
     private let heroCacheKey = "viberss.heroEntries"
 
@@ -460,7 +491,7 @@ struct ContentView: View {
                         if let cached = await ArticleSummarizer.shared.cachedSummary(for: latest.link, length: length) {
                             let one = cached
                             let isNew = !previouslySeenLinks.contains(latest.link)
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew, pubDate: latest.pubDate)
                         } else {
                             var collected = ""
                             let stream = await ArticleSummarizer.shared.streamSummary(url: latest.link, length: .quick, seedText: latest.summary)
@@ -469,7 +500,7 @@ struct ContentView: View {
                             }
                             let one = collected
                             let isNew = !previouslySeenLinks.contains(latest.link)
-                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew)
+                            return SidebarHeroCardView.Entry(source: feed, title: latest.title, oneLine: one, link: latest.link, isNew: isNew, pubDate: latest.pubDate)
                         }
                     } catch {
                         return nil
@@ -480,7 +511,6 @@ struct ContentView: View {
                 if let entry = result { built.append(entry) }
             }
         }
-        built.sort { $0.source.title.localizedCaseInsensitiveCompare($1.source.title) == .orderedAscending }
         heroEntries = built
         saveHeroEntriesToCache()
     }
@@ -661,23 +691,23 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if !heroSourceIDs.isEmpty {
-                    SidebarHeroCardView(entries: heroEntries, expectedCount: heroSourceIDs.count, isUpdating: isLoadingHero, onTapLink: { url in
-                        heroWebLink = WebLink(url: url)
-                    })
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { heroCardHeight = geo.size.height }
-                                .onChange(of: geo.size.height) { _, newHeight in
-                                    if !isLoadingHero {
-                                        heroCardHeight = newHeight
-                                    }
-                                }
+                    SidebarHeroCardView(
+                        entries: heroEntries,
+                        expectedCount: heroSourceIDs.count,
+                        isUpdating: isLoadingHero,
+                        isCollapsed: isHeroCollapsed,
+                        onTapLink: { url in
+                            heroWebLink = WebLink(url: url)
+                        },
+                        onToggleCollapse: {
+                            withAnimation(.snappy(duration: 0.25)) {
+                                isHeroCollapsed.toggle()
+                            }
                         }
                     )
-                    .frame(minHeight: isLoadingHero ? heroCardHeight : nil)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .animation(.snappy(duration: 0.25), value: isHeroCollapsed)
                 }
             }
             .toolbar {
