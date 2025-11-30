@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - Hero Card Height Preference Key
+
+private struct HeroCardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - Shimmer Modifier
 
 private struct Shimmer: ViewModifier {
@@ -238,6 +247,7 @@ struct ContentView: View {
 
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
+    @State private var heroCardHeight: CGFloat = 250
     private let heroCacheKey = "viberss.heroEntries"
 
     private let refreshService = FeedService()
@@ -450,7 +460,7 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var sidebar: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .top) {
             List {
                 Section {
                     NavigationLink {
@@ -602,38 +612,8 @@ struct ContentView: View {
                 }
                 .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
+            .contentMargins(.top, heroCardHeight + 16, for: .scrollContent)
             .navigationTitle("TodayRSS")
-            .safeAreaInset(edge: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        let label: String = {
-                            if lastRefreshAllDate > 0 {
-                                let last = Date(timeIntervalSince1970: lastRefreshAllDate)
-                                return "Updated \(relativeTimeString(since: last))"
-                            } else {
-                                return "Never updated"
-                            }
-                        }()
-                        Text(label)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 0)
-                    .padding(.leading, 16)
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 6)
-
-                    if !heroEntries.isEmpty {
-                        SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero, onTapLink: { url in
-                            heroWebLink = WebLink(url: url)
-                        })
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 8)
-                    }
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
@@ -735,6 +715,28 @@ struct ContentView: View {
                 Text("Choose a folder for \(source.title)")
             }
 
+            // Hero card overlay at top
+            VStack {
+                SidebarHeroCardView(entries: heroEntries, isUpdating: isLoadingHero, onTapLink: { url in
+                    heroWebLink = WebLink(url: url)
+                })
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: HeroCardHeightKey.self, value: geo.size.height)
+                    }
+                )
+                Spacer()
+            }
+            .onPreferenceChange(HeroCardHeightKey.self) { height in
+                if height > 0 {
+                    heroCardHeight = height
+                }
+            }
+
+            // Refresh progress overlay at bottom
             VStack {
                 Spacer()
                 if isRefreshingAll {
