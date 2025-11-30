@@ -69,6 +69,12 @@ actor ArticleSummarizer {
         expandedState = Self.loadExpandedFromDefaults()
     }
 
+    #if canImport(FoundationModels)
+    private var heroSession: LanguageModelSession?
+    private var summarySessionShort: LanguageModelSession?
+    private var summarySessionLong: LanguageModelSession?
+    #endif
+
     /// Call this early in app launch to pre-load the on-device model
     func warmUp() async {
         guard !isWarmedUp else { return }
@@ -78,14 +84,73 @@ actor ArticleSummarizer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return }
 
-        // Create a session and run a tiny prompt to trigger model loading
-        let session = LanguageModelSession(instructions: "Be brief.")
+        // Create and cache a session for hero card summaries
+        let session = LanguageModelSession(instructions: "Summarize in one sentence, 20 words max.")
+        heroSession = session
+
+        // Pre-create summary sessions for faster first summarization
+        let shortInstructions = "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
+        let longInstructions = "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. Preserve qualifiers and numerical details. No fluff."
+        summarySessionShort = LanguageModelSession(instructions: shortInstructions)
+        summarySessionLong = LanguageModelSession(instructions: longInstructions)
+
+        // Run a tiny prompt to trigger model loading
         do {
             _ = try await session.respond(to: "Hi", generating: InlineSummary.self)
         } catch {
             // Warm-up failed, but that's okay - model will load on first real request
         }
         #endif
+    }
+
+    /// Fast summary for hero cards - optimized for speed
+    func fastHeroSummary(url: URL, articleText: String?) async -> String? {
+        let key = makeCacheKey(url: url, length: .quick)
+        if let cached = cache[key] {
+            return cached
+        }
+
+        #if canImport(FoundationModels)
+        let model = SystemLanguageModel.default
+        guard case .available = model.availability else { return nil }
+
+        // Get article text
+        let baseText: String
+        if let text = articleText, !text.isEmpty {
+            baseText = text
+        } else if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
+            baseText = cachedText
+        } else {
+            guard let html = try? await fetchHTML(url: url) else { return nil }
+            let extracted = extractReadableText(from: String(html.prefix(100_000)))
+            if extracted.isEmpty { return nil }
+            baseText = extracted
+            await ArticleTextCache.shared.storeText(extracted, for: url)
+        }
+
+        // Use smaller primer for faster processing
+        let primer = selectPrimerSlice(from: baseText, maxChars: 300)
+        if primer.isEmpty { return nil }
+
+        do {
+            // Reuse cached session or create new one
+            let session = heroSession ?? LanguageModelSession(instructions: "Summarize in one sentence, 20 words max.")
+            if heroSession == nil { heroSession = session }
+
+            // Use respond() instead of streamResponse() - no streaming delays
+            let result = try await session.respond(to: primer, generating: InlineSummary.self)
+            let text = result.content.text
+            if !text.isEmpty {
+                cache[key] = text
+                saveCache()
+                return text
+            }
+        } catch {
+            // Fall through
+        }
+        #endif
+
+        return nil
     }
 
     private static func loadCacheFromDefaults() -> [String: String] {
@@ -293,13 +358,13 @@ actor ArticleSummarizer {
                 let cachedText = await ArticleTextCache.shared.cachedText(for: url)
                 let baseText: String
                 if let cachedText, !cachedText.isEmpty {
-                    baseText = String(cachedText.prefix(250_000))
+                    baseText = String(cachedText.prefix(150_000))
                 } else {
                     guard let html = try? await fetchHTML(url: url) else {
                         continuation.finish()
                         return
                     }
-                    let limitedHTML = String(html.prefix(250_000))
+                    let limitedHTML = String(html.prefix(150_000))
                     let extracted = extractReadableText(from: limitedHTML)
                     if extracted.isEmpty {
                         continuation.finish()
@@ -325,7 +390,7 @@ actor ArticleSummarizer {
                         var finalTextPrimer: String = ""
                         var revealedCountPrimer: Int = 0
                         let step = 2
-                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
                         for try await partial in streamPrimer {
                             if Task.isCancelled { continuation.finish(); return }
                             guard let t = partial.content.text, !t.isEmpty else { continue }
@@ -355,16 +420,7 @@ actor ArticleSummarizer {
                         return
                     }
                 case .short:
-                    let instructions: String = {
-                        switch length {
-                        case .short:
-                            return "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
-                        case .long:
-                            return "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. No fluff. Avoid repetition."
-                        default:
-                            return ""
-                        }
-                    }()
+                    let instructions = "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
 
                     var prompt = "Summarize this article:\n\n"
                     if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
@@ -372,16 +428,19 @@ actor ArticleSummarizer {
                         prompt += "Preview/context from feed:\n\(s)\n\n"
                     }
 
+                    // Reuse cached session or create new one
+                    let session = self.summarySessionShort ?? LanguageModelSession(instructions: instructions)
+                    if self.summarySessionShort == nil { self.summarySessionShort = session }
+
                     // Stage 1: quick primer
                     let primer = self.selectPrimerSlice(from: baseText, maxChars: 1000)
                     let promptPrimer = prompt + primer
                     do {
-                        let sessionPrimer = LanguageModelSession(instructions: instructions)
-                        let streamPrimer = sessionPrimer.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
                         var finalTextPrimer: String = ""
                         var revealedCountPrimer: Int = 0
                         let step = 2
-                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
                         for try await partial in streamPrimer {
                             if Task.isCancelled { continuation.finish(); return }
                             guard let t = partial.content.text, !t.isEmpty else { continue }
@@ -403,24 +462,24 @@ actor ArticleSummarizer {
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
                             self.saveCache()
-                            if finalTextPrimer.count >= 120 {
+                            // Skip Stage 2 if primer covers enough content or result is sufficient
+                            if finalTextPrimer.count >= 100 || primer.count >= baseText.count / 2 {
                                 continuation.finish()
                                 return
                             }
                         }
                     } catch {
-                        // fall through
+                        // fall through to Stage 2
                     }
 
-                    // Stage 2: fuller body
+                    // Stage 2: fuller body (reuse same session)
                     let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 6000)
                     let fullBody = String(selected.prefix(6000))
-                    let sessionFull = LanguageModelSession(instructions: instructions)
-                    let streamFull = sessionFull.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
+                    let streamFull = session.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
                     var finalTextFull: String = ""
                     var revealedCountFull: Int = 0
                     let step = 2
-                    let stepDelay: UInt64 = 30_000_000 // 30 ms
+                    let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
                     for try await partial in streamFull {
                         if Task.isCancelled { continuation.finish(); return }
                         guard let t = partial.content.text, !t.isEmpty else { continue }
@@ -449,8 +508,8 @@ actor ArticleSummarizer {
                     let instructions = """
 Summarize for busy readers in 3–6 sentences (<200 words).
 Focus on key facts, context, implications, and preserve numerical details.
-Preserve qualifiers (e.g., “may”, “could”, “report suggests”) and avoid overstating certainty.
-Do not introduce any information that isn’t present in the text.
+Preserve qualifiers (e.g., "may", "could", "report suggests") and avoid overstating certainty.
+Do not introduce any information that isn't present in the text.
 Avoid repetition and adjectives.
 """
 
@@ -460,16 +519,19 @@ Avoid repetition and adjectives.
                         promptBase += "Preview/context from feed:\n\(s)\n\n"
                     }
 
+                    // Reuse cached session or create new one
+                    let session = self.summarySessionLong ?? LanguageModelSession(instructions: instructions)
+                    if self.summarySessionLong == nil { self.summarySessionLong = session }
+
                     // Stage 1: primer
                     let primer = self.selectPrimerSlice(from: baseText, maxChars: 1400)
                     let promptPrimer = promptBase + primer
                     do {
-                        let sessionPrimer = LanguageModelSession(instructions: instructions)
-                        let streamPrimer = sessionPrimer.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
                         var finalTextPrimer: String = ""
                         var revealedCountPrimer: Int = 0
                         let step = 2
-                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
                         for try await partial in streamPrimer {
                             if Task.isCancelled { continuation.finish(); return }
                             guard let t = partial.content.text, !t.isEmpty else { continue }
@@ -491,7 +553,8 @@ Avoid repetition and adjectives.
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
                             self.saveCache()
-                            if finalTextPrimer.count >= 160 {
+                            // Skip Stage 2 if primer covers enough content or result is sufficient
+                            if finalTextPrimer.count >= 140 || primer.count >= baseText.count / 2 {
                                 continuation.finish()
                                 return
                             }
@@ -500,50 +563,44 @@ Avoid repetition and adjectives.
                         // continue to full pass
                     }
 
-                    // Stage 2: full body
+                    // Stage 2: full body (reuse same session)
                     let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 12_000)
                     let body = String(selected.prefix(12_000))
                     let promptFull = promptBase + body
 
-                    do {
-                        let sessionFull = LanguageModelSession(instructions: instructions)
-                        let streamFull = sessionFull.streamResponse(to: promptFull, generating: InlineSummary.self)
-                        var finalTextFull: String = ""
-                        var revealedCountFull: Int = 0
-                        let step = 2
-                        let stepDelay: UInt64 = 30_000_000 // 30 ms
+                    let streamFull = session.streamResponse(to: promptFull, generating: InlineSummary.self)
+                    var finalTextFull: String = ""
+                    var revealedCountFull: Int = 0
+                    let step = 2
+                    let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
 
-                        for try await partial in streamFull {
+                    for try await partial in streamFull {
+                        if Task.isCancelled { continuation.finish(); return }
+                        guard let t = partial.content.text, !t.isEmpty else { continue }
+                        finalTextFull = t
+
+                        if t.count <= revealedCountFull { continue }
+                        var target = min(revealedCountFull + step, t.count)
+                        while target < t.count {
+                            let idx = t.index(t.startIndex, offsetBy: target)
+                            let prefix = String(t[..<idx])
+                            continuation.yield(prefix)
+                            revealedCountFull = target
+                            try? await Task.sleep(nanoseconds: stepDelay)
                             if Task.isCancelled { continuation.finish(); return }
-                            guard let t = partial.content.text, !t.isEmpty else { continue }
-                            finalTextFull = t
-
-                            if t.count <= revealedCountFull { continue }
-                            var target = min(revealedCountFull + step, t.count)
-                            while target < t.count {
-                                let idx = t.index(t.startIndex, offsetBy: target)
-                                let prefix = String(t[..<idx])
-                                continuation.yield(prefix)
-                                revealedCountFull = target
-                                try? await Task.sleep(nanoseconds: stepDelay)
-                                if Task.isCancelled { continuation.finish(); return }
-                                target = min(revealedCountFull + step, t.count)
-                            }
-
-                            continuation.yield(t)
-                            revealedCountFull = t.count
+                            target = min(revealedCountFull + step, t.count)
                         }
 
-                        if !finalTextFull.isEmpty {
-                            self.cache[key] = finalTextFull
-                            self.saveCache()
-                        }
-                        continuation.finish()
-                        return
-                    } catch {
-                        continuation.finish()
-                        return
+                        continuation.yield(t)
+                        revealedCountFull = t.count
                     }
+
+                    if !finalTextFull.isEmpty {
+                        self.cache[key] = finalTextFull
+                        self.saveCache()
+                    }
+                    continuation.finish()
+                    return
                 }
 #else
                 continuation.finish()

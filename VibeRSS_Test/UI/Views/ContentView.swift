@@ -512,18 +512,10 @@ struct ContentView: View {
         var builtEntries: [SidebarHeroCardView.Entry] = []
 
         for (index, (feed, article)) in feedArticles.enumerated() {
-            let length: ArticleSummarizer.Length = .quick
             let isNew = !previouslySeenLinks.contains(article.link)
 
-            var summary = ""
-            if let cached = await ArticleSummarizer.shared.cachedSummary(for: article.link, length: length) {
-                summary = cached
-            } else {
-                let stream = await ArticleSummarizer.shared.streamSummary(url: article.link, length: .quick, seedText: article.summary)
-                for await partial in stream {
-                    summary = partial
-                }
-            }
+            // Use fast hero summary - optimized for speed
+            let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: nil) ?? ""
 
             let entry = SidebarHeroCardView.Entry(
                 source: feed,
