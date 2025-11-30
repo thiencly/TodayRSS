@@ -46,22 +46,20 @@ let unifiedAnimation: Animation = .linear(duration: 0.9).repeatForever(autorever
 
 // MARK: - Siri-like animated glow background
 struct SiriGlow: View {
-    @State private var phase: Double = 0
     var cornerRadius: CGFloat = 22
     var opacity: Double = 0.35
 
     var body: some View {
-        TimelineView(.animation) { context in
+        // Low frame rate (5fps) for subtle ambient animation with minimal CPU
+        TimelineView(.animation(minimumInterval: 1.0 / 5.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            let p = t.remainder(dividingBy: 6.0) / 6.0 // 6s loop
+            let p = t.remainder(dividingBy: 12.0) / 12.0 // Slow 12s loop
 
             ZStack {
-                // Base soft blur background
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color.clear)
                     .background(.clear)
 
-                // Animated multi-color radial spots that drift slowly
                 glowSpot(color: .purple, x: cos(2 * .pi * (p + 0.00)) * 0.35, y: sin(2 * .pi * (p + 0.00)) * 0.25, radius: 160)
                 glowSpot(color: .blue,   x: cos(2 * .pi * (p + 0.33)) * 0.30, y: sin(2 * .pi * (p + 0.33)) * 0.30, radius: 170)
                 glowSpot(color: .pink,   x: cos(2 * .pi * (p + 0.66)) * 0.25, y: sin(2 * .pi * (p + 0.66)) * 0.35, radius: 150)
@@ -124,14 +122,18 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
     var isActive: Bool = false
 
     // Layer configuration: (lineWidth, blurRadius)
-    private var layers: [(CGFloat, CGFloat)] {
-        isActive ? [
+    private var activeLayers: [(CGFloat, CGFloat)] {
+        [
             (3, 0),     // Sharp edge
             (5, 5),     // Close glow
             (8, 14),    // Mid glow
             (12, 26),   // Outer glow
             (16, 40),   // Far outer glow
-        ] : [
+        ]
+    }
+
+    private var idleLayers: [(CGFloat, CGFloat)] {
+        [
             (2, 0),     // Sharp edge
             (3, 4),     // Close glow
             (4, 10),    // Mid glow
@@ -139,37 +141,66 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
         ]
     }
 
-    private var glowOpacity: Double { isActive ? 0.7 : 0.6 }
-    private var saturation: Double { isActive ? 1.5 : 1.0 }
-
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let seconds = context.date.timeIntervalSinceReferenceDate
-            // Colors flow along the edge - phase controls starting angle
-            let speed: Double = isActive ? 6.0 : 18.0 // faster when active
-            let currentPhase = (seconds.truncatingRemainder(dividingBy: speed) / speed) * 360.0
+        ZStack {
+            if isActive {
+                // High frame rate (30fps) when actively generating
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let seconds = context.date.timeIntervalSinceReferenceDate
+                    let currentPhase = (seconds.truncatingRemainder(dividingBy: 6.0) / 6.0) * 360.0
 
-            ZStack {
-                // Render glow layers from outermost to innermost
-                ForEach(layers.indices.reversed(), id: \.self) { index in
-                    let (lineWidth, blur) = layers[index]
-                    let layerOpacity = glowOpacity * (isActive ? (0.6 + 0.1 * Double(index)) : (0.5 + 0.15 * Double(index)))
+                    ZStack {
+                        ForEach(activeLayers.indices.reversed(), id: \.self) { index in
+                            let (lineWidth, blur) = activeLayers[index]
+                            let layerOpacity = 0.7 * (0.6 + 0.1 * Double(index))
 
-                    shape
-                        .stroke(
-                            AngularGradient(
-                                colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
-                                center: .center,
-                                startAngle: .degrees(currentPhase),
-                                endAngle: .degrees(currentPhase + 360)
-                            ),
-                            lineWidth: lineWidth
-                        )
-                        .blur(radius: blur)
-                        .saturation(saturation)
-                        .opacity(layerOpacity)
-                        .blendMode(index == 0 ? .plusLighter : .screen)
+                            shape
+                                .stroke(
+                                    AngularGradient(
+                                        colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
+                                        center: .center,
+                                        startAngle: .degrees(currentPhase),
+                                        endAngle: .degrees(currentPhase + 360)
+                                    ),
+                                    lineWidth: lineWidth
+                                )
+                                .blur(radius: blur)
+                                .saturation(1.5)
+                                .opacity(layerOpacity)
+                                .blendMode(index == 0 ? .plusLighter : .screen)
+                        }
+                    }
                 }
+                .transition(.opacity.combined(with: .scale(scale: 1.05)))
+            } else {
+                // Low frame rate (5fps) when idle - saves CPU
+                TimelineView(.animation(minimumInterval: 1.0 / 5.0)) { context in
+                    let seconds = context.date.timeIntervalSinceReferenceDate
+                    let currentPhase = (seconds.truncatingRemainder(dividingBy: 18.0) / 18.0) * 360.0
+
+                    ZStack {
+                        ForEach(idleLayers.indices.reversed(), id: \.self) { index in
+                            let (lineWidth, blur) = idleLayers[index]
+                            let layerOpacity = 0.6 * (0.5 + 0.15 * Double(index))
+
+                            shape
+                                .stroke(
+                                    AngularGradient(
+                                        colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
+                                        center: .center,
+                                        startAngle: .degrees(currentPhase),
+                                        endAngle: .degrees(currentPhase + 360)
+                                    ),
+                                    lineWidth: lineWidth
+                                )
+                                .blur(radius: blur)
+                                .saturation(1.0)
+                                .opacity(layerOpacity)
+                                .blendMode(index == 0 ? .plusLighter : .screen)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .animation(.easeInOut(duration: 0.4), value: isActive)
