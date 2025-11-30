@@ -287,8 +287,11 @@ struct ContentView: View {
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0
     @State private var areSourcesCollapsed: Bool = false
     @State private var areFoldersCollapsed: Bool = false
+    @State private var showingSettings: Bool = false
+    @Namespace private var settingsTransition
 
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
 
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
@@ -863,6 +866,33 @@ struct ContentView: View {
                 }
             }
             .allowsHitTesting(false)
+
+            // Settings button at bottom left
+            VStack {
+                Spacer()
+                HStack {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(12)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay(
+                                Circle().strokeBorder(Color.secondary.opacity(0.2))
+                            )
+                    }
+                    .matchedTransitionSource(id: "settings", in: settingsTransition)
+                    .padding(.leading, 16)
+                    .padding(.bottom, 16)
+                    Spacer()
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showingSettings) {
+            SettingsView()
+                .navigationTransition(.zoom(sourceID: "settings", in: settingsTransition))
         }
     }
 
@@ -887,6 +917,7 @@ struct ContentView: View {
             selectedSource = store.feeds.first
             store.backfillIcons()
             loadHeroEntriesFromCache()
+            isHeroCollapsed = heroCollapsedOnLaunch
             Task { await loadHeroEntries() }
         }
         .onChange(of: scenePhase) { _, phase in
