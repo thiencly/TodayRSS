@@ -22,11 +22,26 @@ final class RSSParser: NSObject, XMLParserDelegate {
     private var currentThumbnail: URL?
     private var currentElement = ""
 
+    private var parseError: Error?
+
     func parse(data: Data) throws -> [FeedItem] {
+        items = []
+        parseError = nil
         let parser = XMLParser(data: data)
         parser.delegate = self
-        guard parser.parse() else { throw FeedError.parseFailed }
+        parser.shouldProcessNamespaces = false
+        parser.shouldReportNamespacePrefixes = false
+        guard parser.parse() else {
+            if let error = parseError ?? parser.parserError {
+                print("RSS Parse error: \(error)")
+            }
+            throw FeedError.parseFailed
+        }
         return items
+    }
+
+    func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
+        self.parseError = parseError
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
@@ -58,17 +73,27 @@ final class RSSParser: NSObject, XMLParserDelegate {
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
+        appendText(string)
+    }
+
+    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+        if let string = String(data: CDATABlock, encoding: .utf8) {
+            appendText(string)
+        }
+    }
+
+    private func appendText(_ string: String) {
         switch currentElement {
         case "title": currentTitle += string
         case "link":
             if currentLink == nil {
                 currentLink = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
             }
-        case "description", "summary", "content:encoded":
+        case "description", "summary", "content:encoded", "content":
             currentDescription += string
         case "pubdate":
             currentPubDate = DateFormatter.vr_rfc822.dateFromCommonRSS(string.trimmingCharacters(in: .whitespacesAndNewlines))
-        case "author", "dc:creator":
+        case "author", "dc:creator", "creator":
             currentAuthor = (currentAuthor ?? "") + string
         default: break
         }

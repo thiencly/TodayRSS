@@ -813,7 +813,7 @@ struct ContentView: View {
                     selectedSource = newSource
                 }
                 .environmentObject(store)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showingAddFolder) {
                 AddFolderView { newFolder in

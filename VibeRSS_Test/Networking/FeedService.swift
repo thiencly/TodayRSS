@@ -18,17 +18,65 @@ enum FeedError: Error, LocalizedError {
 
 actor FeedService {
     func loadItems(from url: URL) async throws -> [FeedItem] {
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 6)
+        // Try HTTPS first, fall back to original URL if it fails
+        var urlsToTry: [URL] = []
+
+        if url.scheme == "http", var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.scheme = "https"
+            if let httpsURL = components.url {
+                urlsToTry.append(httpsURL)
+            }
+        }
+        urlsToTry.append(url)
+
+        var lastError: Error = FeedError.requestFailed
+
+        for effectiveURL in urlsToTry {
+            do {
+                return try await loadItemsFromURL(effectiveURL)
+            } catch {
+                print("[FeedService] Failed to load from \(effectiveURL): \(error)")
+                lastError = error
+                continue
+            }
+        }
+
+        throw lastError
+    }
+
+    private func loadItemsFromURL(_ url: URL) async throws -> [FeedItem] {
+        print("[FeedService] Loading from: \(url)")
+
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         try Task.checkCancellation()
+
         let (data, response) = try await URLSession.shared.data(for: request)
         try Task.checkCancellation()
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+
+        guard let http = response as? HTTPURLResponse else {
+            print("[FeedService] No HTTP response")
             throw FeedError.requestFailed
         }
-        if let xml = String(data: data, encoding: .utf8), xml.contains("<feed") { // Atom heuristic
-            return try await parseAtom(data)
+
+        print("[FeedService] Status: \(http.statusCode), Size: \(data.count) bytes")
+
+        guard (200..<300).contains(http.statusCode) else {
+            print("[FeedService] Bad status code: \(http.statusCode)")
+            throw FeedError.requestFailed
+        }
+
+        if let xml = String(data: data, encoding: .utf8) {
+            if xml.contains("<feed") { // Atom heuristic
+                return try await parseAtom(data)
+            } else if xml.contains("<rss") || xml.contains("<channel") {
+                return try await parseRSS(data)
+            } else {
+                print("[FeedService] Unknown feed format. First 500 chars: \(String(xml.prefix(500)))")
+                throw FeedError.parseFailed
+            }
         } else {
-            return try await parseRSS(data)
+            print("[FeedService] Could not decode data as UTF-8")
+            throw FeedError.parseFailed
         }
     }
 
