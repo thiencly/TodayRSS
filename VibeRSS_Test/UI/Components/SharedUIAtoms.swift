@@ -28,11 +28,11 @@ struct SourceBadge: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 17, height: 17)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .frame(width: 20, height: 20)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
             Text(name)
         }
-        .font(.caption2)
+        .font(.subheadline)
         .foregroundStyle(.secondary)
     }
 }

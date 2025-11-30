@@ -75,6 +75,28 @@ private extension View {
     }
 }
 
+// MARK: - Plain Disclosure Style (hides default chevron)
+
+private struct PlainDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) {
+                    configuration.isExpanded.toggle()
+                }
+            } label: {
+                configuration.label
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if configuration.isExpanded {
+                configuration.content
+            }
+        }
+    }
+}
+
 // MARK: - Sidebar Hero Card
 
 private struct SidebarHeroCardView: View {
@@ -210,6 +232,7 @@ struct ContentView: View {
     @State private var heroWebLink: WebLink? = nil
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0
     @State private var areSourcesCollapsed: Bool = false
+    @State private var areFoldersCollapsed: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -446,26 +469,29 @@ struct ContentView: View {
                             .contentShape(Rectangle())
                     }
 
-                    ForEach(store.folders) { folder in
-                        NavigationLink {
-                            FolderDetailView(folder: folder, refreshID: refreshID)
-                                .environmentObject(store)
-                        } label: {
-                            HStack {
-                                Label(folder.name, systemImage: "folder")
-                                Spacer()
-                                Text("\(store.feeds.filter { $0.folderID == folder.id }.count)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                store.removeFolder(folder)
+                    if !areFoldersCollapsed {
+                        ForEach(store.folders) { folder in
+                            NavigationLink {
+                                FolderDetailView(folder: folder, refreshID: refreshID)
+                                    .environmentObject(store)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                HStack {
+                                    Label(folder.name, systemImage: "folder")
+                                    Spacer()
+                                    Text("\(store.feeds.filter { $0.folderID == folder.id }.count)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .contextMenu {
+                                Button("Delete", role: .destructive) {
+                                    store.removeFolder(folder)
+                                }
+                            }
+                        }
+                        .onMove { indices, destination in
+                            store.folders.move(fromOffsets: indices, toOffset: destination)
                         }
                     }
                 }
@@ -477,80 +503,80 @@ struct ContentView: View {
                         Image(systemName: "chevron.right")
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.secondary)
-                            .imageScale(.medium)
-                            .rotationEffect(.degrees(0))
+                            .rotationEffect(.degrees(areFoldersCollapsed ? 0 : 90))
+                            .animation(.snappy(duration: 0.2), value: areFoldersCollapsed)
                         Spacer()
+                        Text("\(store.folders.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
-                    .onTapGesture { }
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.25)) {
+                            areFoldersCollapsed.toggle()
+                        }
+                    }
                 }
+                .animation(.snappy(duration: 0.25), value: areFoldersCollapsed)
 
                 Section {
-                    Group {
-                        if !areSourcesCollapsed {
-                            ForEach(store.feeds) { source in
-                                NavigationLink {
-                                    FeedDetailView(source: source, refreshID: refreshID)
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        FeedIconView(iconURL: source.iconURL)
-                                        Text(source.title)
-                                    }
-                                    .contentShape(Rectangle())
+                    if !areSourcesCollapsed {
+                        ForEach(store.feeds) { source in
+                            NavigationLink {
+                                FeedDetailView(source: source, refreshID: refreshID)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    FeedIconView(iconURL: source.iconURL)
+                                    Text(source.title)
                                 }
-                                .contextMenu {
-                                    Button("Refresh Icon") {
-                                        Task { await store.refreshIcon(for: source) }
-                                    }
-                                    Menu("Move to Folder") {
-                                        ForEach(store.folders) { folder in
-                                            Button(folder.name) {
-                                                store.assign(source, to: folder)
-                                            }
-                                        }
-                                        if source.folderID != nil {
-                                            Button("Remove from Folder") {
-                                                store.assign(source, to: nil)
-                                            }
-                                        }
-                                    }
-                                    Divider()
-                                    Button("Delete", role: .destructive) {
-                                        if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                            store.feeds.remove(at: idx)
-                                            if selectedSource?.id == source.id {
-                                                selectedSource = store.feeds.first
-                                            }
-                                        }
-                                    }
+                                .contentShape(Rectangle())
+                            }
+                            .contextMenu {
+                                Button("Refresh Icon") {
+                                    Task { await store.refreshIcon(for: source) }
                                 }
-                                .swipeActions {
+                                Menu("Move to Folder") {
+                                    ForEach(store.folders) { folder in
+                                        Button(folder.name) {
+                                            store.assign(source, to: folder)
+                                        }
+                                    }
                                     if source.folderID != nil {
-                                        Button("Remove", role: .destructive) {
+                                        Button("Remove from Folder") {
                                             store.assign(source, to: nil)
                                         }
                                     }
-                                    Button("Move") {
-                                        movingSource = source
-                                        showingMoveDialog = true
+                                }
+                                Divider()
+                                Button("Delete", role: .destructive) {
+                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                        store.feeds.remove(at: idx)
+                                        if selectedSource?.id == source.id {
+                                            selectedSource = store.feeds.first
+                                        }
                                     }
-                                    Button("Delete", role: .destructive) {
-                                        if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                            store.feeds.remove(at: idx)
-                                            if selectedSource?.id == source.id {
-                                                selectedSource = store.feeds.first
-                                            }
+                                }
+                            }
+                            .swipeActions {
+                                Button("Move") {
+                                    movingSource = source
+                                    showingMoveDialog = true
+                                }
+                                Button("Delete", role: .destructive) {
+                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                                        store.feeds.remove(at: idx)
+                                        if selectedSource?.id == source.id {
+                                            selectedSource = store.feeds.first
                                         }
                                     }
                                 }
                             }
                         }
+                        .onMove { indices, destination in
+                            store.feeds.move(fromOffsets: indices, toOffset: destination)
+                        }
                     }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
                 } header: {
                     HStack(spacing: 8) {
                         Text("Sources")
@@ -559,7 +585,6 @@ struct ContentView: View {
                         Image(systemName: "chevron.right")
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.secondary)
-                            .imageScale(.medium)
                             .rotationEffect(.degrees(areSourcesCollapsed ? 0 : 90))
                             .animation(.snappy(duration: 0.2), value: areSourcesCollapsed)
                         Spacer()
@@ -567,9 +592,13 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                     .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.snappy(duration: 0.25)) { areSourcesCollapsed.toggle() } }
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.25)) {
+                            areSourcesCollapsed.toggle()
+                        }
+                    }
                 }
                 .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
