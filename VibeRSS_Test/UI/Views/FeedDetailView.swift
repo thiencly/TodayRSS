@@ -10,8 +10,17 @@ struct FeedDetailView: View {
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
 
-    @AppStorage("summaryLength") private var summaryLengthRaw: String = "short"
+    @State private var summaryLengthRaw: String = "short"
     @State private var aiSummarized: Set<UUID> = []
+
+    // Per-source summary length storage
+    private var summaryLengthKey: String { "summaryLength_source_\(source.id.uuidString)" }
+    private func loadSummaryLength() -> String {
+        UserDefaults.standard.string(forKey: summaryLengthKey) ?? "short"
+    }
+    private func saveSummaryLength(_ value: String) {
+        UserDefaults.standard.set(value, forKey: summaryLengthKey)
+    }
     @State private var suppressNextRowTap = false
     @State private var hasCachedSummaryCache: Set<UUID> = []
     @State private var currentDay: Date? = nil
@@ -96,6 +105,9 @@ struct FeedDetailView: View {
         .task(id: refreshID) {
             await vm.load(for: source)
         }
+        .onAppear {
+            summaryLengthRaw = loadSummaryLength()
+        }
         .navigationTitle(source.title)
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $webLink) { w in
@@ -107,6 +119,7 @@ struct FeedDetailView: View {
                     Section("Summary Length") {
                         Button {
                             summaryLengthRaw = "short"
+                            saveSummaryLength("short")
                         } label: {
                             HStack {
                                 Text("Short")
@@ -115,6 +128,7 @@ struct FeedDetailView: View {
                         }
                         Button {
                             summaryLengthRaw = "long"
+                            saveSummaryLength("long")
                         } label: {
                             HStack {
                                 Text("Long")
@@ -128,9 +142,6 @@ struct FeedDetailView: View {
                         expandedSummaries.removeAll()
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                    }
-                    Button("Clear Article Text Cache", role: .destructive) {
-                        Task { await ArticleTextCache.shared.clear() }
                     }
                 } label: {
                     Image(systemName: "sparkles")

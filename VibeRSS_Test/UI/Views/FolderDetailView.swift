@@ -11,9 +11,18 @@ struct FolderDetailView: View {
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
 
-    @AppStorage("summaryLength") private var summaryLengthRaw: String = "short"
+    @State private var summaryLengthRaw: String = "short"
     @State private var aiSummarized: Set<UUID> = []
     @State private var currentDay: Date? = nil
+
+    // Per-folder summary length storage
+    private var summaryLengthKey: String { "summaryLength_folder_\(folder.id.uuidString)" }
+    private func loadSummaryLength() -> String {
+        UserDefaults.standard.string(forKey: summaryLengthKey) ?? "short"
+    }
+    private func saveSummaryLength(_ value: String) {
+        UserDefaults.standard.set(value, forKey: summaryLengthKey)
+    }
     @State private var suppressNextRowTap = false
     @State private var hasCachedSummaryCache: Set<UUID> = []
 
@@ -91,6 +100,9 @@ struct FolderDetailView: View {
             }
         }
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
+        .onAppear {
+            summaryLengthRaw = loadSummaryLength()
+        }
         .navigationTitle(folder.name)
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $webLink) { w in
@@ -102,6 +114,7 @@ struct FolderDetailView: View {
                     Section("Summary Length") {
                         Button {
                             summaryLengthRaw = "short"
+                            saveSummaryLength("short")
                         } label: {
                             HStack {
                                 Text("Short")
@@ -110,6 +123,7 @@ struct FolderDetailView: View {
                         }
                         Button {
                             summaryLengthRaw = "long"
+                            saveSummaryLength("long")
                         } label: {
                             HStack {
                                 Text("Long")
@@ -123,9 +137,6 @@ struct FolderDetailView: View {
                         expandedSummaries.removeAll()
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                    }
-                    Button("Clear Article Text Cache", role: .destructive) {
-                        Task { await ArticleTextCache.shared.clear() }
                     }
                 } label: {
                     Image(systemName: "sparkles")

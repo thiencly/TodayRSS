@@ -34,6 +34,9 @@ actor ImageDiskCache {
         return URLSession(configuration: config)
     }()
 
+    private let maxCacheSizeMB: Int = 100 // Max 100MB of images
+    private let maxCacheAgeDays: Int = 30 // Remove images older than 30 days
+
     init() {
         // Use a local FileManager to avoid capturing the actor-isolated property in nonisolated autoclosures.
         let localFM = FileManager.default
@@ -46,6 +49,49 @@ actor ImageDiskCache {
         }
         directory = base.appendingPathComponent("ImageCache", conformingTo: .directory)
         try? localFM.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        // Prune old/excess cache on init (in background)
+        Task.detached(priority: .background) {
+            await self.pruneCache()
+        }
+    }
+
+    /// Removes old files and enforces size limit
+    func pruneCache() {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]) else { return }
+
+        let now = Date()
+        let maxAge = TimeInterval(maxCacheAgeDays * 24 * 60 * 60)
+        var totalSize: Int64 = 0
+        var fileInfos: [(url: URL, date: Date, size: Int64)] = []
+
+        for file in files {
+            guard let values = try? file.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+                  let modDate = values.contentModificationDate,
+                  let size = values.fileSize else { continue }
+
+            // Remove files older than maxAge
+            if now.timeIntervalSince(modDate) > maxAge {
+                try? fm.removeItem(at: file)
+                continue
+            }
+
+            totalSize += Int64(size)
+            fileInfos.append((file, modDate, Int64(size)))
+        }
+
+        // If still over size limit, remove oldest files
+        let maxBytes = Int64(maxCacheSizeMB * 1024 * 1024)
+        if totalSize > maxBytes {
+            // Sort by date, oldest first
+            fileInfos.sort { $0.date < $1.date }
+            for info in fileInfos {
+                if totalSize <= maxBytes { break }
+                try? fm.removeItem(at: info.url)
+                totalSize -= info.size
+            }
+        }
     }
 
     // Validate image has non-zero dimensions

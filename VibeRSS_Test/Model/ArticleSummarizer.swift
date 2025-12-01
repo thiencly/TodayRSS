@@ -41,6 +41,7 @@ actor ArticleSummarizer {
     private var cache: [String: String] = [:] // key: "<url>#<length>"
     private let cacheStoreKey = "viberss.summaryCache"
     private let expandedStoreKey = "viberss.summaryExpanded"
+    private let maxCacheEntries = 1000 // Keep last ~333 articles (3 lengths each)
     private var expandedState: Set<String> = [] // keys: "<url>#<length>"
 
     private var saveCacheDebounceTask: Task<Void, Never>? = nil
@@ -112,6 +113,21 @@ actor ArticleSummarizer {
     init() {
         cache = Self.loadCacheFromDefaults()
         expandedState = Self.loadExpandedFromDefaults()
+        // Prune on load if over limit
+        if cache.count > maxCacheEntries {
+            pruneCacheIfNeeded()
+        }
+    }
+
+    /// Removes oldest entries to stay under maxCacheEntries limit
+    private func pruneCacheIfNeeded() {
+        guard cache.count > maxCacheEntries else { return }
+        let keysToRemove = Array(cache.keys.prefix(cache.count - maxCacheEntries))
+        for key in keysToRemove {
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
+        }
+        saveCache()
     }
 
     #if canImport(FoundationModels)
@@ -489,18 +505,21 @@ actor ArticleSummarizer {
                                 let idx = t.index(t.startIndex, offsetBy: target)
                                 let prefix = String(t[..<idx])
                                 continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
                                 revealedCountPrimer = target
                                 try? await Task.sleep(nanoseconds: stepDelay)
                                 if Task.isCancelled { continuation.finish(); return }
                                 target = min(revealedCountPrimer + step, t.count)
                             }
                             continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
                             revealedCountPrimer = t.count
                         }
                         if !finalTextPrimer.isEmpty {
                             self.cache[key] = finalTextPrimer
                             Self.addToLookup(key)
                             self.saveCache()
+                            HapticManager.shared.success()
                             continuation.finish()
                             return
                         }
@@ -540,12 +559,14 @@ actor ArticleSummarizer {
                                 let idx = t.index(t.startIndex, offsetBy: target)
                                 let prefix = String(t[..<idx])
                                 continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
                                 revealedCountPrimer = target
                                 try? await Task.sleep(nanoseconds: stepDelay)
                                 if Task.isCancelled { continuation.finish(); return }
                                 target = min(revealedCountPrimer + step, t.count)
                             }
                             continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
                             revealedCountPrimer = t.count
                         }
                         if !finalTextPrimer.isEmpty {
@@ -554,6 +575,7 @@ actor ArticleSummarizer {
                             self.saveCache()
                             // Skip Stage 2 if primer covers enough content or result is sufficient
                             if finalTextPrimer.count >= 100 || primer.count >= baseText.count / 2 {
+                                HapticManager.shared.success()
                                 continuation.finish()
                                 return
                             }
@@ -580,18 +602,21 @@ actor ArticleSummarizer {
                             let idx = t.index(t.startIndex, offsetBy: target)
                             let prefix = String(t[..<idx])
                             continuation.yield(prefix)
+                            HapticManager.shared.typingHaptic()
                             revealedCountFull = target
                             try? await Task.sleep(nanoseconds: stepDelay)
                             if Task.isCancelled { continuation.finish(); return }
                             target = min(revealedCountFull + step, t.count)
                         }
                         continuation.yield(t)
+                        HapticManager.shared.typingHaptic()
                         revealedCountFull = t.count
                     }
                     if !finalTextFull.isEmpty {
                         self.cache[key] = finalTextFull
                         Self.addToLookup(key)
                         self.saveCache()
+                        HapticManager.shared.success()
                     }
                     continuation.finish()
                     return
@@ -633,12 +658,14 @@ Avoid repetition and adjectives.
                                 let idx = t.index(t.startIndex, offsetBy: target)
                                 let prefix = String(t[..<idx])
                                 continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
                                 revealedCountPrimer = target
                                 try? await Task.sleep(nanoseconds: stepDelay)
                                 if Task.isCancelled { continuation.finish(); return }
                                 target = min(revealedCountPrimer + step, t.count)
                             }
                             continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
                             revealedCountPrimer = t.count
                         }
                         if !finalTextPrimer.isEmpty {
@@ -647,6 +674,7 @@ Avoid repetition and adjectives.
                             self.saveCache()
                             // Skip Stage 2 if primer covers enough content or result is sufficient
                             if finalTextPrimer.count >= 140 || primer.count >= baseText.count / 2 {
+                                HapticManager.shared.success()
                                 continuation.finish()
                                 return
                             }
@@ -677,6 +705,7 @@ Avoid repetition and adjectives.
                             let idx = t.index(t.startIndex, offsetBy: target)
                             let prefix = String(t[..<idx])
                             continuation.yield(prefix)
+                            HapticManager.shared.typingHaptic()
                             revealedCountFull = target
                             try? await Task.sleep(nanoseconds: stepDelay)
                             if Task.isCancelled { continuation.finish(); return }
@@ -684,6 +713,7 @@ Avoid repetition and adjectives.
                         }
 
                         continuation.yield(t)
+                        HapticManager.shared.typingHaptic()
                         revealedCountFull = t.count
                     }
 
@@ -691,6 +721,7 @@ Avoid repetition and adjectives.
                         self.cache[key] = finalTextFull
                         Self.addToLookup(key)
                         self.saveCache()
+                        HapticManager.shared.success()
                     }
                     continuation.finish()
                     return

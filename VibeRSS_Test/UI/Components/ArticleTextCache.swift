@@ -28,12 +28,29 @@ actor ArticleTextCache {
     private var cache: [String: String] = [:] // key: url.absoluteString
     private let storeKey = "viberss.articleTextCache"
     private var saveDebounceTask: Task<Void, Never>? = nil
+    private let maxEntries = 500 // Keep last 500 articles
 
     init() {
         if let data = UserDefaults.standard.data(forKey: storeKey),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             cache = dict
+            // Prune on load if over limit
+            if cache.count > maxEntries {
+                pruneCache()
+            }
         }
+    }
+
+    /// Removes oldest entries to stay under maxEntries limit
+    private func pruneCache() {
+        guard cache.count > maxEntries else { return }
+        // Remove random entries since we don't track access time
+        // Keep approximately maxEntries
+        let keysToRemove = Array(cache.keys.prefix(cache.count - maxEntries))
+        for key in keysToRemove {
+            cache.removeValue(forKey: key)
+        }
+        debounceSave()
     }
 
     func cachedText(for url: URL) -> String? {

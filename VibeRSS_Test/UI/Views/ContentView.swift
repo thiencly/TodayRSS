@@ -275,6 +275,8 @@ struct ContentView: View {
     @State private var showingAddFolder = false
     @State private var movingSource: Source?
     @State private var showingMoveDialog = false
+    @State private var renamingSource: Source?
+    @State private var renameText: String = ""
     @State private var refreshID = UUID()
     @State private var isRefreshingAll = false
     @State private var refreshTotal: Int = 0
@@ -576,8 +578,10 @@ struct ContentView: View {
             .contentShape(Rectangle())
         }
         .contextMenu {
-            Button("Delete", role: .destructive) {
+            Button(role: .destructive) {
                 store.removeFolder(folder)
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
 
@@ -618,14 +622,22 @@ struct ContentView: View {
             }
             .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
             Button {
+                renameText = source.title
+                renamingSource = source
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            Button {
                 store.assign(source, to: nil)
             } label: {
                 Label("Remove from Folder", systemImage: "folder.badge.minus")
             }
-            Button("Delete", role: .destructive) {
+            Button(role: .destructive) {
                 if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
                     store.feeds.remove(at: idx)
                 }
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }
@@ -714,43 +726,63 @@ struct ContentView: View {
                                 }
                                 .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
 
-                                Button("Refresh Icon") {
+                                Button {
                                     Task { await store.refreshIcon(for: source) }
+                                } label: {
+                                    Label("Refresh Icon", systemImage: "arrow.triangle.2.circlepath")
                                 }
-                                Menu("Move to Folder") {
+                                Button {
+                                    renameText = source.title
+                                    renamingSource = source
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                Menu {
                                     ForEach(store.folders) { folder in
-                                        Button(folder.name) {
+                                        Button {
                                             store.assign(source, to: folder)
+                                        } label: {
+                                            Label(folder.name, systemImage: "folder")
                                         }
                                     }
                                     if source.folderID != nil {
-                                        Button("Remove from Folder") {
+                                        Button {
                                             store.assign(source, to: nil)
+                                        } label: {
+                                            Label("Remove from Folder", systemImage: "folder.badge.minus")
                                         }
                                     }
+                                } label: {
+                                    Label("Move to Folder", systemImage: "folder.badge.plus")
                                 }
                                 Divider()
-                                Button("Delete", role: .destructive) {
+                                Button(role: .destructive) {
                                     if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
                                         store.feeds.remove(at: idx)
                                         if selectedSource?.id == source.id {
                                             selectedSource = store.feeds.first
                                         }
                                     }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
                             .swipeActions {
-                                Button("Move") {
+                                Button {
                                     movingSource = source
                                     showingMoveDialog = true
+                                } label: {
+                                    Label("Move", systemImage: "folder")
                                 }
-                                Button("Delete", role: .destructive) {
+                                Button(role: .destructive) {
                                     if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
                                         store.feeds.remove(at: idx)
                                         if selectedSource?.id == source.id {
                                             selectedSource = store.feeds.first
                                         }
                                     }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
                         }
@@ -908,6 +940,24 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {}
             } message: { source in
                 Text("Choose a folder for \(source.title)")
+            }
+            .alert("Rename Source", isPresented: Binding(
+                get: { renamingSource != nil },
+                set: { if !$0 { renamingSource = nil } }
+            )) {
+                TextField("Name", text: $renameText)
+                Button("Cancel", role: .cancel) {
+                    renamingSource = nil
+                }
+                Button("Save") {
+                    if let source = renamingSource,
+                       let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                        store.feeds[idx].title = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    renamingSource = nil
+                }
+            } message: {
+                Text("Enter a new name for this source")
             }
 
             // Refresh progress overlay at bottom

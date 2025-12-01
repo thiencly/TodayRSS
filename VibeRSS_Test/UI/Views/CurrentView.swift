@@ -106,9 +106,6 @@ struct CurrentView: View {
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearArticleSummaries() }
                     }
-                    Button("Clear Article Text Cache", role: .destructive) {
-                        Task { await ArticleTextCache.shared.clear() }
-                    }
                 } label: { Image(systemName: "sparkles") }
             }
         }
