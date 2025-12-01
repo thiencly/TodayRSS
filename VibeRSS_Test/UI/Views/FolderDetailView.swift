@@ -127,7 +127,7 @@ struct FolderDetailView: View {
                         aiSummarized.removeAll()
                         expandedSummaries.removeAll()
                         summaryErrors.removeAll()
-                        Task { await ArticleSummarizer.shared.clearCache() }
+                        Task { await ArticleSummarizer.shared.clearArticleSummaries() }
                     }
                     Button("Clear Article Text Cache", role: .destructive) {
                         Task { await ArticleTextCache.shared.clear() }

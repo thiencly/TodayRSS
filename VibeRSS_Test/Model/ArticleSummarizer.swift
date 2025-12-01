@@ -241,6 +241,28 @@ actor ArticleSummarizer {
         UserDefaults.standard.removeObject(forKey: expandedStoreKey)
     }
 
+    /// Clears only article summaries (short/long) used by the Summarize button, not hero summaries
+    func clearArticleSummaries() {
+        let keysToRemove = cache.keys.filter { $0.hasSuffix("#short") || $0.hasSuffix("#long") }
+        for key in keysToRemove {
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
+        }
+        expandedState.removeAll()
+        saveCache()
+        saveExpanded()
+    }
+
+    /// Clears only hero summaries (quick) used by the hero card
+    func clearHeroSummaries() {
+        let keysToRemove = cache.keys.filter { $0.hasSuffix("#quick") }
+        for key in keysToRemove {
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
+        }
+        saveCache()
+    }
+
     func cachedSummary(for url: URL, length: Length) -> String? {
         let key = makeCacheKey(url: url, length: length)
         if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

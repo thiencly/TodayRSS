@@ -179,8 +179,8 @@ private struct SidebarHeroCardView: View {
                         ForEach(visibleEntries) { entry in
                             entryRow(entry)
                         }
-                        // Show shimmer placeholders for remaining entries still loading
-                        if !isCollapsed && remainingPlaceholderCount > 0 {
+                        // Show shimmer placeholders only while still loading
+                        if !isCollapsed && isUpdating && remainingPlaceholderCount > 0 {
                             ForEach(0..<remainingPlaceholderCount, id: \.self) { _ in
                                 placeholderRow
                             }
@@ -285,8 +285,8 @@ struct ContentView: View {
     @State private var cooldownUntil: Date? = nil
     @State private var heroWebLink: WebLink? = nil
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0
-    @State private var areSourcesCollapsed: Bool = false
-    @State private var areFoldersCollapsed: Bool = false
+    @AppStorage("areSourcesCollapsed") private var areSourcesCollapsed: Bool = false
+    @AppStorage("areFoldersCollapsed") private var areFoldersCollapsed: Bool = false
     @State private var showingSettings: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
@@ -609,6 +609,11 @@ struct ContentView: View {
                 )
             }
             .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
+            Button {
+                store.assign(source, to: nil)
+            } label: {
+                Label("Remove from Folder", systemImage: "folder.badge.minus")
+            }
             Button("Delete", role: .destructive) {
                 if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
                     store.feeds.remove(at: idx)
@@ -841,13 +846,16 @@ struct ContentView: View {
 
                         Divider()
 
-                        Button("Clear Hero Cache") {
+                        Button("Clear Hero Summaries") {
                             heroEntries.removeAll()
                             UserDefaults.standard.removeObject(forKey: heroCacheKey)
-                            Task { await loadHeroEntries() }
+                            Task {
+                                await ArticleSummarizer.shared.clearHeroSummaries()
+                                await loadHeroEntries()
+                            }
                         }
                         Button("Clear All Summaries", role: .destructive) {
-                            Task { await ArticleSummarizer.shared.clearCache() }
+                            Task { await ArticleSummarizer.shared.clearArticleSummaries() }
                         }
                     } label: {
                         if isRefreshingAll {
