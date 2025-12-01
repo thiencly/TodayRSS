@@ -115,12 +115,21 @@ actor FeedService {
         throw lastError
     }
 
+    // Dedicated session with aggressive timeout settings to prevent UI freezes
+    private static let feedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForResource = 8
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     private func loadItemsFromURL(_ url: URL) async throws -> [FeedItem] {
 
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
         try Task.checkCancellation()
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.feedSession.data(for: request)
         try Task.checkCancellation()
 
         guard let http = response as? HTTPURLResponse else {

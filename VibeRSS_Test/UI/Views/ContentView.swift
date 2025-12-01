@@ -464,19 +464,27 @@ struct ContentView: View {
     }
 
     private func saveHeroEntriesToCache() {
-        do {
-            // Only cache entries that have valid summaries
-            let validEntries = heroEntries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            let data = try JSONEncoder().encode(validEntries)
-            UserDefaults.standard.set(data, forKey: heroCacheKey)
-        } catch {}
+        // Encode JSON off main thread to prevent UI freeze
+        let entries = heroEntries
+        Task.detached(priority: .utility) {
+            do {
+                // Only cache entries that have valid summaries
+                let validEntries = entries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                let data = try JSONEncoder().encode(validEntries)
+                UserDefaults.standard.set(data, forKey: self.heroCacheKey)
+            } catch {}
+        }
     }
 
     private func loadHeroEntriesFromCache() {
-        if let data = UserDefaults.standard.data(forKey: heroCacheKey) {
-            if let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) {
-                // Filter out entries with empty summaries - they'll be regenerated
-                heroEntries = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        // Decode JSON off main thread to prevent UI freeze
+        Task.detached(priority: .userInitiated) {
+            guard let data = UserDefaults.standard.data(forKey: self.heroCacheKey) else { return }
+            guard let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) else { return }
+            // Filter out entries with empty summaries - they'll be regenerated
+            let filtered = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            await MainActor.run {
+                self.heroEntries = filtered
             }
         }
     }

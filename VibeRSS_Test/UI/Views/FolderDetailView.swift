@@ -4,8 +4,6 @@ struct FolderDetailView: View {
     let folder: Folder
     var refreshID: UUID = UUID()
     @EnvironmentObject private var store: FeedStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var showingDeleteFolder = false
     @StateObject private var vm = FolderItemsViewModel()
     @State private var webLink: WebLink?
     @State private var summarizingID: UUID?
@@ -100,9 +98,6 @@ struct FolderDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(role: .destructive) { showingDeleteFolder = true } label: { Image(systemName: "trash") }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Section("Summary Length") {
                         Button {
@@ -136,15 +131,6 @@ struct FolderDetailView: View {
                     Image(systemName: "sparkles")
                 }
             }
-        }
-        .alert("Delete Folder?", isPresented: $showingDeleteFolder) {
-            Button("Delete", role: .destructive) {
-                store.removeFolder(folder)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("All sources will remain subscribed but will be removed from this folder.")
         }
     }
 

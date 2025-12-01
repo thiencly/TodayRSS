@@ -23,6 +23,15 @@ import SwiftUI
 
 
 actor FaviconService {
+    // Dedicated session with aggressive timeout to prevent UI freezes
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 3
+        config.timeoutIntervalForResource = 5
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     func resolveIcon(for feedURL: URL) async -> URL? {
         // Derive site base from feed URL
         guard var comps = URLComponents(url: feedURL, resolvingAgainstBaseURL: false) else { return nil }
@@ -87,20 +96,20 @@ actor FaviconService {
     private func urlExists(_ url: URL) async -> Bool {
         var req = URLRequest(url: url)
         req.httpMethod = "HEAD"
-        req.timeoutInterval = 5
+        req.timeoutInterval = 3
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         do {
             try Task.checkCancellation()
-            let (_, resp) = try await URLSession.shared.data(for: req)
+            let (_, resp) = try await Self.session.data(for: req)
             if let http = resp as? HTTPURLResponse { return (200..<400).contains(http.statusCode) }
         } catch {}
         // Some servers reject HEAD—fallback to GET small
         do {
             try Task.checkCancellation()
             var getReq = URLRequest(url: url)
-            getReq.timeoutInterval = 5
+            getReq.timeoutInterval = 3
             getReq.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-            let (_, resp) = try await URLSession.shared.data(for: getReq)
+            let (_, resp) = try await Self.session.data(for: getReq)
             if let http = resp as? HTTPURLResponse { return (200..<400).contains(http.statusCode) }
         } catch {}
         return false
@@ -109,10 +118,10 @@ actor FaviconService {
     private func fetchHTML(from url: URL) async -> String? {
         do {
             var req = URLRequest(url: url)
-            req.timeoutInterval = 6
+            req.timeoutInterval = 3
             req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
             try Task.checkCancellation()
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await Self.session.data(for: req)
             guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
             return String(data: data, encoding: .utf8)
         } catch { return nil }

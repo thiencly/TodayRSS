@@ -25,6 +25,15 @@ actor ImageDiskCache {
     // Thread-safe synchronous access to memory cache
     private static let syncMemCache = NSCache<NSString, UIImage>()
 
+    // Dedicated session with aggressive timeout to prevent UI freezes
+    private static let imageSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 4
+        config.timeoutIntervalForResource = 6
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     init() {
         // Use a local FileManager to avoid capturing the actor-isolated property in nonisolated autoclosures.
         let localFM = FileManager.default
@@ -63,8 +72,11 @@ actor ImageDiskCache {
             scale = 1.0
         }
 
-        let newWidth = Int(width * scale)
-        let newHeight = Int(height * scale)
+        let newWidth = max(1, Int(width * scale))
+        let newHeight = max(1, Int(height * scale))
+
+        // Guard against invalid dimensions
+        guard newWidth > 0, newHeight > 0 else { return image }
 
         // Create a bitmap context and draw - this forces decoding
         guard let context = CGContext(
@@ -127,9 +139,9 @@ actor ImageDiskCache {
 
         do {
             var req = URLRequest(url: url)
-            req.timeoutInterval = 5
+            req.timeoutInterval = 4
             try Task.checkCancellation()
-            let (data, response) = try await URLSession.shared.data(for: req)
+            let (data, response) = try await Self.imageSession.data(for: req)
             if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
                 if let rawImage = UIImage(data: data), isValidImage(rawImage) {
                     // Save original data to disk

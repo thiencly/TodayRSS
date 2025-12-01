@@ -54,14 +54,21 @@ actor ArticleSummarizer {
     // Initialize lookup from UserDefaults - call this once at app startup on background thread
     static func initializeLookupAsync() {
         DispatchQueue.global(qos: .userInitiated).async {
+            // Check without lock first (fast path)
+            if lookupInitialized { return }
+
+            // Do JSON decoding OUTSIDE the lock to avoid blocking main thread
+            var keys: Set<String> = []
+            if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
+               let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+                keys = Set(dict.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.keys)
+            }
+
+            // Only hold lock briefly to update state
             lookupLock.lock()
             defer { lookupLock.unlock() }
             guard !lookupInitialized else { return }
-
-            if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
-               let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-                cachedKeysLookup = Set(dict.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.keys)
-            }
+            cachedKeysLookup = keys
             lookupInitialized = true
         }
     }
