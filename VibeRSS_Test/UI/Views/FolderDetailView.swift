@@ -17,6 +17,7 @@ struct FolderDetailView: View {
     @State private var aiSummarized: Set<UUID> = []
     @State private var currentDay: Date? = nil
     @State private var suppressNextRowTap = false
+    @State private var hasCachedSummaryCache: Set<UUID> = []
 
     var body: some View {
         Group {
@@ -30,116 +31,25 @@ struct FolderDetailView: View {
                 }.padding()
             } else {
                 List(vm.items) { item in
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title)
-                                .font(.headline)
-                                .multilineTextAlignment(.leading)
-                                .lineLimit(nil)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .layoutPriority(2)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    webLink = WebLink(url: item.link)
-                                }
-
-                            Group {
-                                let isError = summaryErrors.contains(item.id)
-                                let aiSummary = inlineSummaries[item.id]
-
-                                HStack(spacing: 6) {
-                                    SummarizeButton(
-                                        state: { () -> SummarizeButton.ButtonState in
-                                            if summarizingID == item.id {
-                                                return .generating
-                                            }
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
-                                            let hasCached = (aiSummary != nil) || ArticleSummarizer.hasCachedSummary(url: item.link, length: length)
-                                            if hasCached {
-                                                return .hasSummary(isExpanded: expandedSummaries.contains(item.id))
-                                            } else {
-                                                return .none
-                                            }
-                                        }()
-                                    ) {
-                                        // Toggle expand/collapse if summary exists; otherwise start summarization
-                                        suppressNextRowTap = true
-                                        let hasSummary = (aiSummary != nil)
-                                        if hasSummary {
-                                            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
-                                            if expandedSummaries.contains(item.id) {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    expandedSummaries.remove(item.id)
-                                                }
-                                                Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
-                                            } else {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    expandedSummaries.insert(item.id)
-                                                }
-                                                Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
-                                            }
-                                        } else if summarizingID != item.id {
-                                            Task { await summarize(item) }
-                                        }
-                                    }
-                                    .disabled(isError)
-
-                                    if vm.newArticleIDs.contains(item.id) {
-                                        Circle()
-                                            .fill(Color.blue)
-                                            .frame(width: 6, height: 6)
-                                            .accessibilityLabel("New article")
-                                    }
-                                }
-
-                                ZStack(alignment: .topLeading) {
-                                    if let aiSummary {
-                                        CollapsibleText(text: aiSummary, isExpanded: expandedSummaries.contains(item.id))
-                                    } else if isError {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                                            Text("Summarization unavailable on this device.")
-                                        }
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .padding(.top, 4)
-
-                            HStack(alignment: .center, spacing: 6) {
-                                SourceBadge(iconURL: item.sourceIconURL, name: item.sourceTitle ?? "Source")
-                                if let date = item.pubDate {
-                                    Text("•")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    Text(date, style: .time)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
+                    let rowState = makeRowState(for: item)
+                    ArticleRowView(
+                        state: rowState,
+                        onTapArticle: {
+                            webLink = WebLink(url: item.link)
+                        },
+                        onTapSummarize: {
+                            handleSummarizeAction(for: item)
                         }
-                        Spacer(minLength: 12)
-                        if let thumb = item.thumbnailURL {
-                            ArticleThumbnailView(url: thumb)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    webLink = WebLink(url: item.link)
-                                }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    )
+                    .equatable()
                     .background(DayAnchorReporter(date: item.pubDate, coordinateSpaceName: "FolderListScroll"))
                     .id(item.id)
-                    .transaction { $0.disablesAnimations = false }
                 }
                 .listStyle(.plain)
-                .transaction { $0.animation = nil }
                 .refreshable { await vm.load(for: folder, feeds: store.feeds) }
                 .coordinateSpace(name: "FolderListScroll")
-                .task(id: vm.items.map { $0.id }) { preloadSummaries(for: vm.items) }
-                .onChange(of: summaryLengthRaw) { _, _ in }
+                .onChange(of: vm.items.count) { _, _ in preloadSummaries(for: vm.items) }
+                .task { preloadSummaries(for: vm.items) }
                 .onPreferenceChange(DayAnchorsKey.self) { anchors in
                     guard !anchors.isEmpty else {
                         currentDay = nil
@@ -238,15 +148,67 @@ struct FolderDetailView: View {
         }
     }
 
+    // MARK: - Row State Factory
+
+    private func makeRowState(for item: Article) -> ArticleRowState {
+        let aiSummary = inlineSummaries[item.id]
+        let hasCached = (aiSummary != nil) || hasCachedSummaryCache.contains(item.id)
+
+        return ArticleRowState(
+            id: item.id,
+            title: item.title,
+            link: item.link,
+            pubDate: item.pubDate,
+            thumbnailURL: item.thumbnailURL,
+            sourceIconURL: item.sourceIconURL,
+            sourceTitle: item.sourceTitle ?? "Source",
+            isNew: vm.newArticleIDs.contains(item.id),
+            hasSummary: hasCached,
+            summaryText: aiSummary,
+            isExpanded: expandedSummaries.contains(item.id),
+            isError: summaryErrors.contains(item.id),
+            isGenerating: summarizingID == item.id
+        )
+    }
+
+    private func handleSummarizeAction(for item: Article) {
+        suppressNextRowTap = true
+        let aiSummary = inlineSummaries[item.id]
+        let hasSummary = (aiSummary != nil)
+
+        if hasSummary {
+            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
+            if expandedSummaries.contains(item.id) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedSummaries.remove(item.id)
+                }
+                Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedSummaries.insert(item.id)
+                }
+                Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
+            }
+        } else if summarizingID != item.id {
+            Task { await summarize(item) }
+        }
+    }
+
     private func preloadSummaries(for items: [Article]) {
         let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
+            var cachedStatus = hasCachedSummaryCache
 
             for item in items {
+                if ArticleSummarizer.hasCachedSummary(url: item.link, length: length) {
+                    cachedStatus.insert(item.id)
+                }
+
                 if updated[item.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: item.link, length: length) {
                     updated[item.id] = cached
+                    cachedStatus.insert(item.id)
                 }
                 if await ArticleSummarizer.shared.isExpanded(url: item.link, length: length) {
                     expanded.insert(item.id)
@@ -256,6 +218,7 @@ struct FolderDetailView: View {
             }
             inlineSummaries = updated
             expandedSummaries = expanded
+            hasCachedSummaryCache = cachedStatus
         }
     }
 

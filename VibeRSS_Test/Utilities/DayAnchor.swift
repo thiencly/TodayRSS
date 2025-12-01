@@ -61,9 +61,17 @@ public struct DayAnchorReporter: View {
     }
 }
 
-// Compact “Today / Yesterday / <date>” chip shown pinned at the top.
+// Compact "Today / Yesterday / <date>" chip shown pinned at the top.
 public struct FloatingDayChip: View {
     public let date: Date
+
+    // Cached DateFormatter for performance (creating DateFormatter is expensive)
+    private static let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .none
+        return df
+    }()
 
     public init(date: Date) {
         self.date = date
@@ -84,9 +92,6 @@ public struct FloatingDayChip: View {
         let cal = Calendar.current
         if cal.isDateInToday(date) { return "Today" }
         if cal.isDateInYesterday(date) { return "Yesterday" }
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        return df.string(from: date)
+        return Self.dateFormatter.string(from: date)
     }
 }

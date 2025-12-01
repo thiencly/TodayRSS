@@ -14,11 +14,12 @@ import SwiftUI
 struct SourceBadge: View {
     var iconURL: URL?
     var name: String
+    private let iconSize: CGFloat = 20
     var body: some View {
         HStack(spacing: 6) {
             Group {
                 if let iconURL {
-                    CachedAsyncImage(url: iconURL) {
+                    CachedAsyncImage(url: iconURL, size: CGSize(width: iconSize, height: iconSize)) {
                         Color.clear
                     }
                 } else {
@@ -26,9 +27,10 @@ struct SourceBadge: View {
                         .resizable()
                         .scaledToFit()
                         .foregroundStyle(.secondary)
+                        .frame(width: iconSize, height: iconSize)
                 }
             }
-            .frame(width: 20, height: 20)
+            .frame(width: iconSize, height: iconSize)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             Text(name)
         }
@@ -39,23 +41,26 @@ struct SourceBadge: View {
 
 struct FeedIconView: View {
     var iconURL: URL?
+    private let iconSize: CGFloat = 24
     var body: some View {
         Group {
             if let iconURL {
-                CachedAsyncImage(url: iconURL) {
+                CachedAsyncImage(url: iconURL, size: CGSize(width: iconSize, height: iconSize)) {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .resizable()
                         .scaledToFit()
                         .foregroundStyle(.secondary)
+                        .frame(width: iconSize, height: iconSize)
                 }
             } else {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .resizable()
                     .scaledToFit()
                     .foregroundStyle(.secondary)
+                    .frame(width: iconSize, height: iconSize)
             }
         }
-        .frame(width: 24, height: 24)
+        .frame(width: iconSize, height: iconSize)
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }

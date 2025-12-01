@@ -895,11 +895,9 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var detailView: some View {
-        if let source = selectedSource ?? store.feeds.first {
-            FeedDetailView(source: source, refreshID: refreshID)
-        } else {
-            ContentPlaceholder()
-        }
+        // Show placeholder by default - FeedDetailView only created when navigated to
+        // This matches AllArticlesView behavior and avoids first-load lag
+        ContentPlaceholder()
     }
 
     var body: some View {

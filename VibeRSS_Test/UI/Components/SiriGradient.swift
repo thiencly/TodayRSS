@@ -132,19 +132,10 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
         ]
     }
 
-    private var idleLayers: [(CGFloat, CGFloat)] {
-        [
-            (2, 0),     // Sharp edge
-            (3, 4),     // Close glow
-            (4, 10),    // Mid glow
-            (6, 18),    // Outer glow
-        ]
-    }
-
     var body: some View {
-        ZStack {
+        // Wrap in Group so animation applies to the conditional content
+        Group {
             if isActive {
-                // High frame rate (30fps) when actively generating
                 TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                     let seconds = context.date.timeIntervalSinceReferenceDate
                     let currentPhase = (seconds.truncatingRemainder(dividingBy: 6.0) / 6.0) * 360.0
@@ -171,39 +162,10 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
                         }
                     }
                 }
-                .transition(.opacity.combined(with: .scale(scale: 1.05)))
-            } else {
-                // Low frame rate (5fps) when idle - saves CPU
-                TimelineView(.animation(minimumInterval: 1.0 / 5.0)) { context in
-                    let seconds = context.date.timeIntervalSinceReferenceDate
-                    let currentPhase = (seconds.truncatingRemainder(dividingBy: 18.0) / 18.0) * 360.0
-
-                    ZStack {
-                        ForEach(idleLayers.indices.reversed(), id: \.self) { index in
-                            let (lineWidth, blur) = idleLayers[index]
-                            let layerOpacity = 0.6 * (0.5 + 0.15 * Double(index))
-
-                            shape
-                                .stroke(
-                                    AngularGradient(
-                                        colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
-                                        center: .center,
-                                        startAngle: .degrees(currentPhase),
-                                        endAngle: .degrees(currentPhase + 360)
-                                    ),
-                                    lineWidth: lineWidth
-                                )
-                                .blur(radius: blur)
-                                .saturation(1.0)
-                                .opacity(layerOpacity)
-                                .blendMode(index == 0 ? .plusLighter : .screen)
-                        }
-                    }
-                }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: isActive)
+        .animation(.easeInOut(duration: 0.35), value: isActive)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

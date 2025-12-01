@@ -19,6 +19,11 @@ actor ImageDiskCache {
     private let fm = FileManager.default
     private let directory: URL
     private let memCache = NSCache<NSString, UIImage>()
+    private var activeDownloads = 0
+    private let maxConcurrentDownloads = 10  // Higher limit for faster preloading
+
+    // Thread-safe synchronous access to memory cache
+    private static let syncMemCache = NSCache<NSString, UIImage>()
 
     init() {
         // Use a local FileManager to avoid capturing the actor-isolated property in nonisolated autoclosures.
@@ -34,29 +39,105 @@ actor ImageDiskCache {
         try? localFM.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    // Validate image has non-zero dimensions
+    private func isValidImage(_ image: UIImage) -> Bool {
+        return image.size.width > 0 && image.size.height > 0
+    }
+
+    // Force decode image off main thread to prevent lag during rendering
+    // UIImage defers decoding until first render - this forces it early
+    private func predecodedImage(_ image: UIImage) -> UIImage {
+        guard let cgImage = image.cgImage else { return image }
+
+        // For thumbnails, downsample to 120x120 (2x for retina)
+        // This reduces memory and rendering time for large source images
+        let maxSize: CGFloat = 120
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+
+        // Only downsample if image is larger than needed
+        let scale: CGFloat
+        if width > maxSize || height > maxSize {
+            scale = min(maxSize / width, maxSize / height)
+        } else {
+            scale = 1.0
+        }
+
+        let newWidth = Int(width * scale)
+        let newHeight = Int(height * scale)
+
+        // Create a bitmap context and draw - this forces decoding
+        guard let context = CGContext(
+            data: nil,
+            width: newWidth,
+            height: newHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            return image
+        }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+
+        guard let decodedCGImage = context.makeImage() else {
+            return image
+        }
+
+        return UIImage(cgImage: decodedCGImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+
     func image(for url: URL) async -> UIImage? {
         let file = fileURL(for: url)
         let key = file.lastPathComponent as NSString
 
-        if let cachedMem = memCache.object(forKey: key) {
+        // Check sync memory cache first (accessible from anywhere)
+        // These are already predecoded
+        if let syncCached = Self.syncMemCache.object(forKey: key), isValidImage(syncCached) {
+            return syncCached
+        }
+
+        // Check actor-local memory cache
+        if let cachedMem = memCache.object(forKey: key), isValidImage(cachedMem) {
+            storeInSyncCache(cachedMem, for: url)
             return cachedMem
         }
 
+        // Check disk cache (still fast, no network)
         if fm.fileExists(atPath: file.path),
            let data = try? Data(contentsOf: file),
-           let image = UIImage(data: data) {
+           let rawImage = UIImage(data: data),
+           isValidImage(rawImage) {
+            // Predecode off main thread before caching
+            let image = predecodedImage(rawImage)
             memCache.setObject(image, forKey: key)
+            storeInSyncCache(image, for: url)
             return image
         }
+
+        // Limit concurrent downloads to avoid overwhelming the network/main thread
+        while activeDownloads >= maxConcurrentDownloads {
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            if Task.isCancelled { return nil }
+        }
+
+        activeDownloads += 1
+        defer { activeDownloads -= 1 }
+
         do {
             var req = URLRequest(url: url)
             req.timeoutInterval = 5
             try Task.checkCancellation()
             let (data, response) = try await URLSession.shared.data(for: req)
             if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                try? data.write(to: file, options: [.atomic])
-                if let image = UIImage(data: data) {
+                if let rawImage = UIImage(data: data), isValidImage(rawImage) {
+                    // Save original data to disk
+                    try? data.write(to: file, options: [.atomic])
+                    // Predecode and downsample before caching in memory
+                    let image = predecodedImage(rawImage)
                     memCache.setObject(image, forKey: key)
+                    storeInSyncCache(image, for: url)
                     return image
                 }
             }
@@ -73,5 +154,24 @@ actor ImageDiskCache {
         let data = Data(string.utf8)
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func cacheKey(for url: URL) -> NSString {
+        let data = Data(url.absoluteString.utf8)
+        let digest = SHA256.hash(data: data)
+        let name = digest.map { String(format: "%02x", $0) }.joined()
+        return (name + ".img") as NSString
+    }
+
+    /// Synchronous check for memory-cached image (no async, no actor isolation)
+    nonisolated static func cachedImage(for url: URL) -> UIImage? {
+        let key = cacheKey(for: url)
+        return syncMemCache.object(forKey: key)
+    }
+
+    /// Store image in the sync cache (called after loading)
+    private func storeInSyncCache(_ image: UIImage, for url: URL) {
+        let key = Self.cacheKey(for: url)
+        Self.syncMemCache.setObject(image, forKey: key)
     }
 }

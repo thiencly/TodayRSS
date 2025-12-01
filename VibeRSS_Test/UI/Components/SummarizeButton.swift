@@ -86,15 +86,16 @@ struct SummarizeButton: View {
                             .progressViewStyle(.circular)
                             .scaleEffect(0.8)
                             .frame(width: 16, height: 16)
-                            .transition(.opacity)
+                            .transition(.scale.combined(with: .opacity))
                     } else {
                         Image(systemName: "sparkles")
                             .font(.subheadline.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
                             .frame(width: 16, height: 16)
-                            .scaleEffect(1.0)
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .animation(.easeInOut(duration: 0.3), value: isGenerating)
 
                 Text(title)
                     .font(.callout.weight(.semibold))
@@ -116,7 +117,7 @@ struct SummarizeButton: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .frame(minWidth: 110)
+            .frame(minWidth: 110, minHeight: 32)
             .contentShape(Capsule())
         }
         .buttonStyle(GlassPillStyle())
@@ -125,7 +126,7 @@ struct SummarizeButton: View {
             Capsule()
                 .fill(.thinMaterial)
         )
-        // Siri-like glow halo placed outside clipping so it’s visible
+        // Siri-like glow halo placed outside clipping so it's visible
         .overlay(
             rotatingGlowOverlay()
         )
@@ -135,7 +136,7 @@ struct SummarizeButton: View {
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
         .scaleEffect(isGenerating ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.5), value: isGenerating)
+        .animation(.easeInOut(duration: 0.35), value: isGenerating)
         .accessibilityLabel(title)
     }
 }

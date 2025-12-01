@@ -144,12 +144,12 @@ actor FeedService {
         }
     }
 
-    @MainActor private func parseRSS(_ data: Data) throws -> [FeedItem] {
+    private func parseRSS(_ data: Data) throws -> [FeedItem] {
         let parser = RSSParser()
         return try parser.parse(data: data)
     }
 
-    @MainActor private func parseAtom(_ data: Data) throws -> [FeedItem] {
+    private func parseAtom(_ data: Data) throws -> [FeedItem] {
         let parser = AtomParser()
         return try parser.parse(data: data)
     }
