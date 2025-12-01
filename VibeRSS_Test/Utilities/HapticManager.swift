@@ -15,8 +15,10 @@ final class HapticManager {
     private let selectionFeedback = UISelectionFeedbackGenerator()
     private let notificationFeedback = UINotificationFeedbackGenerator()
 
-    private var lastTypingHaptic: Date = .distantPast
-    private let typingHapticInterval: TimeInterval = 0.04 // 40ms between haptics
+    // Thread-safe timing for typing haptics
+    private let hapticLock = NSLock()
+    private var lastTypingHapticTime: CFAbsoluteTime = 0
+    private let typingHapticInterval: CFAbsoluteTime = 0.12 // 120ms between haptics (~8hz, well under 32hz limit)
 
     private init() {
         // Prepare generators for lower latency
@@ -27,10 +29,19 @@ final class HapticManager {
 
     /// Typing haptic for streaming text - throttled to avoid excessive vibration
     func typingHaptic() {
-        let now = Date()
-        guard now.timeIntervalSince(lastTypingHaptic) >= typingHapticInterval else { return }
-        lastTypingHaptic = now
+        let now = CFAbsoluteTimeGetCurrent()
 
+        // Thread-safe check and update
+        hapticLock.lock()
+        let elapsed = now - lastTypingHapticTime
+        guard elapsed >= typingHapticInterval else {
+            hapticLock.unlock()
+            return
+        }
+        lastTypingHapticTime = now
+        hapticLock.unlock()
+
+        // Fire haptic on main thread
         DispatchQueue.main.async { [weak self] in
             self?.softImpact.impactOccurred(intensity: 0.4)
         }
