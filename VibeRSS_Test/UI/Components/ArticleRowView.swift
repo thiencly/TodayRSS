@@ -37,7 +37,7 @@ struct ArticleRowView: View, Equatable {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 10) {
                 // Title
                 Text(state.title)
                     .font(.headline)
@@ -48,36 +48,34 @@ struct ArticleRowView: View, Equatable {
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onTapArticle)
 
-                // Summary section
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        SummarizeButton(
-                            state: buttonState
-                        ) {
-                            onTapSummarize()
-                        }
-                        .disabled(state.isError)
-
-                        if state.isNew {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 6, height: 6)
-                                .accessibilityLabel("New article")
-                        }
+                // Summarize button
+                HStack(spacing: 6) {
+                    SummarizeButton(
+                        state: buttonState
+                    ) {
+                        onTapSummarize()
                     }
+                    .disabled(state.isError)
 
-                    if let summaryText = state.summaryText {
-                        CollapsibleText(text: summaryText, isExpanded: state.isExpanded)
-                    } else if state.isError {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                            Text("Summarization unavailable on this device.")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if state.isNew {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 6, height: 6)
+                            .accessibilityLabel("New article")
                     }
                 }
-                .padding(.top, 4)
+
+                // AI Summary or error
+                if let summaryText = state.summaryText {
+                    CollapsibleText(text: summaryText, isExpanded: state.isExpanded)
+                } else if state.isError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                        Text("Summarization unavailable on this device.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
 
                 // Source badge
                 HStack(alignment: .center, spacing: 6) {

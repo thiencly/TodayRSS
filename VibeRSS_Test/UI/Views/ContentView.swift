@@ -465,7 +465,9 @@ struct ContentView: View {
 
     private func saveHeroEntriesToCache() {
         do {
-            let data = try JSONEncoder().encode(heroEntries)
+            // Only cache entries that have valid summaries
+            let validEntries = heroEntries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            let data = try JSONEncoder().encode(validEntries)
             UserDefaults.standard.set(data, forKey: heroCacheKey)
         } catch {}
     }
@@ -473,7 +475,8 @@ struct ContentView: View {
     private func loadHeroEntriesFromCache() {
         if let data = UserDefaults.standard.data(forKey: heroCacheKey) {
             if let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) {
-                heroEntries = decoded
+                // Filter out entries with empty summaries - they'll be regenerated
+                heroEntries = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
     }
@@ -513,11 +516,16 @@ struct ContentView: View {
         // Step 2: Process summaries one by one, most recent first, updating UI after each
         var builtEntries: [SidebarHeroCardView.Entry] = []
 
-        for (index, (feed, article)) in feedArticles.enumerated() {
+        for (feed, article) in feedArticles {
             let isNew = !previouslySeenLinks.contains(article.link)
 
             // Use fast hero summary - optimized for speed
             let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: nil) ?? ""
+
+            // Only add entries that have valid AI summaries
+            guard !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
 
             let entry = SidebarHeroCardView.Entry(
                 source: feed,
@@ -532,15 +540,81 @@ struct ContentView: View {
             // Update UI after each entry is processed
             heroEntries = builtEntries
 
-            // After first entry is ready, stop showing loading shimmer
-            // so collapsed view shows content immediately
-            if index == 0 {
+            // After first valid entry is ready, stop showing loading shimmer
+            if builtEntries.count == 1 {
                 isLoadingHero = false
             }
         }
 
         saveHeroEntriesToCache()
         isLoadingHero = false
+    }
+
+    @ViewBuilder
+    private func folderRow(_ folder: Folder) -> some View {
+        let folderFeeds = store.feeds.filter { $0.folderID == folder.id }
+
+        NavigationLink {
+            FolderDetailView(folder: folder, refreshID: refreshID)
+                .environmentObject(store)
+        } label: {
+            HStack {
+                Label(folder.name, systemImage: "folder")
+                Spacer()
+                Text("\(folderFeeds.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .contextMenu {
+            Button("Delete", role: .destructive) {
+                store.removeFolder(folder)
+            }
+        }
+
+        // Show sources under this folder when expanded
+        if !areFoldersCollapsed {
+            ForEach(folderFeeds) { source in
+                folderSourceRow(source)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func folderSourceRow(_ source: Feed) -> some View {
+        NavigationLink {
+            FeedDetailView(source: source, refreshID: refreshID)
+        } label: {
+            HStack(spacing: 12) {
+                FeedIconView(iconURL: source.iconURL)
+                Text(source.title)
+                Spacer()
+                if isHeroSource(source) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.blue)
+                        .font(.subheadline)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .padding(.leading, 20)
+        .contextMenu {
+            Button {
+                toggleHeroSource(source)
+            } label: {
+                Label(
+                    isHeroSource(source) ? "Remove from Today" : "Add to Today",
+                    systemImage: isHeroSource(source) ? "minus.circle" : "plus.circle"
+                )
+            }
+            .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
+            Button("Delete", role: .destructive) {
+                if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
+                    store.feeds.remove(at: idx)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var sidebar: some View {
@@ -563,30 +637,11 @@ struct ContentView: View {
                             .contentShape(Rectangle())
                     }
 
-                    if !areFoldersCollapsed {
-                        ForEach(store.folders) { folder in
-                            NavigationLink {
-                                FolderDetailView(folder: folder, refreshID: refreshID)
-                                    .environmentObject(store)
-                            } label: {
-                                HStack {
-                                    Label(folder.name, systemImage: "folder")
-                                    Spacer()
-                                    Text("\(store.feeds.filter { $0.folderID == folder.id }.count)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .contextMenu {
-                                Button("Delete", role: .destructive) {
-                                    store.removeFolder(folder)
-                                }
-                            }
-                        }
-                        .onMove { indices, destination in
-                            store.folders.move(fromOffsets: indices, toOffset: destination)
-                        }
+                    ForEach(store.folders) { folder in
+                        folderRow(folder)
+                    }
+                    .onMove { indices, destination in
+                        store.folders.move(fromOffsets: indices, toOffset: destination)
                     }
                 }
                 header: {

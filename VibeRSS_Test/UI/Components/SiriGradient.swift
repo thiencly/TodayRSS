@@ -145,32 +145,27 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
 
     var body: some View {
         ZStack {
-            // Idle glow - visible ambient animation
+            // Idle glow - static ambient glow (no animation)
             if showIdle && !isActive {
-                TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { context in  // 12fps for smoother idle
-                    let seconds = context.date.timeIntervalSinceReferenceDate
-                    let currentPhase = (seconds.truncatingRemainder(dividingBy: 8.0) / 8.0) * 360.0  // 8s rotation (20% faster)
+                ZStack {
+                    ForEach(idleLayers.indices.reversed(), id: \.self) { index in
+                        let (lineWidth, blur) = idleLayers[index]
+                        let layerOpacity = 0.45 * (0.5 + 0.12 * Double(index)) * idleIntensity
 
-                    ZStack {
-                        ForEach(idleLayers.indices.reversed(), id: \.self) { index in
-                            let (lineWidth, blur) = idleLayers[index]
-                            let layerOpacity = 0.45 * (0.5 + 0.12 * Double(index)) * idleIntensity
-
-                            shape
-                                .stroke(
-                                    AngularGradient(
-                                        colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
-                                        center: .center,
-                                        startAngle: .degrees(currentPhase),
-                                        endAngle: .degrees(currentPhase + 360)
-                                    ),
-                                    lineWidth: lineWidth
-                                )
-                                .blur(radius: blur)
-                                .saturation(1.3)
-                                .opacity(layerOpacity)
-                                .blendMode(.screen)
-                        }
+                        shape
+                            .stroke(
+                                AngularGradient(
+                                    colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
+                                    center: .center,
+                                    startAngle: .degrees(0),
+                                    endAngle: .degrees(360)
+                                ),
+                                lineWidth: lineWidth
+                            )
+                            .blur(radius: blur)
+                            .saturation(1.3)
+                            .opacity(layerOpacity)
+                            .blendMode(.screen)
                     }
                 }
                 .transition(.opacity)
