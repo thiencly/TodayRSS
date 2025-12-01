@@ -26,7 +26,7 @@ struct SummarizeButton: View {
     // Apple Intelligence glow overlay
     @ViewBuilder
     private func rotatingGlowOverlay() -> some View {
-        AppleIntelligenceGlow<Capsule>(isActive: isGenerating)
+        AppleIntelligenceGlow<Capsule>(isActive: isGenerating, idleIntensity: 0.9)
     }
 
     @ViewBuilder
