@@ -161,9 +161,8 @@ struct AllArticlesView: View {
         if hasSummary {
             let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
             if expandedSummaries.contains(item.id) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    expandedSummaries.remove(item.id)
-                }
+                // No animation for collapse to avoid List jumping
+                expandedSummaries.remove(item.id)
                 Task { await ArticleSummarizer.shared.setExpanded(false, url: item.link, length: length) }
             } else {
                 withAnimation(.easeInOut(duration: 0.2)) {

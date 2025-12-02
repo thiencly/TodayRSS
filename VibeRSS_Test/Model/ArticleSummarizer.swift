@@ -146,12 +146,12 @@ actor ArticleSummarizer {
         guard case .available = model.availability else { return }
 
         // Create and cache a session for hero card summaries
-        let session = LanguageModelSession(instructions: "Summarize in one sentence, 20 words max.")
+        let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
         heroSession = session
 
         // Pre-create summary sessions for faster first summarization
-        let shortInstructions = "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
-        let longInstructions = "Summarize for busy readers in 3–6 sentences (<200 words). Focus on key facts, context, implications. Preserve qualifiers and numerical details. No fluff."
+        let shortInstructions = "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points."
+        let longInstructions = "Summarize for busy readers in 5-8 sentences (250-300 words). Cover key facts, context, implications, and outcomes. Include relevant numbers, quotes, and decisions. Preserve qualifiers and avoid overstating certainty."
         summarySessionShort = LanguageModelSession(instructions: shortInstructions)
         summarySessionLong = LanguageModelSession(instructions: longInstructions)
 
@@ -194,12 +194,12 @@ actor ArticleSummarizer {
         }
 
         // Use smaller primer for faster processing
-        let primer = selectPrimerSlice(from: baseText, maxChars: 300)
+        let primer = selectPrimerSlice(from: baseText, maxChars: 400)
         if primer.isEmpty { return nil }
 
         do {
             // Reuse cached session or create new one
-            let session = heroSession ?? LanguageModelSession(instructions: "Summarize in one sentence, 20 words max.")
+            let session = heroSession ?? LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
             if heroSession == nil { heroSession = session }
 
             // Use respond() instead of streamResponse() - no streaming delays
@@ -480,13 +480,13 @@ actor ArticleSummarizer {
 
                 switch length {
                 case .quick:
-                    let instructions = "Summarize the article in 20 words or fewer. Use a single sentence. Focus on the single most important point. No lists, no emojis."
+                    let instructions = "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail. No lists, no emojis."
                     var prompt = "Summarize this article:\n\n"
                     if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
                         let s = String(seed.prefix(900))
                         prompt += "Preview/context from feed:\n\(s)\n\n"
                     }
-                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 600)
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 800)
                     let promptPrimer = prompt + primer
                     do {
                         let sessionPrimer = LanguageModelSession(instructions: instructions)
@@ -528,7 +528,7 @@ actor ArticleSummarizer {
                         return
                     }
                 case .short:
-                    let instructions = "Summarize in 1 sentence (≤60 words). Focus only on key facts, outcomes, numbers, and decisions. Omit background, adjectives, and repetition. No bullet points."
+                    let instructions = "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points."
 
                     var prompt = "Summarize this article:\n\n"
                     if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
@@ -541,7 +541,7 @@ actor ArticleSummarizer {
                     if self.summarySessionShort == nil { self.summarySessionShort = session }
 
                     // Stage 1: quick primer
-                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1000)
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1500)
                     let promptPrimer = prompt + primer
                     do {
                         let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
@@ -585,8 +585,8 @@ actor ArticleSummarizer {
                     }
 
                     // Stage 2: fuller body (reuse same session)
-                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 6000)
-                    let fullBody = String(selected.prefix(6000))
+                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 8000)
+                    let fullBody = String(selected.prefix(8000))
                     let streamFull = session.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
                     var finalTextFull: String = ""
                     var revealedCountFull: Int = 0
@@ -622,11 +622,11 @@ actor ArticleSummarizer {
                     return
                 case .long:
                     let instructions = """
-Summarize for busy readers in 3–6 sentences (<200 words).
-Focus on key facts, context, implications, and preserve numerical details.
+Summarize for busy readers in 5–8 sentences (250-300 words).
+Cover key facts, context, implications, and outcomes.
+Include relevant numbers, quotes, and decisions.
 Preserve qualifiers (e.g., "may", "could", "report suggests") and avoid overstating certainty.
 Do not introduce any information that isn't present in the text.
-Avoid repetition and adjectives.
 """
 
                     var promptBase = "Summarize this article:\n\n"
@@ -640,7 +640,7 @@ Avoid repetition and adjectives.
                     if self.summarySessionLong == nil { self.summarySessionLong = session }
 
                     // Stage 1: primer
-                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1400)
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 2000)
                     let promptPrimer = promptBase + primer
                     do {
                         let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
@@ -684,8 +684,8 @@ Avoid repetition and adjectives.
                     }
 
                     // Stage 2: full body (reuse same session)
-                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 12_000)
-                    let body = String(selected.prefix(12_000))
+                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 15_000)
+                    let body = String(selected.prefix(15_000))
                     let promptFull = promptBase + body
 
                     let streamFull = session.streamResponse(to: promptFull, generating: InlineSummary.self)

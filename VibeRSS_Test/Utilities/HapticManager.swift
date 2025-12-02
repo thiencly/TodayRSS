@@ -12,6 +12,7 @@ final class HapticManager {
 
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
     private let softImpact = UIImpactFeedbackGenerator(style: .soft)
+    private let rigidImpact = UIImpactFeedbackGenerator(style: .rigid)
     private let selectionFeedback = UISelectionFeedbackGenerator()
     private let notificationFeedback = UINotificationFeedbackGenerator()
 
@@ -24,6 +25,7 @@ final class HapticManager {
         // Prepare generators for lower latency
         lightImpact.prepare()
         softImpact.prepare()
+        rigidImpact.prepare()
         selectionFeedback.prepare()
     }
 
@@ -47,10 +49,10 @@ final class HapticManager {
         }
     }
 
-    /// Light tap feedback for button presses
+    /// Sharp tap feedback for button presses
     func lightTap() {
         DispatchQueue.main.async { [weak self] in
-            self?.lightImpact.impactOccurred(intensity: 0.5)
+            self?.rigidImpact.impactOccurred(intensity: 0.8)
         }
     }
 

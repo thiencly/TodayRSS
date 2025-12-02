@@ -78,7 +78,10 @@ struct SummarizeButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticManager.shared.lightTap()
+            action()
+        } label: {
             HStack(spacing: 4) {
                 Group {
                     if isGenerating {
