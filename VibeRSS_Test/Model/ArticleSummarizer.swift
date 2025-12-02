@@ -134,6 +134,46 @@ actor ArticleSummarizer {
     private var heroSession: LanguageModelSession?
     private var summarySessionShort: LanguageModelSession?
     private var summarySessionLong: LanguageModelSession?
+
+    /// Reset all cached sessions - call when sessions become stale
+    private func resetSessions() {
+        heroSession = nil
+        summarySessionShort = nil
+        summarySessionLong = nil
+    }
+
+    /// Re-warm a specific session type in the background after reset
+    private func rewarmSession(_ type: Length) {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            let model = SystemLanguageModel.default
+            guard case .available = model.availability else { return }
+
+            switch type {
+            case .quick:
+                let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
+                await self.setHeroSession(session)
+            case .short:
+                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points.")
+                await self.setShortSession(session)
+            case .long:
+                let session = LanguageModelSession(instructions: "Summarize for busy readers in 5-8 sentences (250-300 words). Cover key facts, context, implications, and outcomes. Include relevant numbers, quotes, and decisions. Preserve qualifiers and avoid overstating certainty.")
+                await self.setLongSession(session)
+            }
+        }
+    }
+
+    private func setHeroSession(_ session: LanguageModelSession) {
+        if heroSession == nil { heroSession = session }
+    }
+
+    private func setShortSession(_ session: LanguageModelSession) {
+        if summarySessionShort == nil { summarySessionShort = session }
+    }
+
+    private func setLongSession(_ session: LanguageModelSession) {
+        if summarySessionLong == nil { summarySessionLong = session }
+    }
     #endif
 
     /// Call this early in app launch to pre-load the on-device model
@@ -212,7 +252,9 @@ actor ArticleSummarizer {
                 return text
             }
         } catch {
-            // Fall through
+            // Reset session on error and rewarm in background
+            heroSession = nil
+            rewarmSession(.quick)
         }
         #endif
 
@@ -579,44 +621,59 @@ actor ArticleSummarizer {
                                 continuation.finish()
                                 return
                             }
+                        } else {
+                            // Stage 1 produced no output - session may be stale
+                            self.summarySessionShort = nil; self.rewarmSession(.short)
                         }
                     } catch {
-                        // fall through to Stage 2
+                        // Stage 1 failed, reset session and fall through to Stage 2
+                        self.summarySessionShort = nil; self.rewarmSession(.short)
                     }
 
-                    // Stage 2: fuller body (reuse same session)
-                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 8000)
-                    let fullBody = String(selected.prefix(8000))
-                    let streamFull = session.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
-                    var finalTextFull: String = ""
-                    var revealedCountFull: Int = 0
-                    let step = 2
-                    let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
-                    for try await partial in streamFull {
-                        if Task.isCancelled { continuation.finish(); return }
-                        guard let t = partial.content.text, !t.isEmpty else { continue }
-                        finalTextFull = t
-                        if t.count <= revealedCountFull { continue }
-                        var target = min(revealedCountFull + step, t.count)
-                        while target < t.count {
-                            let idx = t.index(t.startIndex, offsetBy: target)
-                            let prefix = String(t[..<idx])
-                            continuation.yield(prefix)
-                            HapticManager.shared.typingHaptic()
-                            revealedCountFull = target
-                            try? await Task.sleep(nanoseconds: stepDelay)
+                    // Stage 2: fuller body (create fresh session since Stage 1 may have failed)
+                    do {
+                        let stage2Session = self.summarySessionShort ?? LanguageModelSession(instructions: instructions)
+                        if self.summarySessionShort == nil { self.summarySessionShort = stage2Session }
+
+                        let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 8000)
+                        let fullBody = String(selected.prefix(8000))
+                        let streamFull = stage2Session.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
+                        var finalTextFull: String = ""
+                        var revealedCountFull: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
+                        for try await partial in streamFull {
                             if Task.isCancelled { continuation.finish(); return }
-                            target = min(revealedCountFull + step, t.count)
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalTextFull = t
+                            if t.count <= revealedCountFull { continue }
+                            var target = min(revealedCountFull + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
+                                revealedCountFull = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCountFull + step, t.count)
+                            }
+                            continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
+                            revealedCountFull = t.count
                         }
-                        continuation.yield(t)
-                        HapticManager.shared.typingHaptic()
-                        revealedCountFull = t.count
-                    }
-                    if !finalTextFull.isEmpty {
-                        self.cache[key] = finalTextFull
-                        Self.addToLookup(key)
-                        self.saveCache()
-                        HapticManager.shared.success()
+                        if !finalTextFull.isEmpty {
+                            self.cache[key] = finalTextFull
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            HapticManager.shared.success()
+                        } else {
+                            // Stream produced no output - session may be stale
+                            self.summarySessionShort = nil; self.rewarmSession(.short)
+                        }
+                    } catch {
+                        // Stage 2 failed - reset session for next attempt
+                        self.summarySessionShort = nil; self.rewarmSession(.short)
                     }
                     continuation.finish()
                     return
@@ -678,50 +735,65 @@ Do not introduce any information that isn't present in the text.
                                 continuation.finish()
                                 return
                             }
+                        } else {
+                            // Stage 1 produced no output - session may be stale
+                            self.summarySessionLong = nil; self.rewarmSession(.long)
                         }
                     } catch {
-                        // continue to full pass
+                        // Stage 1 failed, reset session and fall through to Stage 2
+                        self.summarySessionLong = nil; self.rewarmSession(.long)
                     }
 
-                    // Stage 2: full body (reuse same session)
-                    let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 15_000)
-                    let body = String(selected.prefix(15_000))
-                    let promptFull = promptBase + body
+                    // Stage 2: full body (create fresh session since Stage 1 may have failed)
+                    do {
+                        let stage2Session = self.summarySessionLong ?? LanguageModelSession(instructions: instructions)
+                        if self.summarySessionLong == nil { self.summarySessionLong = stage2Session }
 
-                    let streamFull = session.streamResponse(to: promptFull, generating: InlineSummary.self)
-                    var finalTextFull: String = ""
-                    var revealedCountFull: Int = 0
-                    let step = 2
-                    let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
+                        let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 15_000)
+                        let body = String(selected.prefix(15_000))
+                        let promptFull = promptBase + body
 
-                    for try await partial in streamFull {
-                        if Task.isCancelled { continuation.finish(); return }
-                        guard let t = partial.content.text, !t.isEmpty else { continue }
-                        finalTextFull = t
+                        let streamFull = stage2Session.streamResponse(to: promptFull, generating: InlineSummary.self)
+                        var finalTextFull: String = ""
+                        var revealedCountFull: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
 
-                        if t.count <= revealedCountFull { continue }
-                        var target = min(revealedCountFull + step, t.count)
-                        while target < t.count {
-                            let idx = t.index(t.startIndex, offsetBy: target)
-                            let prefix = String(t[..<idx])
-                            continuation.yield(prefix)
-                            HapticManager.shared.typingHaptic()
-                            revealedCountFull = target
-                            try? await Task.sleep(nanoseconds: stepDelay)
+                        for try await partial in streamFull {
                             if Task.isCancelled { continuation.finish(); return }
-                            target = min(revealedCountFull + step, t.count)
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalTextFull = t
+
+                            if t.count <= revealedCountFull { continue }
+                            var target = min(revealedCountFull + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
+                                revealedCountFull = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCountFull + step, t.count)
+                            }
+
+                            continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
+                            revealedCountFull = t.count
                         }
 
-                        continuation.yield(t)
-                        HapticManager.shared.typingHaptic()
-                        revealedCountFull = t.count
-                    }
-
-                    if !finalTextFull.isEmpty {
-                        self.cache[key] = finalTextFull
-                        Self.addToLookup(key)
-                        self.saveCache()
-                        HapticManager.shared.success()
+                        if !finalTextFull.isEmpty {
+                            self.cache[key] = finalTextFull
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            HapticManager.shared.success()
+                        } else {
+                            // Stream produced no output - session may be stale
+                            self.summarySessionLong = nil; self.rewarmSession(.long)
+                        }
+                    } catch {
+                        // Stage 2 failed - reset session for next attempt
+                        self.summarySessionLong = nil; self.rewarmSession(.long)
                     }
                     continuation.finish()
                     return
