@@ -56,6 +56,13 @@ final class HapticManager {
         }
     }
 
+    /// Crisp click feel like a MacBook trackpad
+    func click() {
+        DispatchQueue.main.async { [weak self] in
+            self?.rigidImpact.impactOccurred(intensity: 1.0)
+        }
+    }
+
     /// Selection changed feedback
     func selection() {
         DispatchQueue.main.async { [weak self] in

@@ -266,6 +266,7 @@ struct AddFeedView: View {
     // MARK: - Add Feed Logic
 
     private func addSearchResult(_ result: FeedSearchResult) {
+        HapticManager.shared.click()
         addingFeedID = result.id
 
         Task {

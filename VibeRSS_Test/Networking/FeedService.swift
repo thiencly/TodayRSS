@@ -90,16 +90,26 @@ actor FeedService {
     }
 
     private func fetchFromNetwork(url: URL) async throws -> [FeedItem] {
-        // Try HTTPS first, fall back to original URL if it fails
+        // Build list of URLs to try with both HTTP and HTTPS variants
         var urlsToTry: [URL] = []
 
         if url.scheme == "http", var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            // If original is HTTP, try HTTPS first then fall back to HTTP
             components.scheme = "https"
             if let httpsURL = components.url {
                 urlsToTry.append(httpsURL)
             }
+            urlsToTry.append(url)
+        } else if url.scheme == "https", var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            // If original is HTTPS and it fails (e.g., TLS error), also try HTTP as fallback
+            urlsToTry.append(url)
+            components.scheme = "http"
+            if let httpURL = components.url {
+                urlsToTry.append(httpURL)
+            }
+        } else {
+            urlsToTry.append(url)
         }
-        urlsToTry.append(url)
 
         var lastError: Error = FeedError.requestFailed
 

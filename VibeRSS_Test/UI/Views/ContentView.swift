@@ -243,8 +243,6 @@ private struct SidebarHeroCardView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onTapLink?(entry.link) }
-        .redacted(reason: isUpdating ? .placeholder : [])
-        .shimmer(if: isUpdating)
     }
 
     private var placeholderRow: some View {
@@ -549,11 +547,6 @@ struct ContentView: View {
 
             // Update UI after each entry is processed
             heroEntries = builtEntries
-
-            // After first valid entry is ready, stop showing loading shimmer
-            if builtEntries.count == 1 {
-                isLoadingHero = false
-            }
         }
 
         saveHeroEntriesToCache()
