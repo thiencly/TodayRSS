@@ -16,14 +16,21 @@
 import Foundation
 import SwiftUI
 import Combine
+import WidgetKit
 
 @MainActor
 final class FeedStore: ObservableObject {
     @Published var feeds: [Feed] = [] {
-        didSet { debounceSaveFeeds() }
+        didSet {
+            debounceSaveFeeds()
+            updateWidgetConfig()
+        }
     }
     @Published var folders: [Folder] = [] {
-        didSet { debounceSaveFolders() }
+        didSet {
+            debounceSaveFolders()
+            updateWidgetConfig()
+        }
     }
 
     private let faviconService = FaviconService()
@@ -140,6 +147,20 @@ final class FeedStore: ObservableObject {
         guard let idx = feeds.firstIndex(where: { $0.id == feed.id }) else { return }
         if let icon = await faviconService.resolveIcon(for: feed.url) {
             feeds[idx].iconURL = icon
+        }
+    }
+
+    // MARK: - Widget Support
+
+    private var widgetUpdateTask: Task<Void, Never>?
+
+    private func updateWidgetConfig() {
+        // Debounce widget updates
+        widgetUpdateTask?.cancel()
+        widgetUpdateTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
+            guard !Task.isCancelled else { return }
+            WidgetUpdater.shared.updateSourceConfig(feeds: feeds, folders: folders)
         }
     }
 }

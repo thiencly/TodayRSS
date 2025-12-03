@@ -264,6 +264,20 @@ private struct SidebarHeroCardView: View {
     }
 }
 
+// MARK: - Article Collector for Widget Sync
+
+private actor ArticleCollector {
+    private var articles: [UUID: [FeedItem]] = [:]
+
+    func store(feedID: UUID, items: [FeedItem]) {
+        articles[feedID] = items
+    }
+
+    func getAll() -> [UUID: [FeedItem]] {
+        return articles
+    }
+}
+
 // MARK: - Content View
 
 struct ContentView: View {
@@ -344,6 +358,9 @@ struct ContentView: View {
             refreshArticlesSkippedThisRun = 0
         }
 
+        // Collect articles for widget sync using actor for thread safety
+        let articleCollector = ArticleCollector()
+
         await withTaskGroup(of: Void.self) { group in
             for feed in snapshotFeeds {
                 group.addTask {
@@ -357,7 +374,17 @@ struct ContentView: View {
                             }
                         }
                         do {
-                            let items = try await refreshService.loadItems(from: feed.url)
+                            var items = try await refreshService.loadItems(from: feed.url)
+
+                            // Add source info to items for widget
+                            for i in items.indices {
+                                items[i].sourceID = feed.id
+                                items[i].sourceTitle = feed.title
+                                items[i].sourceIconURL = feed.iconURL
+                            }
+
+                            // Store for widget sync
+                            await articleCollector.store(feedID: feed.id, items: Array(items.prefix(10)))
                             try Task.checkCancellation()
                             if Task.isCancelled { return }
 
@@ -417,6 +444,38 @@ struct ContentView: View {
                 }
             }
             for await _ in group { }
+        }
+
+        // Sync articles to widget
+        let articlesToSync = await articleCollector.getAll()
+        if !articlesToSync.isEmpty {
+            // Download thumbnails for widget (top 3 per feed)
+            await downloadThumbnailsForWidget(articlesByFeed: articlesToSync)
+
+            await MainActor.run {
+                WidgetUpdater.shared.updateArticles(articlesByFeed: articlesToSync)
+            }
+        }
+    }
+
+    private func downloadThumbnailsForWidget(articlesByFeed: [UUID: [FeedItem]]) async {
+        var thumbnailURLs: [URL] = []
+        for (_, articles) in articlesByFeed {
+            for article in articles.prefix(3) {
+                if let url = article.thumbnailURL {
+                    thumbnailURLs.append(url)
+                }
+            }
+        }
+
+        guard !thumbnailURLs.isEmpty else { return }
+
+        await withTaskGroup(of: Void.self) { group in
+            for url in thumbnailURLs.prefix(20) {
+                group.addTask {
+                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                }
+            }
         }
     }
 

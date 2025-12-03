@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		WIDGET004000000000000001 /* TodayRSSWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		1191FA132E934A3B00738217 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,18 +25,63 @@
 			remoteGlobalIDString = 1191FA022E934A3900738217;
 			remoteInfo = VibeRSS_Test;
 		};
+		WIDGET001000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1191F9FB2E934A3900738217 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = WIDGET002000000000000001;
+			remoteInfo = TodayRSSWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		WIDGET003000000000000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				WIDGET004000000000000001 /* TodayRSSWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		1191FA032E934A3900738217 /* VibeRSS_Test.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VibeRSS_Test.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1191FA122E934A3B00738217 /* VibeRSS_TestTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibeRSS_TestTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1191FA1C2E934A3B00738217 /* VibeRSS_TestUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibeRSS_TestUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TodayRSSWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		WIDGET00F000000000000001 /* Exceptions for "TodayRSSWidget" folder in "TodayRSSWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = WIDGET002000000000000001 /* TodayRSSWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1191FA052E934A3900738217 /* VibeRSS_Test */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VibeRSS_Test;
+			sourceTree = "<group>";
+		};
+		WIDGET006000000000000001 /* TodayRSSWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				WIDGET00F000000000000001 /* Exceptions for "TodayRSSWidget" folder in "TodayRSSWidgetExtension" target */,
+			);
+			path = TodayRSSWidget;
+			sourceTree = "<group>";
+		};
+		WIDGET007000000000000001 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -59,6 +108,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		WIDGET008000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -66,6 +122,8 @@
 			isa = PBXGroup;
 			children = (
 				1191FA052E934A3900738217 /* VibeRSS_Test */,
+				WIDGET007000000000000001 /* Shared */,
+				WIDGET006000000000000001 /* TodayRSSWidget */,
 				1191FA042E934A3900738217 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,6 +134,7 @@
 				1191FA032E934A3900738217 /* VibeRSS_Test.app */,
 				1191FA122E934A3B00738217 /* VibeRSS_TestTests.xctest */,
 				1191FA1C2E934A3B00738217 /* VibeRSS_TestUITests.xctest */,
+				WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,13 +149,16 @@
 				1191F9FF2E934A3900738217 /* Sources */,
 				1191FA002E934A3900738217 /* Frameworks */,
 				1191FA012E934A3900738217 /* Resources */,
+				WIDGET003000000000000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				WIDGET009000000000000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1191FA052E934A3900738217 /* VibeRSS_Test */,
+				WIDGET007000000000000001 /* Shared */,
 			);
 			name = VibeRSS_Test;
 			packageProductDependencies = (
@@ -145,6 +207,29 @@
 			productReference = 1191FA1C2E934A3B00738217 /* VibeRSS_TestUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		WIDGET002000000000000001 /* TodayRSSWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = WIDGET00A000000000000001 /* Build configuration list for PBXNativeTarget "TodayRSSWidgetExtension" */;
+			buildPhases = (
+				WIDGET00B000000000000001 /* Sources */,
+				WIDGET008000000000000001 /* Frameworks */,
+				WIDGET00C000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				WIDGET006000000000000001 /* TodayRSSWidget */,
+				WIDGET007000000000000001 /* Shared */,
+			);
+			name = TodayRSSWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TodayRSSWidgetExtension;
+			productReference = WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -185,6 +270,7 @@
 				1191FA022E934A3900738217 /* VibeRSS_Test */,
 				1191FA112E934A3B00738217 /* VibeRSS_TestTests */,
 				1191FA1B2E934A3B00738217 /* VibeRSS_TestUITests */,
+				WIDGET002000000000000001 /* TodayRSSWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -205,6 +291,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		1191FA1A2E934A3B00738217 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		WIDGET00C000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -235,6 +328,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		WIDGET00B000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -247,6 +347,11 @@
 			isa = PBXTargetDependency;
 			target = 1191FA022E934A3900738217 /* VibeRSS_Test */;
 			targetProxy = 1191FA1D2E934A3B00738217 /* PBXContainerItemProxy */;
+		};
+		WIDGET009000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = WIDGET002000000000000001 /* TodayRSSWidgetExtension */;
+			targetProxy = WIDGET001000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -377,6 +482,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VibeRSS_Test/VibeRSS_Test.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T3X4LD9H4Q;
@@ -411,6 +517,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VibeRSS_Test/VibeRSS_Test.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T3X4LD9H4Q;
@@ -524,6 +631,68 @@
 			};
 			name = Release;
 		};
+		WIDGET00D000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TodayRSSWidget/TodayRSSWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T3X4LD9H4Q;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TodayRSSWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TodayRSSWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "IDKN.VibeRSS-Test.TodayRSSWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		WIDGET00E000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TodayRSSWidget/TodayRSSWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T3X4LD9H4Q;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TodayRSSWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TodayRSSWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "IDKN.VibeRSS-Test.TodayRSSWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -559,6 +728,15 @@
 			buildConfigurations = (
 				1191FA2D2E934A3B00738217 /* Debug */,
 				1191FA2E2E934A3B00738217 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		WIDGET00A000000000000001 /* Build configuration list for PBXNativeTarget "TodayRSSWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				WIDGET00D000000000000001 /* Debug */,
+				WIDGET00E000000000000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

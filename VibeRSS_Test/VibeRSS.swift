@@ -7,7 +7,12 @@ import SafariServices
 
 @main
 struct VibeRSSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
+        // Register background tasks
+        BackgroundSyncManager.shared.registerBackgroundTasks()
+
         // Initialize cache lookup on background thread (prevents first-tap lag)
         ArticleSummarizer.initializeLookupAsync()
 
@@ -24,9 +29,28 @@ struct VibeRSSApp: App {
         Task {
             await ArticleSummarizer.shared.warmUp()
         }
+
+        // Schedule initial background refresh
+        BackgroundSyncManager.shared.scheduleBackgroundRefresh()
     }
 
     var body: some Scene {
-        WindowGroup { ContentView() }
+        WindowGroup {
+            ContentView()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                // Schedule background refresh when entering background
+                BackgroundSyncManager.shared.handleEnterBackground()
+            case .active:
+                // Check if sync is needed when becoming active
+                Task {
+                    await BackgroundSyncManager.shared.handleBecomeActive()
+                }
+            default:
+                break
+            }
+        }
     }
 }
