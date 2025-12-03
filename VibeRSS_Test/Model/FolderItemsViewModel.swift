@@ -81,16 +81,13 @@ final class FolderItemsViewModel: ObservableObject {
                 all.append(contentsOf: result)
             }
         }
-        guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
-            // If date math fails, sort without filtering
-            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            updateNewArticles(from: sorted)
-            items = sorted
-            isLoading = false
-            return
+        // Filter to only show articles from today
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let filtered = all.filter { article in
+            guard let pubDate = article.pubDate else { return false }
+            return pubDate >= startOfToday
         }
-        // Updated filter logic for pubDate nil items kept
-        let filtered = all.filter { if let d = $0.pubDate { return d >= cutoff } else { return true } }
         let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
         updateNewArticles(from: sorted)
         items = sorted

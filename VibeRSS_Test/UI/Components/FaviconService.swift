@@ -142,8 +142,8 @@ actor FaviconService {
             "/favicon-32x32.png",
             "/favicon-16x16.png",
             "/favicon.png",
-            "/favicon.ico",
-            "/favicon.svg"
+            "/favicon.ico"
+            // Note: SVG removed - UIImage can't render it
         ]
         return paths.compactMap { URL(string: $0, relativeTo: base) }
     }
@@ -197,7 +197,10 @@ actor FaviconService {
             candidates.append(Candidate(href: hrefStr, size: sizeValue))
         }
 
-        // Sort by size descending and return hrefs
-        return candidates.sorted { $0.size > $1.size }.map { $0.href }
+        // Sort by size descending, filter out SVG, and return hrefs
+        return candidates
+            .filter { !$0.href.lowercased().hasSuffix(".svg") }
+            .sorted { $0.size > $1.size }
+            .map { $0.href }
     }
 }

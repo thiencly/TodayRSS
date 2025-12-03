@@ -90,7 +90,7 @@ struct AllArticlesView: View {
             }
         }
         .task(id: refreshID) { await vm.loadAll(feeds: store.feeds) }
-        .navigationTitle("All Articles")
+        .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()

@@ -184,22 +184,22 @@ final class BackgroundSyncManager {
             }
         }
 
-        // Pre-download thumbnails for widget (top 2 articles per feed for medium widget)
+        // Save to widget storage FIRST (so data is available when timeline reloads)
+        if !articlesByFeed.isEmpty {
+            await WidgetUpdater.shared.updateArticlesImmediately(articlesByFeed: articlesByFeed)
+        }
+
+        // Pre-download thumbnails for widget (top 5 articles per feed)
         await downloadThumbnailsForWidget(articlesByFeed: articlesByFeed)
 
         // Pre-cache article text for hero sources (enables fast hero summaries)
         await cacheArticleTextForHeroSources(articlesByFeed: articlesByFeed)
 
-        // Save to widget storage
-        if !articlesByFeed.isEmpty {
-            WidgetUpdater.shared.updateArticles(articlesByFeed: articlesByFeed)
-        }
-
         // Update last sync date
         lastSyncDate = Date()
         UserDefaults.standard.set(lastSyncDate, forKey: lastSyncKey)
 
-        // Reload widget timelines
+        // Reload widget timelines AFTER thumbnails are downloaded
         WidgetCenter.shared.reloadAllTimelines()
 
         print("Background sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")

@@ -15,8 +15,9 @@ class WidgetImageCache {
 
     private let userDefaults: UserDefaults?
     private let cacheKey = "widgetThumbnailCache"
-    private let maxCacheCount = 30 // Keep only recent thumbnails
+    private let maxCacheCount = 100 // Keep more thumbnails for multiple widgets
     private let maxImageDimension: CGFloat = 300 // Keep small for widgets
+    private let queue = DispatchQueue(label: "com.viberss.widget.imagecache", qos: .userInitiated)
 
     private init() {
         userDefaults = UserDefaults(suiteName: appGroupIdentifier)
@@ -29,7 +30,7 @@ class WidgetImageCache {
 
     /// Save an image to the shared cache
     func saveImage(_ image: UIImage, for url: URL) {
-        guard let userDefaults else { return }
+        guard userDefaults != nil else { return }
 
         // Resize to widget-appropriate size
         let resized = resizeImage(image, maxDimension: maxImageDimension)
@@ -40,78 +41,97 @@ class WidgetImageCache {
         // Extract dominant color from bottom portion (where gradient will be)
         let dominantColorRGB = extractDominantColor(from: resized)
 
-        // Load existing cache
-        var cache = loadCache()
-
-        // Add new entry
         let key = cacheKey(for: url)
-        cache[key] = CachedImage(data: data, timestamp: Date(), dominantColorRGB: dominantColorRGB)
+        let newEntry = CachedImage(data: data, timestamp: Date(), dominantColorRGB: dominantColorRGB)
 
-        // Prune if over limit
-        if cache.count > maxCacheCount {
-            let sorted = cache.sorted { $0.value.timestamp < $1.value.timestamp }
-            let toRemove = cache.count - maxCacheCount
-            for (key, _) in sorted.prefix(toRemove) {
-                cache.removeValue(forKey: key)
+        // Use serial queue to prevent race conditions
+        queue.sync {
+            // Load existing cache
+            var cache = loadCacheUnsafe()
+
+            // Add new entry
+            cache[key] = newEntry
+
+            // Prune if over limit
+            if cache.count > maxCacheCount {
+                let sorted = cache.sorted { $0.value.timestamp < $1.value.timestamp }
+                let toRemove = cache.count - maxCacheCount
+                for (key, _) in sorted.prefix(toRemove) {
+                    cache.removeValue(forKey: key)
+                }
             }
-        }
 
-        // Save back
-        saveCache(cache)
+            // Save back
+            saveCacheUnsafe(cache)
+        }
     }
 
     /// Load an image from the shared cache
     func loadImage(for url: URL) -> UIImage? {
-        guard let userDefaults else { return nil }
+        guard userDefaults != nil else { return nil }
 
-        let cache = loadCache()
         let key = cacheKey(for: url)
 
-        guard let cached = cache[key],
-              let image = UIImage(data: cached.data) else {
-            return nil
+        return queue.sync {
+            let cache = loadCacheUnsafe()
+            guard let cached = cache[key],
+                  let image = UIImage(data: cached.data) else {
+                return nil
+            }
+            return image
         }
-
-        return image
     }
 
     /// Load an image with its dominant color from the shared cache
     func loadImageWithColor(for url: URL) -> CachedImageData? {
         guard userDefaults != nil else { return nil }
 
-        var cache = loadCache()
         let key = cacheKey(for: url)
 
-        guard let cached = cache[key],
-              let image = UIImage(data: cached.data) else {
-            return nil
-        }
+        return queue.sync {
+            var cache = loadCacheUnsafe()
 
-        var dominantColor: UIColor? = nil
-        if let rgb = cached.dominantColorRGB, rgb.count >= 3 {
-            // Use cached color
-            dominantColor = UIColor(red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1.0)
-        } else {
-            // Extract color on-the-fly for old cache entries and update cache
-            if let rgb = extractDominantColor(from: image) {
-                dominantColor = UIColor(red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1.0)
-                // Update cache with the extracted color
-                cache[key] = CachedImage(data: cached.data, timestamp: cached.timestamp, dominantColorRGB: rgb)
-                saveCache(cache)
+            guard let cached = cache[key],
+                  let image = UIImage(data: cached.data) else {
+                return nil
             }
-        }
 
-        return CachedImageData(image: image, dominantColor: dominantColor)
+            var dominantColor: UIColor? = nil
+            if let rgb = cached.dominantColorRGB, rgb.count >= 3 {
+                // Use cached color
+                dominantColor = UIColor(red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1.0)
+            } else {
+                // Extract color on-the-fly for old cache entries and update cache
+                if let rgb = extractDominantColor(from: image) {
+                    dominantColor = UIColor(red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1.0)
+                    // Update cache with the extracted color
+                    cache[key] = CachedImage(data: cached.data, timestamp: cached.timestamp, dominantColorRGB: rgb)
+                    saveCacheUnsafe(cache)
+                }
+            }
+
+            return CachedImageData(image: image, dominantColor: dominantColor)
+        }
     }
 
     /// Check if an image exists in cache
     func hasImage(for url: URL) -> Bool {
-        let cache = loadCache()
-        return cache[cacheKey(for: url)] != nil
+        let key = cacheKey(for: url)
+        return queue.sync {
+            let cache = loadCacheUnsafe()
+            return cache[key] != nil
+        }
     }
 
     /// Download and cache an image from URL
     func downloadAndCache(from url: URL) async -> Bool {
+        // Skip SVG files - UIImage can't render them
+        let pathLower = url.path.lowercased()
+        if pathLower.hasSuffix(".svg") {
+            print("WidgetImageCache: Skipping SVG \(url.lastPathComponent)")
+            return false
+        }
+
         // Skip if already cached AND the image is actually loadable
         // (hasImage only checks key exists, loadImage validates the data)
         if loadImage(for: url) != nil {
@@ -123,7 +143,7 @@ class WidgetImageCache {
             request.timeoutInterval = 10
             // Add headers to avoid blocks from CDNs (Engadget, etc.)
             request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
-            request.setValue("image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+            request.setValue("image/png,image/jpeg,image/webp,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
             // Some CDNs require Referer header
             if let host = url.host {
                 request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
@@ -134,13 +154,20 @@ class WidgetImageCache {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("WidgetImageCache: HTTP \(httpResponse.statusCode) for \(url.host ?? "unknown")")
+                    print("WidgetImageCache: HTTP \(httpResponse.statusCode) for \(url.host ?? "unknown") - \(url.lastPathComponent)")
                 }
                 return false
             }
 
+            // Check if response is SVG (some servers ignore Accept header)
+            if let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type"),
+               contentType.contains("svg") {
+                print("WidgetImageCache: Server returned SVG for \(url.host ?? "unknown")")
+                return false
+            }
+
             guard let image = UIImage(data: data) else {
-                print("WidgetImageCache: Invalid image data from \(url.host ?? "unknown")")
+                print("WidgetImageCache: Invalid image data from \(url.host ?? "unknown") - \(url.lastPathComponent)")
                 return false
             }
 
@@ -155,7 +182,9 @@ class WidgetImageCache {
 
     /// Clear all cached images
     func clearCache() {
-        userDefaults?.removeObject(forKey: cacheKey)
+        queue.sync {
+            userDefaults?.removeObject(forKey: cacheKey)
+        }
     }
 
     // MARK: - Private Helpers
@@ -178,7 +207,18 @@ class WidgetImageCache {
         return digest.prefix(16).compactMap { String(format: "%02x", $0) }.joined()
     }
 
+    /// Thread-safe cache load (use from outside queue.sync blocks)
     private func loadCache() -> [String: CachedImage] {
+        return queue.sync { loadCacheUnsafe() }
+    }
+
+    /// Thread-safe cache save (use from outside queue.sync blocks)
+    private func saveCache(_ cache: [String: CachedImage]) {
+        queue.sync { saveCacheUnsafe(cache) }
+    }
+
+    /// Internal load - only call from within queue.sync blocks
+    private func loadCacheUnsafe() -> [String: CachedImage] {
         guard let userDefaults,
               let data = userDefaults.data(forKey: cacheKey) else {
             return [:]
@@ -191,7 +231,8 @@ class WidgetImageCache {
         }
     }
 
-    private func saveCache(_ cache: [String: CachedImage]) {
+    /// Internal save - only call from within queue.sync blocks
+    private func saveCacheUnsafe(_ cache: [String: CachedImage]) {
         guard let userDefaults else { return }
 
         do {

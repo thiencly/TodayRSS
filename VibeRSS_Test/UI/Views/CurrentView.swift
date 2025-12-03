@@ -79,7 +79,7 @@ struct CurrentView: View {
             }
         }
         .task(id: refreshID) { await loadLatestPerSource() }
-        .navigationTitle("Current")
+        .navigationTitle("Latest")
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $webLink) { w in
             ReaderSafariView(url: w.url).ignoresSafeArea()

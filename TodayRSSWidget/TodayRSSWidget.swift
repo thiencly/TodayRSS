@@ -10,112 +10,117 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 
-// MARK: - Widget Entry
-struct NewsEntry: TimelineEntry {
-    let date: Date
-    let articles: [WidgetArticle]
-    let sourceName: String?
-    let configuration: ConfigurationAppIntent
-}
+// MARK: - Shared Helpers
 
-// MARK: - Timeline Provider
-struct Provider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> NewsEntry {
-        NewsEntry(
-            date: Date(),
-            articles: Self.sampleArticles,
-            sourceName: "TodayRSS",
-            configuration: ConfigurationAppIntent()
-        )
-    }
+/// Get articles for a specific source entity
+private func getArticles(for source: SourceEntity?) -> [WidgetArticle] {
+    let manager = WidgetDataManager.shared
 
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> NewsEntry {
-        // For snapshot, use cached articles
-        let articles = getCachedArticles(for: configuration)
-        return NewsEntry(
-            date: Date(),
-            articles: articles.isEmpty ? Self.sampleArticles : articles,
-            sourceName: configuration.source?.displayName ?? "All Sources",
-            configuration: configuration
-        )
-    }
-
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<NewsEntry> {
-        // Use cached articles from main app's background sync
-        // The app syncs feeds in the background and shares data via App Group
-        var articles = getCachedArticles(for: configuration)
-
-        // Fall back to sample if no synced data yet
-        if articles.isEmpty {
-            articles = Self.sampleArticles
-        }
-
-        let entry = NewsEntry(
-            date: Date(),
-            articles: articles,
-            sourceName: configuration.source?.displayName ?? "All Sources",
-            configuration: configuration
-        )
-
-        // Refresh timeline every 30 minutes to pick up new synced data
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        return Timeline(entries: [entry], policy: .after(nextUpdate))
-    }
-
-    private func getCachedArticles(for configuration: ConfigurationAppIntent) -> [WidgetArticle] {
-        let manager = WidgetDataManager.shared
-
-        if let source = configuration.source {
-            if source.isFolder {
-                return manager.articles(forFolder: source.id)
-            } else {
-                return manager.articles(for: source.id)
-            }
-        }
+    guard let source = source else {
         return manager.allArticles()
     }
 
-    static let sampleArticles: [WidgetArticle] = [
-        WidgetArticle(
-            id: "1",
-            title: "Breaking: Major Tech Announcement Expected Today",
-            link: "https://example.com/1",
-            summary: "Industry leaders gather for what promises to be a groundbreaking reveal.",
-            pubDate: Date(),
-            thumbnailURL: nil,
-            sourceTitle: "Tech News",
-            sourceIconURL: nil
-        ),
-        WidgetArticle(
-            id: "2",
-            title: "Markets Rally on Positive Economic Data",
-            link: "https://example.com/2",
-            summary: "Stock indices reach new highs following employment report.",
-            pubDate: Date().addingTimeInterval(-3600),
-            thumbnailURL: nil,
-            sourceTitle: "Finance Daily",
-            sourceIconURL: nil
-        ),
-        WidgetArticle(
-            id: "3",
-            title: "New Study Reveals Surprising Health Benefits",
-            link: "https://example.com/3",
-            summary: "Researchers discover unexpected connections in latest findings.",
-            pubDate: Date().addingTimeInterval(-7200),
-            thumbnailURL: nil,
-            sourceTitle: "Health Weekly",
-            sourceIconURL: nil
-        )
-    ]
+    if source.isFolder {
+        return manager.articles(forFolder: source.id)
+    } else {
+        return manager.articles(for: source.id)
+    }
 }
 
-// MARK: - Widget Configuration Intent
-struct ConfigurationAppIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource { "Select Source" }
-    static var description: IntentDescription { "Choose a feed or folder to display" }
+private let sampleArticles: [WidgetArticle] = [
+    WidgetArticle(
+        id: "1",
+        title: "Breaking: Major Tech Announcement Expected Today",
+        link: "https://example.com/1",
+        summary: "Industry leaders gather for what promises to be a groundbreaking reveal.",
+        pubDate: Date(),
+        thumbnailURL: nil,
+        sourceTitle: "Tech News",
+        sourceIconURL: nil
+    ),
+    WidgetArticle(
+        id: "2",
+        title: "Markets Rally on Positive Economic Data",
+        link: "https://example.com/2",
+        summary: "Stock indices reach new highs following employment report.",
+        pubDate: Date().addingTimeInterval(-3600),
+        thumbnailURL: nil,
+        sourceTitle: "Finance Daily",
+        sourceIconURL: nil
+    ),
+    WidgetArticle(
+        id: "3",
+        title: "New Study Reveals Surprising Health Benefits",
+        link: "https://example.com/3",
+        summary: "Researchers discover unexpected connections in latest findings.",
+        pubDate: Date().addingTimeInterval(-7200),
+        thumbnailURL: nil,
+        sourceTitle: "Health Weekly",
+        sourceIconURL: nil
+    )
+]
 
-    @Parameter(title: "Source")
-    var source: SourceEntity?
+// MARK: - Time Formatter
+private func formatTime(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "h:mm a"
+    return formatter.string(from: date)
+}
+
+/// Format date as relative day + time (e.g., "Today, 10:55 AM")
+private func formatRelativeDateTime(_ date: Date) -> String {
+    let calendar = Calendar.current
+    let timeFormatter = DateFormatter()
+    timeFormatter.dateFormat = "h:mm a"
+    let timeString = timeFormatter.string(from: date)
+
+    if calendar.isDateInToday(date) {
+        return "Today, \(timeString)"
+    } else if calendar.isDateInYesterday(date) {
+        return "Yesterday, \(timeString)"
+    } else {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEEE" // Day name (e.g., "Monday")
+        let dayString = dayFormatter.string(from: date)
+        return "\(dayString), \(timeString)"
+    }
+}
+
+// MARK: - Cached Widget Image View
+struct CachedWidgetImage: View {
+    let thumbnailURL: URL?
+
+    var body: some View {
+        if let url = thumbnailURL,
+           let image = WidgetImageCache.shared.loadImage(for: url) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            LinearGradient(
+                colors: [Color(.systemGray4), Color(.systemGray5)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+}
+
+// MARK: - Dominant Color Helper
+private func getDominantColor(for url: URL?) -> Color {
+    guard let url = url else {
+        return Color.black
+    }
+
+    guard let cachedData = WidgetImageCache.shared.loadImageWithColor(for: url) else {
+        return Color.black
+    }
+
+    guard let uiColor = cachedData.dominantColor else {
+        return Color(white: 0.15)
+    }
+
+    return Color(uiColor)
 }
 
 // MARK: - Source Entity for Intent
@@ -134,7 +139,6 @@ struct SourceEntity: AppEntity, Identifiable, Hashable {
         DisplayRepresentation(title: "\(displayName)")
     }
 
-    // Hashable conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
@@ -163,12 +167,10 @@ struct SourceQuery: EntityQuery {
         let config = WidgetDataManager.shared.loadSourceConfig()
         var suggestions: [SourceEntity] = []
 
-        // Add folders first
         for folder in config.folders {
             suggestions.append(SourceEntity(id: folder.id, displayName: "📁 \(folder.name)", isFolder: true))
         }
 
-        // Then add individual feeds
         for feed in config.feeds {
             suggestions.append(SourceEntity(id: feed.id, displayName: feed.title, isFolder: false))
         }
@@ -177,62 +179,66 @@ struct SourceQuery: EntityQuery {
     }
 
     func defaultResult() async -> SourceEntity? {
-        nil // Show all sources by default
+        nil
     }
 }
 
-// MARK: - Time Formatter
-private func formatTime(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "h:mm a"
-    return formatter.string(from: date)
+// ============================================================================
+// MARK: - SMALL WIDGET (and Lock Screen)
+// ============================================================================
+
+// MARK: - Small Widget Entry
+struct SmallWidgetEntry: TimelineEntry {
+    let date: Date
+    let articles: [WidgetArticle]
+    let sourceName: String?
 }
 
-// MARK: - Cached Widget Image View
-/// Loads images from the shared App Group cache instead of network
-/// Does NOT use AsyncImage because widgets have strict image size limits
-struct CachedWidgetImage: View {
-    let thumbnailURL: URL?
+// MARK: - Small Widget Intent
+struct SmallWidgetIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource { "Select Source" }
+    static var description: IntentDescription { "Choose a feed or folder to display" }
 
-    var body: some View {
-        if let url = thumbnailURL,
-           let image = WidgetImageCache.shared.loadImage(for: url) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            // Show gradient placeholder - don't use AsyncImage (causes "image too large" errors)
-            LinearGradient(
-                colors: [Color(.systemGray4), Color(.systemGray5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+    @Parameter(title: "Source")
+    var source: SourceEntity?
+}
+
+// MARK: - Small Widget Provider
+struct SmallWidgetProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> SmallWidgetEntry {
+        SmallWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
+    }
+
+    func snapshot(for configuration: SmallWidgetIntent, in context: Context) async -> SmallWidgetEntry {
+        let articles = getArticles(for: configuration.source)
+        return SmallWidgetEntry(
+            date: Date(),
+            articles: articles.isEmpty ? sampleArticles : articles,
+            sourceName: configuration.source?.displayName ?? "All Sources"
+        )
+    }
+
+    func timeline(for configuration: SmallWidgetIntent, in context: Context) async -> Timeline<SmallWidgetEntry> {
+        var articles = getArticles(for: configuration.source)
+
+        if articles.isEmpty {
+            articles = sampleArticles
         }
+
+        let entry = SmallWidgetEntry(
+            date: Date(),
+            articles: articles,
+            sourceName: configuration.source?.displayName ?? "All Sources"
+        )
+
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 }
 
-// MARK: - Dominant Color Helper
-/// Gets the dominant color for a thumbnail URL, or returns a default dark color
-private func getDominantColor(for url: URL?) -> Color {
-    guard let url = url else {
-        return Color.black // No URL provided
-    }
-
-    guard let cachedData = WidgetImageCache.shared.loadImageWithColor(for: url) else {
-        return Color.black // Image not in cache
-    }
-
-    guard let uiColor = cachedData.dominantColor else {
-        // Image exists but color extraction failed - use dark gray
-        return Color(white: 0.15)
-    }
-
-    return Color(uiColor)
-}
-
-// MARK: - Small Widget View (Apple News Style)
+// MARK: - Small Widget View
 struct SmallWidgetView: View {
-    let entry: NewsEntry
+    let entry: SmallWidgetEntry
 
     var body: some View {
         if let article = entry.articles.first {
@@ -240,10 +246,8 @@ struct SmallWidgetView: View {
                 WidgetImageCache.shared.loadImage(for: article.thumbnailImageURL!) != nil
 
             if hasThumbnail {
-                // Image-focused layout with thumbnail
                 smallWidgetWithThumbnail(article: article)
             } else {
-                // Text-focused layout with favicon-based gradient
                 smallWidgetTextOnly(article: article)
             }
         } else {
@@ -261,12 +265,10 @@ struct SmallWidgetView: View {
 
         GeometryReader { geo in
             ZStack {
-                // Thumbnail background - fills entire widget
                 CachedWidgetImage(thumbnailURL: article.thumbnailImageURL)
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
 
-                // Bottom gradient - uses dominant color from thumbnail
                 VStack(spacing: 0) {
                     Spacer()
                     LinearGradient(
@@ -284,11 +286,8 @@ struct SmallWidgetView: View {
                     .frame(height: geo.size.height * 0.75)
                 }
 
-                // Content
                 VStack(alignment: .leading, spacing: 0) {
-                    // Source label and time at top
                     HStack(spacing: 4) {
-                        // Source favicon
                         if let iconURL = article.sourceIconImageURL,
                            let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
                             Image(uiImage: iconImage)
@@ -314,7 +313,6 @@ struct SmallWidgetView: View {
 
                     Spacer()
 
-                    // Headline
                     Text(article.title)
                         .font(.system(size: 14, weight: .bold))
                         .lineLimit(4)
@@ -332,18 +330,14 @@ struct SmallWidgetView: View {
     private func smallWidgetTextOnly(article: WidgetArticle) -> some View {
         GeometryReader { geo in
             ZStack {
-                // Gray gradient background
                 LinearGradient(
                     colors: [Color(.systemGray4), Color(.systemGray6)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
 
-                // Content - source at top, centered headline
                 VStack(alignment: .leading, spacing: 0) {
-                    // Source label and time at top
                     HStack(spacing: 4) {
-                        // Source favicon
                         if let iconURL = article.sourceIconImageURL,
                            let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
                             Image(uiImage: iconImage)
@@ -368,7 +362,6 @@ struct SmallWidgetView: View {
 
                     Spacer()
 
-                    // Headline - centered, scales down for long titles
                     Text(article.title)
                         .font(.system(size: 15, weight: .bold))
                         .lineLimit(6)
@@ -386,12 +379,204 @@ struct SmallWidgetView: View {
     }
 }
 
-// MARK: - Medium Widget View (Apple News Style)
-struct MediumWidgetView: View {
-    let entry: NewsEntry
+// MARK: - Lock Screen Widget Views
+struct LockScreenCircularView: View {
+    let entry: SmallWidgetEntry
 
     var body: some View {
-        if entry.articles.isEmpty {
+        if let article = entry.articles.first,
+           let iconURL = article.sourceIconImageURL,
+           let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(uiImage: iconImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+        } else {
+            ZStack {
+                AccessoryWidgetBackground()
+                Text("RSS")
+                    .font(.system(size: 12, weight: .bold))
+            }
+        }
+    }
+}
+
+struct LockScreenRectangularView: View {
+    let entry: SmallWidgetEntry
+
+    var body: some View {
+        if let article = entry.articles.first {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    if let iconURL = article.sourceIconImageURL,
+                       let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
+                        Image(uiImage: iconImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                    if let pubDate = article.pubDate {
+                        Text(formatRelativeDateTime(pubDate))
+                            .font(.system(size: 12, weight: .bold))
+                            .lineLimit(1)
+                    }
+                }
+                .foregroundStyle(.secondary)
+
+                Text(article.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .widgetURL(article.linkURL)
+        } else {
+            Text("TodayRSS")
+                .font(.system(size: 10))
+        }
+    }
+}
+
+struct LockScreenInlineView: View {
+    let entry: SmallWidgetEntry
+
+    var body: some View {
+        if let article = entry.articles.first {
+            Text(article.title)
+        } else {
+            Text("TodayRSS")
+        }
+    }
+}
+
+// MARK: - Small Widget Entry View
+struct SmallWidgetEntryView: View {
+    @Environment(\.widgetFamily) var family
+    var entry: SmallWidgetEntry
+
+    var body: some View {
+        switch family {
+        case .systemSmall:
+            SmallWidgetView(entry: entry)
+        case .accessoryCircular:
+            LockScreenCircularView(entry: entry)
+        case .accessoryRectangular:
+            LockScreenRectangularView(entry: entry)
+        case .accessoryInline:
+            LockScreenInlineView(entry: entry)
+        default:
+            SmallWidgetView(entry: entry)
+        }
+    }
+}
+
+// MARK: - Small Widget Definition
+struct SmallRSSWidget: Widget {
+    let kind: String = "SmallRSSWidget"
+
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: kind, intent: SmallWidgetIntent.self, provider: SmallWidgetProvider()) { entry in
+            SmallWidgetEntryView(entry: entry)
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+        }
+        .contentMarginsDisabled()
+        .configurationDisplayName("TodayRSS")
+        .description("Stay updated with your RSS feeds.")
+        .supportedFamilies([
+            .systemSmall,
+            .accessoryCircular,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
+    }
+}
+
+// ============================================================================
+// MARK: - MEDIUM WIDGET
+// ============================================================================
+
+// MARK: - Medium Widget Entry
+struct MediumWidgetEntry: TimelineEntry {
+    let date: Date
+    let leftArticle: WidgetArticle?
+    let rightArticle: WidgetArticle?
+}
+
+// MARK: - Medium Widget Intent
+struct MediumWidgetIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource { "Select Sources" }
+    static var description: IntentDescription { "Choose feeds or folders for left and right sides" }
+
+    @Parameter(title: "Left Source")
+    var leftSource: SourceEntity?
+
+    @Parameter(title: "Right Source")
+    var rightSource: SourceEntity?
+}
+
+// MARK: - Medium Widget Provider
+struct MediumWidgetProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> MediumWidgetEntry {
+        MediumWidgetEntry(
+            date: Date(),
+            leftArticle: sampleArticles[0],
+            rightArticle: sampleArticles[1]
+        )
+    }
+
+    func snapshot(for configuration: MediumWidgetIntent, in context: Context) async -> MediumWidgetEntry {
+        let (left, right) = getLeftRightArticles(for: configuration)
+        return MediumWidgetEntry(
+            date: Date(),
+            leftArticle: left ?? sampleArticles[0],
+            rightArticle: right ?? sampleArticles[1]
+        )
+    }
+
+    func timeline(for configuration: MediumWidgetIntent, in context: Context) async -> Timeline<MediumWidgetEntry> {
+        let (left, right) = getLeftRightArticles(for: configuration)
+
+        let entry = MediumWidgetEntry(
+            date: Date(),
+            leftArticle: left ?? sampleArticles.first,
+            rightArticle: right ?? (sampleArticles.count > 1 ? sampleArticles[1] : nil)
+        )
+
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
+    }
+
+    private func getLeftRightArticles(for configuration: MediumWidgetIntent) -> (WidgetArticle?, WidgetArticle?) {
+        let leftArticles = getArticles(for: configuration.leftSource)
+        let rightArticles = getArticles(for: configuration.rightSource)
+
+        // If same source selected for both (or both nil), show 2 articles from that source
+        if configuration.leftSource?.id == configuration.rightSource?.id {
+            let allFromSource = leftArticles
+            let left = allFromSource.first
+            let right = allFromSource.dropFirst().first
+            return (left, right)
+        } else {
+            // Different sources - take first article from each
+            return (leftArticles.first, rightArticles.first)
+        }
+    }
+}
+
+// MARK: - Medium Widget View
+struct MediumWidgetView: View {
+    let entry: MediumWidgetEntry
+
+    var body: some View {
+        let hasAnyArticle = entry.leftArticle != nil || entry.rightArticle != nil
+
+        if !hasAnyArticle {
             HStack {
                 Spacer()
                 VStack {
@@ -407,19 +592,17 @@ struct MediumWidgetView: View {
         } else {
             GeometryReader { geo in
                 HStack(spacing: 2) {
-                    // First article
-                    if let firstArticle = entry.articles.first {
+                    if let article = entry.leftArticle {
                         articleCard(
-                            article: firstArticle,
+                            article: article,
                             width: (geo.size.width - 2) / 2,
                             height: geo.size.height
                         )
                     }
 
-                    // Second article
-                    if entry.articles.count > 1 {
+                    if let article = entry.rightArticle {
                         articleCard(
-                            article: entry.articles[1],
+                            article: article,
                             width: (geo.size.width - 2) / 2,
                             height: geo.size.height
                         )
@@ -447,12 +630,10 @@ struct MediumWidgetView: View {
 
         Link(destination: article.linkURL ?? URL(string: "todayrss://")!) {
             ZStack {
-                // Thumbnail background - fills card
                 CachedWidgetImage(thumbnailURL: article.thumbnailImageURL)
                     .frame(width: width, height: height)
                     .clipped()
 
-                // Bottom gradient - uses dominant color from thumbnail
                 VStack(spacing: 0) {
                     Spacer()
                     LinearGradient(
@@ -470,11 +651,8 @@ struct MediumWidgetView: View {
                     .frame(height: height * 0.7)
                 }
 
-                // Content
                 VStack(alignment: .leading, spacing: 0) {
-                    // Source label and time at top
                     HStack(spacing: 3) {
-                        // Source favicon
                         if let iconURL = article.sourceIconImageURL,
                            let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
                             Image(uiImage: iconImage)
@@ -500,7 +678,6 @@ struct MediumWidgetView: View {
 
                     Spacer()
 
-                    // Headline
                     Text(article.title)
                         .font(.system(size: 12, weight: .bold))
                         .lineLimit(3)
@@ -518,18 +695,14 @@ struct MediumWidgetView: View {
     private func articleCardTextOnly(article: WidgetArticle, width: CGFloat, height: CGFloat) -> some View {
         Link(destination: article.linkURL ?? URL(string: "todayrss://")!) {
             ZStack {
-                // Gray gradient background
                 LinearGradient(
                     colors: [Color(.systemGray4), Color(.systemGray6)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
 
-                // Content - source at top, centered headline
                 VStack(alignment: .leading, spacing: 0) {
-                    // Source label and time at top
                     HStack(spacing: 3) {
-                        // Source favicon
                         if let iconURL = article.sourceIconImageURL,
                            let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
                             Image(uiImage: iconImage)
@@ -554,7 +727,6 @@ struct MediumWidgetView: View {
 
                     Spacer()
 
-                    // Headline - centered, scales down for long titles
                     Text(article.title)
                         .font(.system(size: 13, weight: .bold))
                         .lineLimit(5)
@@ -572,171 +744,60 @@ struct MediumWidgetView: View {
     }
 }
 
-// MARK: - Lock Screen Widget Views
-struct LockScreenCircularView: View {
-    let entry: NewsEntry
+// MARK: - Medium Widget Entry View
+struct MediumWidgetEntryView: View {
+    var entry: MediumWidgetEntry
 
     var body: some View {
-        if let article = entry.articles.first,
-           let iconURL = article.sourceIconImageURL,
-           let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
-            ZStack {
-                AccessoryWidgetBackground()
-                Image(uiImage: iconImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-        } else {
-            ZStack {
-                AccessoryWidgetBackground()
-                Text("RSS")
-                    .font(.system(size: 12, weight: .bold))
-            }
-        }
+        MediumWidgetView(entry: entry)
     }
 }
 
-struct LockScreenRectangularView: View {
-    let entry: NewsEntry
-
-    var body: some View {
-        if let article = entry.articles.first {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
-                    // Source favicon (bigger)
-                    if let iconURL = article.sourceIconImageURL,
-                       let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
-                        Image(uiImage: iconImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 14, height: 14)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                    }
-                    // Relative day + time (e.g., "Today, 10:55 AM")
-                    if let pubDate = article.pubDate {
-                        Text(formatRelativeDateTime(pubDate))
-                            .font(.system(size: 12, weight: .bold))
-                            .lineLimit(1)
-                    }
-                }
-                .foregroundStyle(.secondary)
-
-                Text(article.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(3)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .widgetURL(article.linkURL)
-        } else {
-            Text("TodayRSS")
-                .font(.system(size: 10))
-        }
-    }
-}
-
-/// Format date as relative day + time (e.g., "Today, 10:55 AM")
-private func formatRelativeDateTime(_ date: Date) -> String {
-    let calendar = Calendar.current
-    let timeFormatter = DateFormatter()
-    timeFormatter.dateFormat = "h:mm a"
-    let timeString = timeFormatter.string(from: date)
-
-    if calendar.isDateInToday(date) {
-        return "Today, \(timeString)"
-    } else if calendar.isDateInYesterday(date) {
-        return "Yesterday, \(timeString)"
-    } else {
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "EEEE" // Day name (e.g., "Monday")
-        let dayString = dayFormatter.string(from: date)
-        return "\(dayString), \(timeString)"
-    }
-}
-
-struct LockScreenInlineView: View {
-    let entry: NewsEntry
-
-    var body: some View {
-        if let article = entry.articles.first {
-            Text(article.title)
-        } else {
-            Text("TodayRSS")
-        }
-    }
-}
-
-// MARK: - Main Widget View
-struct TodayRSSWidgetEntryView: View {
-    @Environment(\.widgetFamily) var family
-    var entry: Provider.Entry
-
-    var body: some View {
-        switch family {
-        case .systemSmall:
-            SmallWidgetView(entry: entry)
-        case .systemMedium:
-            MediumWidgetView(entry: entry)
-        case .accessoryCircular:
-            LockScreenCircularView(entry: entry)
-        case .accessoryRectangular:
-            LockScreenRectangularView(entry: entry)
-        case .accessoryInline:
-            LockScreenInlineView(entry: entry)
-        default:
-            SmallWidgetView(entry: entry)
-        }
-    }
-}
-
-// MARK: - Widget Definition
-struct TodayRSSWidget: Widget {
-    let kind: String = "TodayRSSWidget"
+// MARK: - Medium Widget Definition
+struct MediumRSSWidget: Widget {
+    let kind: String = "MediumRSSWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
-            TodayRSSWidgetEntryView(entry: entry)
+        AppIntentConfiguration(kind: kind, intent: MediumWidgetIntent.self, provider: MediumWidgetProvider()) { entry in
+            MediumWidgetEntryView(entry: entry)
                 .containerBackground(for: .widget) {
                     Color.clear
                 }
         }
-        .contentMarginsDisabled() // Remove default widget margins for edge-to-edge images
-        .configurationDisplayName("TodayRSS")
-        .description("Stay updated with your RSS feeds.")
-        .supportedFamilies([
-            .systemSmall,
-            .systemMedium,
-            .accessoryCircular,
-            .accessoryRectangular,
-            .accessoryInline
-        ])
+        .contentMarginsDisabled()
+        .configurationDisplayName("TodayRSS Dual")
+        .description("Two sources side by side.")
+        .supportedFamilies([.systemMedium])
     }
 }
 
+// ============================================================================
 // MARK: - Widget Bundle
+// ============================================================================
+
 @main
 struct TodayRSSWidgetBundle: WidgetBundle {
     var body: some Widget {
-        TodayRSSWidget()
+        SmallRSSWidget()
+        MediumRSSWidget()
     }
 }
 
 // MARK: - Previews
 #Preview("Small", as: .systemSmall) {
-    TodayRSSWidget()
+    SmallRSSWidget()
 } timeline: {
-    NewsEntry(date: Date(), articles: Provider.sampleArticles, sourceName: "TodayRSS", configuration: ConfigurationAppIntent())
+    SmallWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
 }
 
 #Preview("Medium", as: .systemMedium) {
-    TodayRSSWidget()
+    MediumRSSWidget()
 } timeline: {
-    NewsEntry(date: Date(), articles: Provider.sampleArticles, sourceName: "TodayRSS", configuration: ConfigurationAppIntent())
+    MediumWidgetEntry(date: Date(), leftArticle: sampleArticles[0], rightArticle: sampleArticles[1])
 }
 
 #Preview("Lock Screen Rectangular", as: .accessoryRectangular) {
-    TodayRSSWidget()
+    SmallRSSWidget()
 } timeline: {
-    NewsEntry(date: Date(), articles: Provider.sampleArticles, sourceName: "TodayRSS", configuration: ConfigurationAppIntent())
+    SmallWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
 }

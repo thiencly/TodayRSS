@@ -84,4 +84,27 @@ class WidgetUpdater {
     func reloadTimelines() {
         WidgetCenter.shared.reloadAllTimelines()
     }
+
+    /// Update articles immediately without debounce (for background sync)
+    func updateArticlesImmediately(articlesByFeed: [UUID: [FeedItem]]) async {
+        var widgetArticles: [String: [WidgetArticle]] = [:]
+        for (feedID, articles) in articlesByFeed {
+            let converted = articles.prefix(10).map { article in
+                WidgetArticle(
+                    id: article.id.uuidString,
+                    title: article.title,
+                    link: article.link.absoluteString,
+                    summary: article.summary,
+                    pubDate: article.pubDate,
+                    thumbnailURL: article.thumbnailURL?.absoluteString,
+                    sourceTitle: article.sourceTitle,
+                    sourceIconURL: article.sourceIconURL?.absoluteString
+                )
+            }
+            widgetArticles[feedID.uuidString] = Array(converted)
+        }
+
+        // Save to App Group immediately (no debounce)
+        WidgetDataManager.shared.saveArticles(widgetArticles)
+    }
 }

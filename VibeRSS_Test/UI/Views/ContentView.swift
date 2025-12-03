@@ -313,6 +313,8 @@ struct ContentView: View {
     @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
     private let heroCacheKey = "viberss.heroEntries"
+    private let seenLinksKey = "viberss.heroSeenLinks"
+    @State private var isInitialLoad: Bool = true
 
     private var heroSourceIDs: Set<UUID> {
         (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
@@ -551,21 +553,34 @@ struct ContentView: View {
                 let validEntries = entries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 let data = try JSONEncoder().encode(validEntries)
                 UserDefaults.standard.set(data, forKey: self.heroCacheKey)
+
+                // Also save seen links for persistence across app restarts
+                let links = validEntries.map { $0.link.absoluteString }
+                let linksData = try JSONEncoder().encode(links)
+                UserDefaults.standard.set(linksData, forKey: self.seenLinksKey)
             } catch {}
         }
     }
 
     private func loadHeroEntriesFromCache() {
-        // Decode JSON off main thread to prevent UI freeze
-        Task.detached(priority: .userInitiated) {
-            guard let data = UserDefaults.standard.data(forKey: self.heroCacheKey) else { return }
-            guard let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) else { return }
-            // Filter out entries with empty summaries - they'll be regenerated
-            let filtered = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            await MainActor.run {
-                self.heroEntries = filtered
-            }
+        // Load synchronously on main thread to ensure entries are available before loadHeroEntries()
+        guard let data = UserDefaults.standard.data(forKey: heroCacheKey) else { return }
+        guard let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) else { return }
+        // Filter out entries with empty summaries - they'll be regenerated
+        // Mark all cached entries as NOT new (they were already seen before app was killed)
+        var filtered = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        for i in filtered.indices {
+            filtered[i].isNew = false
         }
+        heroEntries = filtered
+    }
+
+    private func loadSeenLinks() -> Set<URL> {
+        guard let data = UserDefaults.standard.data(forKey: seenLinksKey),
+              let links = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(links.compactMap { URL(string: $0) })
     }
 
     @MainActor private func loadHeroEntries() async {
@@ -574,7 +589,12 @@ struct ContentView: View {
 
         let selectedIDs = heroSourceIDs
         let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
-        let previouslySeenLinks: Set<URL> = Set(heroEntries.map { $0.link })
+
+        // Use persisted seen links (survives app restart) merged with current entries
+        var previouslySeenLinks = loadSeenLinks()
+        for entry in heroEntries {
+            previouslySeenLinks.insert(entry.link)
+        }
 
         // Keep existing entries as fallback (indexed by source ID)
         let existingEntriesBySource: [UUID: SidebarHeroCardView.Entry] = Dictionary(
@@ -668,8 +688,8 @@ struct ContentView: View {
         let isNewChanged = oldIsNew != newIsNew
 
         if linksChanged || isNewChanged || heroEntries.count != builtEntries.count {
-            // If only isNew changed (no new articles), update without animation
-            if !linksChanged && isNewChanged {
+            // Disable animation on initial load or when only isNew changed
+            if isInitialLoad || (!linksChanged && isNewChanged) {
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
@@ -682,6 +702,7 @@ struct ContentView: View {
 
         saveHeroEntriesToCache()
         isLoadingHero = false
+        isInitialLoad = false
     }
 
     @ViewBuilder
@@ -774,7 +795,7 @@ struct ContentView: View {
                         CurrentView(refreshID: refreshID)
                             .environmentObject(store)
                     } label: {
-                        Label("Current", systemImage: "sparkles.rectangle.stack")
+                        Label("Latest", systemImage: "sparkles.rectangle.stack")
                             .contentShape(Rectangle())
                     }
 
@@ -782,7 +803,7 @@ struct ContentView: View {
                         AllArticlesView(refreshID: refreshID)
                             .environmentObject(store)
                     } label: {
-                        Label("All Articles", systemImage: "newspaper.fill")
+                        Label("Today", systemImage: "newspaper.fill")
                             .contentShape(Rectangle())
                     }
 
