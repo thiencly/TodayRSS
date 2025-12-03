@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 // MARK: - Hero Card Height Preference Key
 
@@ -236,7 +237,7 @@ private struct SidebarHeroCardView: View {
                 }
                 Spacer()
             }
-            Text(entry.oneLine.isEmpty ? entry.title : entry.oneLine)
+            Text(entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -449,31 +450,50 @@ struct ContentView: View {
         // Sync articles to widget
         let articlesToSync = await articleCollector.getAll()
         if !articlesToSync.isEmpty {
-            // Download thumbnails for widget (top 3 per feed)
+            // Download thumbnails and favicons for widget (top 3 per feed)
             await downloadThumbnailsForWidget(articlesByFeed: articlesToSync)
 
             await MainActor.run {
                 WidgetUpdater.shared.updateArticles(articlesByFeed: articlesToSync)
+                // Reload widget timelines to pick up new thumbnails
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
     }
 
     private func downloadThumbnailsForWidget(articlesByFeed: [UUID: [FeedItem]]) async {
         var thumbnailURLs: [URL] = []
+        var faviconURLs: Set<URL> = []
+
         for (_, articles) in articlesByFeed {
             for article in articles.prefix(3) {
                 if let url = article.thumbnailURL {
                     thumbnailURLs.append(url)
                 }
+                if let iconURL = article.sourceIconURL {
+                    faviconURLs.insert(iconURL)
+                }
             }
         }
 
-        guard !thumbnailURLs.isEmpty else { return }
+        // Download thumbnails
+        if !thumbnailURLs.isEmpty {
+            await withTaskGroup(of: Void.self) { group in
+                for url in thumbnailURLs.prefix(20) {
+                    group.addTask {
+                        _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                    }
+                }
+            }
+        }
 
-        await withTaskGroup(of: Void.self) { group in
-            for url in thumbnailURLs.prefix(20) {
-                group.addTask {
-                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+        // Download favicons
+        if !faviconURLs.isEmpty {
+            await withTaskGroup(of: Void.self) { group in
+                for url in faviconURLs {
+                    group.addTask {
+                        _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                    }
                 }
             }
         }
@@ -586,8 +606,8 @@ struct ContentView: View {
         for (feed, article) in feedArticles {
             let isNew = !previouslySeenLinks.contains(article.link)
 
-            // Use fast hero summary - optimized for speed
-            let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: nil) ?? ""
+            // Use fast hero summary - pass RSS description to avoid network fetch
+            let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
 
             // Only add entries that have valid AI summaries
             guard !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

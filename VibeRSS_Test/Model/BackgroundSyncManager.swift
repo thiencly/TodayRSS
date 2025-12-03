@@ -187,6 +187,9 @@ final class BackgroundSyncManager {
         // Pre-download thumbnails for widget (top 2 articles per feed for medium widget)
         await downloadThumbnailsForWidget(articlesByFeed: articlesByFeed)
 
+        // Pre-cache article text for hero sources (enables fast hero summaries)
+        await cacheArticleTextForHeroSources(articlesByFeed: articlesByFeed)
+
         // Save to widget storage
         if !articlesByFeed.isEmpty {
             WidgetUpdater.shared.updateArticles(articlesByFeed: articlesByFeed)
@@ -242,6 +245,50 @@ final class BackgroundSyncManager {
                 }
             }
             print("Downloaded \(faviconURLs.count) favicons for widget")
+        }
+    }
+
+    /// Pre-cache article text for hero card sources so summaries generate instantly
+    private func cacheArticleTextForHeroSources(articlesByFeed: [UUID: [FeedItem]]) async {
+        // Load hero source IDs (same key as ContentView)
+        guard let heroData = UserDefaults.standard.data(forKey: "heroSourceIDs"),
+              let heroSourceIDs = try? JSONDecoder().decode(Set<UUID>.self, from: heroData),
+              !heroSourceIDs.isEmpty else {
+            return
+        }
+
+        // Get latest article from each hero source
+        var heroArticles: [FeedItem] = []
+        for sourceID in heroSourceIDs {
+            if let articles = articlesByFeed[sourceID],
+               let latest = articles.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first {
+                heroArticles.append(latest)
+            }
+        }
+
+        guard !heroArticles.isEmpty else { return }
+
+        // Fetch and cache article text concurrently (limit to hero sources only)
+        await withTaskGroup(of: Void.self) { group in
+            for article in heroArticles {
+                group.addTask {
+                    // Skip if already cached
+                    if await ArticleTextCache.shared.cachedText(for: article.link) != nil {
+                        return
+                    }
+
+                    do {
+                        let html = try await ArticleSummarizer.shared.fetchHTML(url: article.link)
+                        let text = ArticleSummarizer.shared.extractReadableText(from: String(html.prefix(100_000)))
+                        if !text.isEmpty {
+                            await ArticleTextCache.shared.storeText(text, for: article.link)
+                            print("Cached article text for hero source: \(article.sourceTitle ?? "unknown")")
+                        }
+                    } catch {
+                        print("Failed to cache article text: \(error.localizedDescription)")
+                    }
+                }
+            }
         }
     }
 

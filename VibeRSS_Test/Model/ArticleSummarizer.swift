@@ -205,7 +205,10 @@ actor ArticleSummarizer {
     }
 
     /// Fast summary for hero cards - optimized for speed
-    func fastHeroSummary(url: URL, articleText: String?) async -> String? {
+    /// - Parameters:
+    ///   - url: Article URL
+    ///   - fallbackText: RSS description to use if full article fetch fails (optional fallback)
+    func fastHeroSummary(url: URL, articleText fallbackText: String?) async -> String? {
         let key = makeCacheKey(url: url, length: .quick)
         if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return cached
@@ -219,18 +222,28 @@ actor ArticleSummarizer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return nil }
 
-        // Get article text
+        // Priority: 1) Cached full article, 2) Fetch HTML, 3) RSS description fallback
         let baseText: String
-        if let text = articleText, !text.isEmpty {
-            baseText = text
-        } else if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
+        if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
+            // Best: use cached full article text
             baseText = cachedText
-        } else {
-            guard let html = try? await fetchHTML(url: url) else { return nil }
+        } else if let html = try? await fetchHTML(url: url) {
+            // Good: fetch and extract full article
             let extracted = extractReadableText(from: String(html.prefix(100_000)))
-            if extracted.isEmpty { return nil }
-            baseText = extracted
-            await ArticleTextCache.shared.storeText(extracted, for: url)
+            if !extracted.isEmpty {
+                baseText = extracted
+                await ArticleTextCache.shared.storeText(extracted, for: url)
+            } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // HTML extraction failed, use RSS description
+                baseText = fallback
+            } else {
+                return nil
+            }
+        } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Network failed, use RSS description as fallback
+            baseText = fallback
+        } else {
+            return nil
         }
 
         // Use smaller primer for faster processing
@@ -810,7 +823,8 @@ Do not introduce any information that isn't present in the text.
 
     func fetchHTML(url: URL) async throws -> String {
         try Task.checkCancellation()
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 3)
+        // Increased timeout from 3s to 10s to handle slower sites
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10)
         let (data, _) = try await URLSession.shared.data(for: request)
         try Task.checkCancellation()
         return String(decoding: data, as: UTF8.self)
