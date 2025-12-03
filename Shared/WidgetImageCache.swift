@@ -112,31 +112,43 @@ class WidgetImageCache {
 
     /// Download and cache an image from URL
     func downloadAndCache(from url: URL) async -> Bool {
-        // Skip if already cached
-        if hasImage(for: url) {
+        // Skip if already cached AND the image is actually loadable
+        // (hasImage only checks key exists, loadImage validates the data)
+        if loadImage(for: url) != nil {
             return true
         }
 
         do {
             var request = URLRequest(url: url)
             request.timeoutInterval = 10
+            // Add headers to avoid blocks from CDNs (Engadget, etc.)
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
+            request.setValue("image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+            // Some CDNs require Referer header
+            if let host = url.host {
+                request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+            }
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("WidgetImageCache: HTTP \(httpResponse.statusCode) for \(url.host ?? "unknown")")
+                }
                 return false
             }
 
             guard let image = UIImage(data: data) else {
+                print("WidgetImageCache: Invalid image data from \(url.host ?? "unknown")")
                 return false
             }
 
             saveImage(image, for: url)
-            print("WidgetImageCache: Cached \(Int(image.size.width))x\(Int(image.size.height)) -> \(Int(maxImageDimension))px")
+            print("WidgetImageCache: Cached \(Int(image.size.width))x\(Int(image.size.height)) -> \(Int(maxImageDimension))px from \(url.host ?? "unknown")")
             return true
         } catch {
-            print("WidgetImageCache: Download failed: \(error.localizedDescription)")
+            print("WidgetImageCache: Download failed for \(url.host ?? "unknown"): \(error.localizedDescription)")
             return false
         }
     }

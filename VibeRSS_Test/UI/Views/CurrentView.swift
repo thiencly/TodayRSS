@@ -109,6 +109,9 @@ struct CurrentView: View {
                 } label: { Image(systemName: "sparkles") }
             }
         }
+        .onDisappear {
+            NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+        }
     }
 
     private func loadLatestPerSource() async {

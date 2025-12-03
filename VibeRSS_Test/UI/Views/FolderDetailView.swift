@@ -143,6 +143,9 @@ struct FolderDetailView: View {
                 }
             }
         }
+        .onDisappear {
+            NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+        }
     }
 
     // MARK: - Row State Factory

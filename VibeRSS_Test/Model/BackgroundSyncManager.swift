@@ -207,12 +207,12 @@ final class BackgroundSyncManager {
 
     /// Download thumbnails and favicons to shared cache for widget access
     private func downloadThumbnailsForWidget(articlesByFeed: [UUID: [FeedItem]]) async {
-        // Collect thumbnail URLs to download (top 3 per feed for widget display)
+        // Collect thumbnail URLs to download (top 5 per feed for widget display)
         var thumbnailURLs: [URL] = []
         var faviconURLs: Set<URL> = [] // Use Set to avoid duplicates
 
         for (_, articles) in articlesByFeed {
-            for article in articles.prefix(3) {
+            for article in articles.prefix(5) {
                 if let url = article.thumbnailURL {
                     thumbnailURLs.append(url)
                 }
@@ -223,16 +223,16 @@ final class BackgroundSyncManager {
             }
         }
 
-        // Download thumbnails concurrently
+        // Download thumbnails concurrently (increased limit from 20 to 40)
         if !thumbnailURLs.isEmpty {
             await withTaskGroup(of: Void.self) { group in
-                for url in thumbnailURLs.prefix(20) {
+                for url in thumbnailURLs.prefix(40) {
                     group.addTask {
                         _ = await WidgetImageCache.shared.downloadAndCache(from: url)
                     }
                 }
             }
-            print("Downloaded \(min(thumbnailURLs.count, 20)) thumbnails for widget")
+            print("Downloaded \(min(thumbnailURLs.count, 40)) thumbnails for widget")
         }
 
         // Download favicons concurrently

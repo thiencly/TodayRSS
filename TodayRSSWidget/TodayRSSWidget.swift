@@ -603,33 +603,55 @@ struct LockScreenRectangularView: View {
 
     var body: some View {
         if let article = entry.articles.first {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 3) {
-                    // Source favicon
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    // Source favicon (bigger)
                     if let iconURL = article.sourceIconImageURL,
                        let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
                         Image(uiImage: iconImage)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 10, height: 10)
-                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                            .frame(width: 14, height: 14)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
-                    Text(article.sourceTitle ?? "TodayRSS")
-                        .font(.system(size: 9))
-                        .lineLimit(1)
+                    // Relative day + time (e.g., "Today, 10:55 AM")
+                    if let pubDate = article.pubDate {
+                        Text(formatRelativeDateTime(pubDate))
+                            .font(.system(size: 12, weight: .bold))
+                            .lineLimit(1)
+                    }
                 }
                 .foregroundStyle(.secondary)
 
                 Text(article.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(3)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .widgetURL(article.linkURL)
         } else {
             Text("TodayRSS")
                 .font(.system(size: 10))
         }
+    }
+}
+
+/// Format date as relative day + time (e.g., "Today, 10:55 AM")
+private func formatRelativeDateTime(_ date: Date) -> String {
+    let calendar = Calendar.current
+    let timeFormatter = DateFormatter()
+    timeFormatter.dateFormat = "h:mm a"
+    let timeString = timeFormatter.string(from: date)
+
+    if calendar.isDateInToday(date) {
+        return "Today, \(timeString)"
+    } else if calendar.isDateInYesterday(date) {
+        return "Yesterday, \(timeString)"
+    } else {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEEE" // Day name (e.g., "Monday")
+        let dayString = dayFormatter.string(from: date)
+        return "\(dayString), \(timeString)"
     }
 }
 

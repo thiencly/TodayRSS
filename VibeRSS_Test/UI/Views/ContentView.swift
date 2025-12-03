@@ -116,7 +116,7 @@ private struct SidebarHeroCardView: View {
         let title: String
         let oneLine: String
         let link: URL
-        let isNew: Bool
+        var isNew: Bool
         let pubDate: Date?
     }
 
@@ -466,7 +466,7 @@ struct ContentView: View {
         var faviconURLs: Set<URL> = []
 
         for (_, articles) in articlesByFeed {
-            for article in articles.prefix(3) {
+            for article in articles.prefix(5) {
                 if let url = article.thumbnailURL {
                     thumbnailURLs.append(url)
                 }
@@ -476,10 +476,10 @@ struct ContentView: View {
             }
         }
 
-        // Download thumbnails
+        // Download thumbnails (increased limit from 20 to 40)
         if !thumbnailURLs.isEmpty {
             await withTaskGroup(of: Void.self) { group in
-                for url in thumbnailURLs.prefix(20) {
+                for url in thumbnailURLs.prefix(40) {
                     group.addTask {
                         _ = await WidgetImageCache.shared.downloadAndCache(from: url)
                     }
@@ -576,6 +576,12 @@ struct ContentView: View {
         let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
         let previouslySeenLinks: Set<URL> = Set(heroEntries.map { $0.link })
 
+        // Keep existing entries as fallback (indexed by source ID)
+        let existingEntriesBySource: [UUID: SidebarHeroCardView.Entry] = Dictionary(
+            heroEntries.map { ($0.source.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         // Step 1: Fetch all feeds in parallel (fast - just RSS parsing)
         var feedArticles: [(feed: Feed, article: FeedItem)] = []
         await withTaskGroup(of: (Feed, FeedItem)?.self) { group in
@@ -600,17 +606,27 @@ struct ContentView: View {
         // Sort by most recent first
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
 
-        // Step 2: Process summaries one by one, most recent first, updating UI after each
+        // Step 2: Process summaries one by one, most recent first
         var builtEntries: [SidebarHeroCardView.Entry] = []
+        var processedSourceIDs: Set<UUID> = []
+        var hasNewContent = false
 
         for (feed, article) in feedArticles {
+            processedSourceIDs.insert(feed.id)
             let isNew = !previouslySeenLinks.contains(article.link)
+            if isNew { hasNewContent = true }
 
             // Use fast hero summary - pass RSS description to avoid network fetch
             let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
 
-            // Only add entries that have valid AI summaries
-            guard !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // If summary generation failed, try to keep existing entry for this source
+            if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let existingEntry = existingEntriesBySource[feed.id] {
+                    // Update isNew flag on existing entry (it's now been "seen")
+                    var updatedEntry = existingEntry
+                    updatedEntry.isNew = false
+                    builtEntries.append(updatedEntry)
+                }
                 continue
             }
 
@@ -624,8 +640,44 @@ struct ContentView: View {
             )
             builtEntries.append(entry)
 
-            // Update UI after each entry is processed
-            heroEntries = builtEntries
+            // Only update UI progressively if there's actually new content
+            if hasNewContent {
+                heroEntries = builtEntries
+            }
+        }
+
+        // For sources where feed fetch failed entirely, keep existing entries (mark as seen)
+        for (sourceID, existingEntry) in existingEntriesBySource {
+            if !processedSourceIDs.contains(sourceID) && selectedIDs.contains(sourceID) {
+                var updatedEntry = existingEntry
+                updatedEntry.isNew = false
+                builtEntries.append(updatedEntry)
+            }
+        }
+
+        // Final sort by date
+        builtEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+        // Check if content actually changed (compare links and isNew flags)
+        let oldLinks = heroEntries.map { $0.link }
+        let newLinks = builtEntries.map { $0.link }
+        let oldIsNew = heroEntries.map { $0.isNew }
+        let newIsNew = builtEntries.map { $0.isNew }
+
+        let linksChanged = oldLinks != newLinks
+        let isNewChanged = oldIsNew != newIsNew
+
+        if linksChanged || isNewChanged || heroEntries.count != builtEntries.count {
+            // If only isNew changed (no new articles), update without animation
+            if !linksChanged && isNewChanged {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    heroEntries = builtEntries
+                }
+            } else {
+                heroEntries = builtEntries
+            }
         }
 
         saveHeroEntriesToCache()
@@ -1114,5 +1166,13 @@ struct ContentView: View {
         .onChange(of: store.feeds) { _, _ in
             Task { await loadHeroEntries() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .didReturnToSourceList)) { _ in
+            Task { await loadHeroEntries() }
+        }
     }
+}
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let didReturnToSourceList = Notification.Name("didReturnToSourceList")
 }
