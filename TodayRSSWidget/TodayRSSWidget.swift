@@ -30,32 +30,32 @@ private func getArticles(for source: SourceEntity?) -> [WidgetArticle] {
 private let sampleArticles: [WidgetArticle] = [
     WidgetArticle(
         id: "1",
-        title: "Breaking: Major Tech Announcement Expected Today",
-        link: "https://example.com/1",
-        summary: "Industry leaders gather for what promises to be a groundbreaking reveal.",
+        title: "Open TodayRSS app to sync your feeds",
+        link: "https://todayrss.app/sync",
+        summary: "Your feeds will appear here after syncing.",
         pubDate: Date(),
         thumbnailURL: nil,
-        sourceTitle: "Tech News",
+        sourceTitle: "TodayRSS",
         sourceIconURL: nil
     ),
     WidgetArticle(
         id: "2",
-        title: "Markets Rally on Positive Economic Data",
-        link: "https://example.com/2",
-        summary: "Stock indices reach new highs following employment report.",
+        title: "Tap to open the app and refresh",
+        link: "https://todayrss.app/sync",
+        summary: "Pull down to refresh or use Sync Now in Settings.",
         pubDate: Date().addingTimeInterval(-3600),
         thumbnailURL: nil,
-        sourceTitle: "Finance Daily",
+        sourceTitle: "TodayRSS",
         sourceIconURL: nil
     ),
     WidgetArticle(
         id: "3",
-        title: "New Study Reveals Surprising Health Benefits",
-        link: "https://example.com/3",
-        summary: "Researchers discover unexpected connections in latest findings.",
+        title: "No articles synced yet",
+        link: "https://todayrss.app/sync",
+        summary: "Open the app to start syncing your RSS feeds.",
         pubDate: Date().addingTimeInterval(-7200),
         thumbnailURL: nil,
-        sourceTitle: "Health Weekly",
+        sourceTitle: "TodayRSS",
         sourceIconURL: nil
     )
 ]

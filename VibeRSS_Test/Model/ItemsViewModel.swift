@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import WidgetKit
 
 @MainActor
 final class ItemsViewModel: ObservableObject {
@@ -20,6 +21,10 @@ final class ItemsViewModel: ObservableObject {
                 result[i].sourceTitle = source.title
                 result[i].sourceIconURL = source.iconURL
             }
+
+            // Sync to widgets
+            WidgetUpdater.shared.syncFeedToWidget(feedID: source.id, articles: result)
+
             guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
                 // If date math fails, keep existing items order without filtering
                 let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }

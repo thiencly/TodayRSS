@@ -44,6 +44,9 @@ class WidgetUpdater {
 
         // Reload widget timelines so they can fetch new feeds
         WidgetCenter.shared.reloadAllTimelines()
+
+        // Invalidate configuration recommendations so new sources appear in widget picker
+        WidgetCenter.shared.invalidateConfigurationRecommendations()
     }
 
     /// Update cached articles for widgets
@@ -55,9 +58,13 @@ class WidgetUpdater {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
             guard !Task.isCancelled else { return }
 
-            var widgetArticles: [String: [WidgetArticle]] = [:]
+            // Load existing articles and merge (don't wipe feeds that failed to load)
+            var widgetArticles = WidgetDataManager.shared.loadArticles()
+
             for (feedID, articles) in articlesByFeed {
-                let converted = articles.prefix(10).map { article in
+                // Sort by date (newest first) before taking top 10
+                let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+                let converted = sorted.prefix(10).map { article in
                     WidgetArticle(
                         id: article.id.uuidString,
                         title: article.title,
@@ -72,7 +79,7 @@ class WidgetUpdater {
                 widgetArticles[feedID.uuidString] = Array(converted)
             }
 
-            // Save to App Group
+            // Save merged articles to App Group
             WidgetDataManager.shared.saveArticles(widgetArticles)
 
             // Reload widget timelines
@@ -87,9 +94,13 @@ class WidgetUpdater {
 
     /// Update articles immediately without debounce (for background sync)
     func updateArticlesImmediately(articlesByFeed: [UUID: [FeedItem]]) async {
-        var widgetArticles: [String: [WidgetArticle]] = [:]
+        // Load existing articles and merge (don't wipe feeds that failed to load)
+        var widgetArticles = WidgetDataManager.shared.loadArticles()
+
         for (feedID, articles) in articlesByFeed {
-            let converted = articles.prefix(10).map { article in
+            // Sort by date (newest first) before taking top 10
+            let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            let converted = sorted.prefix(10).map { article in
                 WidgetArticle(
                     id: article.id.uuidString,
                     title: article.title,
@@ -104,7 +115,66 @@ class WidgetUpdater {
             widgetArticles[feedID.uuidString] = Array(converted)
         }
 
-        // Save to App Group immediately (no debounce)
+        // Save merged articles to App Group immediately (no debounce)
         WidgetDataManager.shared.saveArticles(widgetArticles)
+    }
+
+    /// Sync a single feed's articles to widgets (with thumbnail caching)
+    /// Call this when user browses/refreshes a feed
+    func syncFeedToWidget(feedID: UUID, articles: [FeedItem]) {
+        Task {
+            // Sort by date and download thumbnails for top 5 newest articles
+            let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            await downloadImagesForArticles(Array(sorted.prefix(5)))
+
+            // Update widget storage (uses debouncing)
+            updateArticles(articlesByFeed: [feedID: articles])
+        }
+    }
+
+    /// Sync multiple feeds to widgets (with thumbnail caching)
+    /// Call this when user browses folders or all articles
+    func syncFeedsToWidget(articlesByFeed: [UUID: [FeedItem]]) {
+        Task {
+            // Download thumbnails and favicons for top 5 newest articles from each feed
+            var allArticles: [FeedItem] = []
+            for (_, articles) in articlesByFeed {
+                let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+                allArticles.append(contentsOf: sorted.prefix(5))
+            }
+            await downloadImagesForArticles(allArticles)
+
+            // Update widget storage (uses debouncing)
+            updateArticles(articlesByFeed: articlesByFeed)
+        }
+    }
+
+    /// Download thumbnails and favicons for articles
+    private func downloadImagesForArticles(_ articles: [FeedItem]) async {
+        var thumbnailURLs: [URL] = []
+        var faviconURLs: Set<URL> = []
+
+        for article in articles {
+            if let url = article.thumbnailURL {
+                thumbnailURLs.append(url)
+            }
+            if let iconURL = article.sourceIconURL {
+                faviconURLs.insert(iconURL)
+            }
+        }
+
+        // Download in parallel
+        await withTaskGroup(of: Void.self) { group in
+            for url in thumbnailURLs.prefix(20) {
+                group.addTask {
+                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                }
+            }
+            for url in faviconURLs {
+                group.addTask {
+                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                }
+            }
+        }
     }
 }

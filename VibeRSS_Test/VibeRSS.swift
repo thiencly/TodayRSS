@@ -38,13 +38,13 @@ struct VibeRSSApp: App {
         WindowGroup {
             ContentView()
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase, initial: true) { _, newPhase in
             switch newPhase {
             case .background:
                 // Schedule background refresh when entering background
                 BackgroundSyncManager.shared.handleEnterBackground()
             case .active:
-                // Check if sync is needed when becoming active
+                // Check if sync is needed when becoming active (also fires on initial launch)
                 Task {
                     await BackgroundSyncManager.shared.handleBecomeActive()
                 }

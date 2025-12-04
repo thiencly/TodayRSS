@@ -56,6 +56,9 @@ final class FeedStore: ObservableObject {
             }
             feeds = initialFeeds
         }
+
+        // Immediately sync widget config on launch (not debounced)
+        WidgetUpdater.shared.updateSourceConfig(feeds: feeds, folders: folders)
     }
 
     private func save() {

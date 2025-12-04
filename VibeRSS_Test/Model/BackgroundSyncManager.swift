@@ -147,6 +147,11 @@ final class BackgroundSyncManager {
 
         // Load feeds from UserDefaults (same as FeedStore)
         let feeds = loadFeeds()
+        let folders = loadFolders()
+
+        // Always sync source config to widget (ensures widget knows about feeds)
+        WidgetUpdater.shared.updateSourceConfig(feeds: feeds, folders: folders)
+
         guard !feeds.isEmpty else { return }
 
         let feedService = FeedService()
@@ -207,12 +212,14 @@ final class BackgroundSyncManager {
 
     /// Download thumbnails and favicons to shared cache for widget access
     private func downloadThumbnailsForWidget(articlesByFeed: [UUID: [FeedItem]]) async {
-        // Collect thumbnail URLs to download (top 5 per feed for widget display)
+        // Collect thumbnail URLs to download (top 5 newest per feed for widget display)
         var thumbnailURLs: [URL] = []
         var faviconURLs: Set<URL> = [] // Use Set to avoid duplicates
 
         for (_, articles) in articlesByFeed {
-            for article in articles.prefix(5) {
+            // Sort by date to get newest articles first
+            let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            for article in sorted.prefix(5) {
                 if let url = article.thumbnailURL {
                     thumbnailURLs.append(url)
                 }
@@ -304,6 +311,16 @@ final class BackgroundSyncManager {
         }
     }
 
+    private func loadFolders() -> [Folder] {
+        guard let data = UserDefaults.standard.data(forKey: "viberss.folders") else { return [] }
+        do {
+            return try JSONDecoder().decode([Folder].self, from: data)
+        } catch {
+            print("Failed to load folders: \(error)")
+            return []
+        }
+    }
+
     private func saveSyncInterval() {
         UserDefaults.standard.set(syncInterval.rawValue, forKey: syncIntervalKey)
     }
@@ -324,12 +341,24 @@ final class BackgroundSyncManager {
 
     /// Call when app becomes active - sync if needed
     func handleBecomeActive() async {
-        guard let lastSync = lastSyncDate,
-              let interval = syncInterval.timeInterval else { return }
+        // Always sync on app launch if never synced before
+        guard let lastSync = lastSyncDate else {
+            await performSync()
+            return
+        }
+
+        // If manual mode, just reload widget timelines (use cached data)
+        guard let interval = syncInterval.timeInterval else {
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
 
         // If enough time has passed since last sync, sync now
         if Date().timeIntervalSince(lastSync) > interval {
             await performSync()
+        } else {
+            // Even if not syncing feeds, reload widget timelines to pick up latest data
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 }

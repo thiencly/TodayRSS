@@ -138,12 +138,33 @@ class WidgetImageCache {
             return true
         }
 
+        // Try up to 2 times for flaky CDNs (NYT, etc.)
+        for attempt in 1...2 {
+            if let image = await attemptDownload(from: url, attempt: attempt) {
+                saveImage(image, for: url)
+                print("WidgetImageCache: Cached \(Int(image.size.width))x\(Int(image.size.height)) from \(url.host ?? "unknown")")
+                return true
+            }
+
+            // Wait before retry
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+            }
+        }
+
+        return false
+    }
+
+    /// Single download attempt
+    private func attemptDownload(from url: URL, attempt: Int) async -> UIImage? {
         do {
             var request = URLRequest(url: url)
-            request.timeoutInterval = 10
-            // Add headers to avoid blocks from CDNs (Engadget, etc.)
+            // Longer timeout for slow CDNs (NYT, etc.)
+            request.timeoutInterval = attempt == 1 ? 15 : 20
+            // Add headers to avoid blocks from CDNs
             request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
             request.setValue("image/png,image/jpeg,image/webp,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
+            request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
             // Some CDNs require Referer header
             if let host = url.host {
                 request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
@@ -154,29 +175,33 @@ class WidgetImageCache {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("WidgetImageCache: HTTP \(httpResponse.statusCode) for \(url.host ?? "unknown") - \(url.lastPathComponent)")
+                    if attempt == 2 {
+                        print("WidgetImageCache: HTTP \(httpResponse.statusCode) for \(url.host ?? "unknown")")
+                    }
                 }
-                return false
+                return nil
             }
 
             // Check if response is SVG (some servers ignore Accept header)
             if let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type"),
                contentType.contains("svg") {
                 print("WidgetImageCache: Server returned SVG for \(url.host ?? "unknown")")
-                return false
+                return nil
             }
 
             guard let image = UIImage(data: data) else {
-                print("WidgetImageCache: Invalid image data from \(url.host ?? "unknown") - \(url.lastPathComponent)")
-                return false
+                if attempt == 2 {
+                    print("WidgetImageCache: Invalid image data from \(url.host ?? "unknown")")
+                }
+                return nil
             }
 
-            saveImage(image, for: url)
-            print("WidgetImageCache: Cached \(Int(image.size.width))x\(Int(image.size.height)) -> \(Int(maxImageDimension))px from \(url.host ?? "unknown")")
-            return true
+            return image
         } catch {
-            print("WidgetImageCache: Download failed for \(url.host ?? "unknown"): \(error.localizedDescription)")
-            return false
+            if attempt == 2 {
+                print("WidgetImageCache: Download failed for \(url.host ?? "unknown"): \(error.localizedDescription)")
+            }
+            return nil
         }
     }
 

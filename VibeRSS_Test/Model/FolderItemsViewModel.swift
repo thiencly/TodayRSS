@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import WidgetKit
 
 @MainActor
 final class FolderItemsViewModel: ObservableObject {
@@ -10,6 +11,7 @@ final class FolderItemsViewModel: ObservableObject {
 
     private let service = FeedService()
     private var previousArticleIDs: Set<UUID> = []
+    private var lastLoadedArticlesByFeed: [UUID: [FeedItem]] = [:]
 
     private func updateNewArticles(from articles: [Article]) {
         let currentIDs = Set(articles.map { $0.id })
@@ -25,7 +27,9 @@ final class FolderItemsViewModel: ObservableObject {
         isLoading = true; errorMessage = nil
         let sources = feeds.filter { $0.folderID == folder.id }
         var all: [Article] = []
-        await withTaskGroup(of: [FeedItem].self) { group in
+        var articlesByFeed: [UUID: [FeedItem]] = [:]
+
+        await withTaskGroup(of: (UUID, [FeedItem]).self) { group in
             for src in sources {
                 group.addTask {
                     do {
@@ -35,14 +39,24 @@ final class FolderItemsViewModel: ObservableObject {
                             r[i].sourceTitle = src.title
                             r[i].sourceIconURL = src.iconURL
                         }
-                        return r
-                    } catch { return [] }
+                        return (src.id, r)
+                    } catch { return (src.id, []) }
                 }
             }
-            for await result in group {
+            for await (feedID, result) in group {
                 all.append(contentsOf: result)
+                if !result.isEmpty {
+                    articlesByFeed[feedID] = result
+                }
             }
         }
+
+        // Sync to widgets
+        if !articlesByFeed.isEmpty {
+            lastLoadedArticlesByFeed.merge(articlesByFeed) { _, new in new }
+            WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
+        }
+
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
             // If date math fails, sort without filtering
             let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
@@ -63,7 +77,9 @@ final class FolderItemsViewModel: ObservableObject {
         isLoading = true; errorMessage = nil
         let sources = feeds
         var all: [Article] = []
-        await withTaskGroup(of: [FeedItem].self) { group in
+        var articlesByFeed: [UUID: [FeedItem]] = [:]
+
+        await withTaskGroup(of: (UUID, [FeedItem]).self) { group in
             for src in sources {
                 group.addTask {
                     do {
@@ -73,14 +89,24 @@ final class FolderItemsViewModel: ObservableObject {
                             r[i].sourceTitle = src.title
                             r[i].sourceIconURL = src.iconURL
                         }
-                        return r
-                    } catch { return [] }
+                        return (src.id, r)
+                    } catch { return (src.id, []) }
                 }
             }
-            for await result in group {
+            for await (feedID, result) in group {
                 all.append(contentsOf: result)
+                if !result.isEmpty {
+                    articlesByFeed[feedID] = result
+                }
             }
         }
+
+        // Sync to widgets
+        if !articlesByFeed.isEmpty {
+            lastLoadedArticlesByFeed.merge(articlesByFeed) { _, new in new }
+            WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
+        }
+
         // Filter to only show articles from today
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: Date())

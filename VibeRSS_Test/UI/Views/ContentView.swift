@@ -468,7 +468,9 @@ struct ContentView: View {
         var faviconURLs: Set<URL> = []
 
         for (_, articles) in articlesByFeed {
-            for article in articles.prefix(5) {
+            // Sort by date to get newest articles first
+            let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            for article in sorted.prefix(5) {
                 if let url = article.thumbnailURL {
                     thumbnailURLs.append(url)
                 }

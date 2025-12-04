@@ -61,17 +61,26 @@ class WidgetDataManager {
 
     init() {
         userDefaults = UserDefaults(suiteName: appGroupIdentifier)
+        if userDefaults == nil {
+            print("⚠️ WidgetDataManager: Failed to access App Group '\(appGroupIdentifier)'")
+        } else {
+            print("✓ WidgetDataManager: App Group accessible")
+        }
     }
 
     // MARK: - Source Config (feeds & folders list)
 
     func saveSourceConfig(_ config: WidgetSourceConfig) {
-        guard let userDefaults else { return }
+        guard let userDefaults else {
+            print("⚠️ WidgetDataManager: Cannot save config - App Group not accessible")
+            return
+        }
         do {
             let encoded = try JSONEncoder().encode(config)
             userDefaults.set(encoded, forKey: configKey)
+            print("✓ WidgetDataManager: Saved config with \(config.feeds.count) feeds, \(config.folders.count) folders")
         } catch {
-            print("Failed to save widget config: \(error)")
+            print("⚠️ WidgetDataManager: Failed to save config: \(error)")
         }
     }
 
@@ -91,12 +100,17 @@ class WidgetDataManager {
     // MARK: - Cached Articles
 
     func saveArticles(_ articles: [String: [WidgetArticle]]) {
-        guard let userDefaults else { return }
+        guard let userDefaults else {
+            print("⚠️ WidgetDataManager: Cannot save articles - App Group not accessible")
+            return
+        }
         do {
             let encoded = try JSONEncoder().encode(articles)
             userDefaults.set(encoded, forKey: articlesKey)
+            let totalArticles = articles.values.reduce(0) { $0 + $1.count }
+            print("✓ WidgetDataManager: Saved \(totalArticles) articles from \(articles.count) feeds")
         } catch {
-            print("Failed to save widget articles: \(error)")
+            print("⚠️ WidgetDataManager: Failed to save articles: \(error)")
         }
     }
 
@@ -113,10 +127,11 @@ class WidgetDataManager {
         }
     }
 
-    // Get articles for a specific feed
+    // Get articles for a specific feed (sorted by date, newest first)
     func articles(for feedID: String) -> [WidgetArticle] {
         let articles = loadArticles()
-        return articles[feedID] ?? []
+        let feedArticles = articles[feedID] ?? []
+        return feedArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
     }
 
     // Get articles for a folder (all feeds in that folder)
@@ -151,5 +166,11 @@ class WidgetDataManager {
     // Get folder by ID
     func folder(for id: String) -> WidgetFolder? {
         loadSourceConfig().folders.first { $0.id == id }
+    }
+
+    // Clear all widget data
+    func clearAllData() {
+        userDefaults?.removeObject(forKey: configKey)
+        userDefaults?.removeObject(forKey: articlesKey)
     }
 }

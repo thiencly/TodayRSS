@@ -51,10 +51,22 @@ struct SettingsView: View {
                         Text("Refresh Widget Images")
                     }
                     .disabled(syncManager.isSyncing)
+
+                    Button(role: .destructive) {
+                        Task {
+                            // Clear all widget data and resync
+                            WidgetImageCache.shared.clearCache()
+                            WidgetDataManager.shared.clearAllData()
+                            await syncManager.syncNow()
+                        }
+                    } label: {
+                        Text("Reset Widget Data")
+                    }
+                    .disabled(syncManager.isSyncing)
                 } header: {
                     Text("Background Sync")
                 } footer: {
-                    Text("Background sync keeps your feeds and widgets updated automatically. Use 'Refresh Widget Images' if widget colors appear incorrect.")
+                    Text("Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.")
                 }
 
                 // MARK: - Hero Card Section

@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct CurrentView: View {
     @EnvironmentObject private var store: FeedStore
@@ -118,8 +119,10 @@ struct CurrentView: View {
         await MainActor.run { isLoading = true; errorMessage = nil }
         let feeds = store.feeds
         var collected: [Article] = []
+        var articlesByFeed: [UUID: [FeedItem]] = [:]
         let service = self.service
-        await withTaskGroup(of: Article?.self) { group in
+
+        await withTaskGroup(of: (UUID, [FeedItem], Article?).self) { group in
             for src in feeds {
                 group.addTask {
                     do {
@@ -129,19 +132,26 @@ struct CurrentView: View {
                             items[i].sourceTitle = src.title
                             items[i].sourceIconURL = src.iconURL
                         }
-                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
-                            return nil
-                        }
-                        return latest
+                        let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first
+                        return (src.id, items, latest)
                     } catch {
-                        return nil
+                        return (src.id, [], nil)
                     }
                 }
             }
-            for await result in group {
-                if let a = result { collected.append(a) }
+            for await (feedID, allItems, latest) in group {
+                if let a = latest { collected.append(a) }
+                if !allItems.isEmpty {
+                    articlesByFeed[feedID] = allItems
+                }
             }
         }
+
+        // Sync to widgets
+        if !articlesByFeed.isEmpty {
+            WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
+        }
+
         collected.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
         await MainActor.run {
             let currentIDs = Set(collected.map { $0.id })
