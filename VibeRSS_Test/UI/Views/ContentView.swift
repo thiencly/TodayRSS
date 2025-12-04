@@ -309,6 +309,7 @@ struct ContentView: View {
 
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
+    @State private var pendingHeroRefresh: Bool = false
     @State private var heroCardHeight: CGFloat = 200
     @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
@@ -457,8 +458,9 @@ struct ContentView: View {
 
             await MainActor.run {
                 WidgetUpdater.shared.updateArticles(articlesByFeed: articlesToSync)
-                // Reload widget timelines to pick up new thumbnails
-                WidgetCenter.shared.reloadAllTimelines()
+                // Reload widget timelines (explicit kinds for lock screen widgets)
+                WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+                WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
             }
         }
     }
@@ -586,8 +588,13 @@ struct ContentView: View {
     }
 
     @MainActor private func loadHeroEntries() async {
-        guard !isLoadingHero else { return }
+        // If already loading, mark for refresh after current load completes
+        if isLoadingHero {
+            pendingHeroRefresh = true
+            return
+        }
         isLoadingHero = true
+        pendingHeroRefresh = false
 
         let selectedIDs = heroSourceIDs
         let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
@@ -664,7 +671,11 @@ struct ContentView: View {
 
             // Only update UI progressively if there's actually new content
             if hasNewContent {
-                heroEntries = builtEntries
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    heroEntries = builtEntries
+                }
             }
         }
 
@@ -680,24 +691,11 @@ struct ContentView: View {
         // Final sort by date
         builtEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
 
-        // Check if content actually changed (compare links and isNew flags)
-        let oldLinks = heroEntries.map { $0.link }
-        let newLinks = builtEntries.map { $0.link }
-        let oldIsNew = heroEntries.map { $0.isNew }
-        let newIsNew = builtEntries.map { $0.isNew }
-
-        let linksChanged = oldLinks != newLinks
-        let isNewChanged = oldIsNew != newIsNew
-
-        if linksChanged || isNewChanged || heroEntries.count != builtEntries.count {
-            // Disable animation on initial load or when only isNew changed
-            if isInitialLoad || (!linksChanged && isNewChanged) {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    heroEntries = builtEntries
-                }
-            } else {
+        // Update hero entries without animation to prevent janky expand/collapse
+        if heroEntries != builtEntries {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 heroEntries = builtEntries
             }
         }
@@ -705,6 +703,12 @@ struct ContentView: View {
         saveHeroEntriesToCache()
         isLoadingHero = false
         isInitialLoad = false
+
+        // If a refresh was requested while loading, run again
+        if pendingHeroRefresh {
+            pendingHeroRefresh = false
+            Task { await loadHeroEntries() }
+        }
     }
 
     @ViewBuilder
@@ -1033,7 +1037,7 @@ struct ContentView: View {
 
                         Divider()
 
-                        Button("Clear Hero Summaries") {
+                        Button("Clear Today Highlights") {
                             heroEntries.removeAll()
                             UserDefaults.standard.removeObject(forKey: heroCacheKey)
                             Task {
@@ -1192,10 +1196,15 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .didReturnToSourceList)) { _ in
             Task { await loadHeroEntries() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .backgroundSyncCompleted)) { _ in
+            // Refresh hero entries after background sync completes (RSSCache now has fresh data)
+            Task { await loadHeroEntries() }
+        }
     }
 }
 
 // MARK: - Notifications
 extension Notification.Name {
     static let didReturnToSourceList = Notification.Name("didReturnToSourceList")
+    static let backgroundSyncCompleted = Notification.Name("backgroundSyncCompleted")
 }

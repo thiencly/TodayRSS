@@ -205,7 +205,12 @@ final class BackgroundSyncManager {
         UserDefaults.standard.set(lastSyncDate, forKey: lastSyncKey)
 
         // Reload widget timelines AFTER thumbnails are downloaded
-        WidgetCenter.shared.reloadAllTimelines()
+        // Explicitly reload both kinds to ensure lock screen widgets update
+        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+
+        // Notify that sync completed (so hero card can refresh with cached data)
+        NotificationCenter.default.post(name: .backgroundSyncCompleted, object: nil)
 
         print("Background sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")
     }
@@ -349,7 +354,8 @@ final class BackgroundSyncManager {
 
         // If manual mode, just reload widget timelines (use cached data)
         guard let interval = syncInterval.timeInterval else {
-            WidgetCenter.shared.reloadAllTimelines()
+            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
             return
         }
 
@@ -358,7 +364,8 @@ final class BackgroundSyncManager {
             await performSync()
         } else {
             // Even if not syncing feeds, reload widget timelines to pick up latest data
-            WidgetCenter.shared.reloadAllTimelines()
+            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
         }
     }
 }

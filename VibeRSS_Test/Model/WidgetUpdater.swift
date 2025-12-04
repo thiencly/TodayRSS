@@ -42,8 +42,9 @@ class WidgetUpdater {
         // Save to App Group
         WidgetDataManager.shared.saveSourceConfig(config)
 
-        // Reload widget timelines so they can fetch new feeds
-        WidgetCenter.shared.reloadAllTimelines()
+        // Reload widget timelines (explicit kinds for lock screen widgets)
+        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
 
         // Invalidate configuration recommendations so new sources appear in widget picker
         WidgetCenter.shared.invalidateConfigurationRecommendations()
@@ -82,14 +83,17 @@ class WidgetUpdater {
             // Save merged articles to App Group
             WidgetDataManager.shared.saveArticles(widgetArticles)
 
-            // Reload widget timelines
-            WidgetCenter.shared.reloadAllTimelines()
+            // Reload widget timelines (explicit kinds for lock screen widgets)
+            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
         }
     }
 
     /// Quick update just to refresh timelines
     func reloadTimelines() {
-        WidgetCenter.shared.reloadAllTimelines()
+        // Reload all widget kinds explicitly to ensure lock screen widgets update
+        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
     }
 
     /// Update articles immediately without debounce (for background sync)
