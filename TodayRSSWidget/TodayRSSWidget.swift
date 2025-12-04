@@ -591,11 +591,11 @@ struct MediumWidgetView: View {
             }
         } else {
             GeometryReader { geo in
-                HStack(spacing: 2) {
+                HStack(spacing: 0) {
                     if let article = entry.leftArticle {
                         articleCard(
                             article: article,
-                            width: (geo.size.width - 2) / 2,
+                            width: geo.size.width / 2,
                             height: geo.size.height
                         )
                     }
@@ -603,7 +603,7 @@ struct MediumWidgetView: View {
                     if let article = entry.rightArticle {
                         articleCard(
                             article: article,
-                            width: (geo.size.width - 2) / 2,
+                            width: geo.size.width / 2,
                             height: geo.size.height
                         )
                     }
