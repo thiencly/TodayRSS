@@ -323,7 +323,7 @@ struct SmallWidgetView: View {
                 .padding(18)
             }
         }
-        .widgetURL(article.linkURL)
+        .widgetURL(article.deepLinkURL ?? article.linkURL)
     }
 
     @ViewBuilder
@@ -375,7 +375,7 @@ struct SmallWidgetView: View {
                 .padding(18)
             }
         }
-        .widgetURL(article.linkURL)
+        .widgetURL(article.deepLinkURL ?? article.linkURL)
     }
 }
 
@@ -433,7 +433,7 @@ struct LockScreenRectangularView: View {
                     .lineLimit(3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .widgetURL(article.linkURL)
+            .widgetURL(article.deepLinkURL ?? article.linkURL)
         } else {
             Text("TodayRSS")
                 .font(.system(size: 10))
@@ -628,7 +628,7 @@ struct MediumWidgetView: View {
     private func articleCardWithThumbnail(article: WidgetArticle, width: CGFloat, height: CGFloat) -> some View {
         let gradientColor = getDominantColor(for: article.thumbnailImageURL)
 
-        Link(destination: article.linkURL ?? URL(string: "todayrss://")!) {
+        Link(destination: article.deepLinkURL ?? article.linkURL ?? URL(string: "todayrss://")!) {
             ZStack {
                 CachedWidgetImage(thumbnailURL: article.thumbnailImageURL)
                     .frame(width: width, height: height)
@@ -693,7 +693,7 @@ struct MediumWidgetView: View {
 
     @ViewBuilder
     private func articleCardTextOnly(article: WidgetArticle, width: CGFloat, height: CGFloat) -> some View {
-        Link(destination: article.linkURL ?? URL(string: "todayrss://")!) {
+        Link(destination: article.deepLinkURL ?? article.linkURL ?? URL(string: "todayrss://")!) {
             ZStack {
                 LinearGradient(
                     colors: [Color(.systemGray4), Color(.systemGray6)],

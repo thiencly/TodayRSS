@@ -22,6 +22,14 @@ struct WidgetArticle: Codable, Identifiable, Hashable {
     var linkURL: URL? { URL(string: link) }
     var thumbnailImageURL: URL? { thumbnailURL.flatMap { URL(string: $0) } }
     var sourceIconImageURL: URL? { sourceIconURL.flatMap { URL(string: $0) } }
+
+    /// Deep link URL that opens the article in the app's Safari reader view
+    var deepLinkURL: URL? {
+        guard let encodedLink = link.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            return nil
+        }
+        return URL(string: "todayrss://read?url=\(encodedLink)")
+    }
 }
 
 // MARK: - Widget Feed (Codable version for widget)

@@ -5,9 +5,15 @@
 import SwiftUI
 import SafariServices
 
+// Make URL work with fullScreenCover(item:)
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}
+
 @main
 struct VibeRSSApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @State private var deepLinkURL: URL?
 
     init() {
         // Register background tasks
@@ -37,6 +43,13 @@ struct VibeRSSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .fullScreenCover(item: $deepLinkURL) { url in
+                    ReaderSafariView(url: url)
+                        .ignoresSafeArea()
+                }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
         .onChange(of: scenePhase, initial: true) { _, newPhase in
             switch newPhase {
@@ -52,5 +65,17 @@ struct VibeRSSApp: App {
                 break
             }
         }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        // Handle todayrss://read?url=ENCODED_ARTICLE_URL
+        guard url.scheme == "todayrss",
+              url.host == "read",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let urlParam = components.queryItems?.first(where: { $0.name == "url" })?.value,
+              let articleURL = URL(string: urlParam) else {
+            return
+        }
+        deepLinkURL = articleURL
     }
 }
