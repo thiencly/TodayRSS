@@ -14,6 +14,7 @@ extension URL: @retroactive Identifiable {
 struct VibeRSSApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var deepLinkURL: URL?
+    @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
 
     init() {
         // Register background tasks
@@ -43,6 +44,9 @@ struct VibeRSSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .fullScreenCover(isPresented: $showOnboarding) {
+                    OnboardingView(isPresented: $showOnboarding)
+                }
                 .fullScreenCover(item: $deepLinkURL) { url in
                     ReaderSafariView(url: url)
                         .ignoresSafeArea()

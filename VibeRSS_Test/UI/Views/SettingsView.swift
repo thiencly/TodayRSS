@@ -4,6 +4,7 @@ struct SettingsView: View {
     @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Bindable private var syncManager = BackgroundSyncManager.shared
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationStack {
@@ -69,14 +70,37 @@ struct SettingsView: View {
                     Text("Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.")
                 }
 
-                // MARK: - Hero Card Section
+                // MARK: - Highlights Section
                 Section {
-                    Toggle("Collapse Hero Card on Launch", isOn: $heroCollapsedOnLaunch)
+                    Toggle("Collapse Highlights on Launch", isOn: $heroCollapsedOnLaunch)
                 } header: {
-                    Text("Hero Card")
+                    Text("Highlights")
                 } footer: {
-                    Text("When enabled, the Today Highlights hero card will start collapsed when you open the app.")
+                    Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
                 }
+
+                // MARK: - About Section
+                Section {
+                    Button {
+                        showOnboarding = true
+                    } label: {
+                        HStack {
+                            Label("Show Onboarding", systemImage: "hand.wave.fill")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("View the welcome tutorial again.")
+                }
+            }
+            .fullScreenCover(isPresented: $showOnboarding) {
+                OnboardingView(isPresented: $showOnboarding)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
