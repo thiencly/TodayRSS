@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/thienly/VibeRSS/build/Release-iphoneos/TodayRSSWidgetExtension.appex/TodayRSSWidgetExtension'
+relocations:     []
+...

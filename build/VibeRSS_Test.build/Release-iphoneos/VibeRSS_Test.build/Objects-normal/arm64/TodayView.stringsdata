@@ -1,0 +1,16 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/TodayView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Today",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 129
+        }
+      }
+    ]
+  },
+  "version": 1
+}

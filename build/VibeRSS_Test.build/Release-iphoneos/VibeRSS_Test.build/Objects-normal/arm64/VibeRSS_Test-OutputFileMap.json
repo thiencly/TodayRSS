@@ -1,0 +1,271 @@
+{
+  "" : {
+    "const-values" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.swiftconstvalues",
+    "dependencies" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.d",
+    "diagnostics" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.dia",
+    "emit-module-dependencies" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary-emit-module.dia",
+    "pch" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.swiftdeps"
+  },
+  "/Users/thienly/VibeRSS/Shared/WidgetData.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetData.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetData.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetData.o"
+  },
+  "/Users/thienly/VibeRSS/Shared/WidgetImageCache.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetImageCache.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetImageCache.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetImageCache.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Caching/ImageDiskCache.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ImageDiskCache.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ImageDiskCache.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ImageDiskCache.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Item.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Item.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Item.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Item.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/ArticleSummarizer.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleSummarizer.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleSummarizer.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleSummarizer.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/BackgroundSyncManager.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/BackgroundSyncManager.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/BackgroundSyncManager.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/BackgroundSyncManager.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/Feed.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Feed.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Feed.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Feed.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedItem.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedItem.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedItem.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedItem.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedSearchService.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedSearchService.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedSearchService.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedSearchService.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedService+Conformance.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService+Conformance.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService+Conformance.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService+Conformance.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedServicing.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedServicing.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedServicing.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedServicing.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedStore.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedStore.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedStore.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedStore.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FeedViewModel.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedViewModel.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedViewModel.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedViewModel.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/Folder.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Folder.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Folder.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/Folder.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/FolderItemsViewModel.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderItemsViewModel.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderItemsViewModel.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderItemsViewModel.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/ItemsViewModel.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ItemsViewModel.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ItemsViewModel.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ItemsViewModel.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Model/WidgetUpdater.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetUpdater.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetUpdater.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WidgetUpdater.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Networking/AtomParser.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AtomParser.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AtomParser.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AtomParser.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Networking/FeedService.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedService.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Networking/HTMLImageExtraction.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HTMLImageExtraction.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HTMLImageExtraction.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HTMLImageExtraction.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Networking/RSSParser.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RSSParser.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RSSParser.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RSSParser.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ArticleRowView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleRowView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleRowView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleRowView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ArticleTextCache.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleTextCache.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleTextCache.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleTextCache.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ArticleThumbnailView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleThumbnailView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleThumbnailView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ArticleThumbnailView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ButtonsAndStyles.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ButtonsAndStyles.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ButtonsAndStyles.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ButtonsAndStyles.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/CachedAsyncImage.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CachedAsyncImage.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CachedAsyncImage.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CachedAsyncImage.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/FaviconService.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FaviconService.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FaviconService.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FaviconService.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/RainbowGlowText.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RainbowGlowText.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RainbowGlowText.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/RainbowGlowText.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/SharedUIAtoms.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SharedUIAtoms.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SharedUIAtoms.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SharedUIAtoms.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/SiriGradient.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SiriGradient.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SiriGradient.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SiriGradient.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/SummarizeButton.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SummarizeButton.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SummarizeButton.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SummarizeButton.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/TodayCardView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayCardView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayCardView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayCardView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/TodayView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/TodayView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/WebAndTypes.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WebAndTypes.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WebAndTypes.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/WebAndTypes.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AddFeedView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFeedView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFeedView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFeedView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AddFolderView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFolderView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFolderView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AddFolderView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AllArticlesView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AllArticlesView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AllArticlesView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/AllArticlesView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/CollapsibleText.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CollapsibleText.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CollapsibleText.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CollapsibleText.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/ContentView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ContentView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/CurrentView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CurrentView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CurrentView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/CurrentView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/FeedDetailView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedDetailView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedDetailView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FeedDetailView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/FolderDetailView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderDetailView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderDetailView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/FolderDetailView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/ReaderSafariView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ReaderSafariView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ReaderSafariView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ReaderSafariView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/SettingsView.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/SettingsView.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/ConcurrencyGate.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ConcurrencyGate.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ConcurrencyGate.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ConcurrencyGate.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/DateFormatter+RSS.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DateFormatter+RSS.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DateFormatter+RSS.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DateFormatter+RSS.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/DayAnchor.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DayAnchor.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DayAnchor.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/DayAnchor.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/HapticManager.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HapticManager.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HapticManager.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/HapticManager.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/ParsingHelpers.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ParsingHelpers.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ParsingHelpers.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/ParsingHelpers.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Utilities/String+HTML.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/String+HTML.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/String+HTML.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/String+HTML.o"
+  },
+  "/Users/thienly/VibeRSS/VibeRSS_Test/VibeRSS.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS.o"
+  },
+  "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/thienly/VibeRSS/build/VibeRSS_Test.build/Release-iphoneos/VibeRSS_Test.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  }
+}

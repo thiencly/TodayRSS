@@ -1,0 +1,344 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Today Highlights",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 157
+        }
+      },
+      {
+        "comment": "",
+        "key": "New article",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 236
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 744
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 754
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Today",
+        "location": {
+          "startingColumn": 44,
+          "startingLine": 789
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add to Today",
+        "location": {
+          "startingColumn": 66,
+          "startingLine": 789
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 798
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 803
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 810
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 988
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move to Folder",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 1099
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename Source",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 1114
+        }
+      },
+      {
+        "comment": "",
+        "key": "Latest",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 823
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 831
+        }
+      },
+      {
+        "comment": "",
+        "key": "Folders",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 844
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 853
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Hero Card",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 890
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add to Hero Card",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 892
+        }
+      },
+      {
+        "comment": "",
+        "key": "Hero Card Full (3 max)",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 894
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh Icon",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 902
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 908
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 51,
+          "startingLine": 922
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move to Folder",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 926
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 937
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 945
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 955
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sources",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 965
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 974
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh & Cache Tools",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 1079
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear Today Highlights",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 1059
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear All Summaries",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 1067
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh All Feeds",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 1053
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 1106
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1110
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose a folder for %@",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1112
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 1118
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1119
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1122
+        }
+      },
+      {
+        "comment": "",
+        "key": "Enter a new name for this source",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1130
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refreshing feeds: %lld/%lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1142
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cached (new): %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1143
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skipped (already cached): %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1144
+        }
+      }
+    ]
+  },
+  "version": 1
+}

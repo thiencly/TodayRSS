@@ -134,41 +134,23 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
         ]
     }
 
-    // Layers for idle state - visible but contained (3 layers for performance)
-    private var idleLayers: [(CGFloat, CGFloat)] {
-        [
-            (2, 0),     // Sharp edge
-            (4, 5),     // Close glow
-            (6, 10),    // Mid glow
-        ]
-    }
-
     var body: some View {
         ZStack {
-            // Idle glow - static ambient glow (no animation)
+            // Idle glow - single layer for scroll performance (was 3 layers)
             if showIdle && !isActive {
-                ZStack {
-                    ForEach(idleLayers.indices.reversed(), id: \.self) { index in
-                        let (lineWidth, blur) = idleLayers[index]
-                        let layerOpacity = 0.45 * (0.5 + 0.12 * Double(index)) * idleIntensity
-
-                        shape
-                            .stroke(
-                                AngularGradient(
-                                    colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
-                                    center: .center,
-                                    startAngle: .degrees(0),
-                                    endAngle: .degrees(360)
-                                ),
-                                lineWidth: lineWidth
-                            )
-                            .blur(radius: blur)
-                            .saturation(1.3)
-                            .opacity(layerOpacity)
-                            .blendMode(.screen)
-                    }
-                }
-                .transition(.opacity)
+                shape
+                    .stroke(
+                        AngularGradient(
+                            colors: AppleIntelligenceColors.colors + [AppleIntelligenceColors.colors[0]],
+                            center: .center,
+                            startAngle: .degrees(0),
+                            endAngle: .degrees(360)
+                        ),
+                        lineWidth: 3
+                    )
+                    .blur(radius: 4)
+                    .opacity(0.6 * idleIntensity)
+                    .transition(.opacity)
             }
 
             // Active glow - fast, vibrant animation

@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/thienly/VibeRSS/build/Release-iphoneos/VibeRSS_Test.app/VibeRSS_Test'
+relocations:     []
+...

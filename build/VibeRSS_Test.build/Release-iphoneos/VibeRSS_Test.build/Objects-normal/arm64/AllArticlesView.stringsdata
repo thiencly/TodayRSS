@@ -1,0 +1,56 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AllArticlesView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Today",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 93
+        }
+      },
+      {
+        "comment": "",
+        "key": "Retry",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 27
+        }
+      },
+      {
+        "comment": "",
+        "key": "Summary Length",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 101
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear Summaries",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 119
+        }
+      },
+      {
+        "comment": "",
+        "key": "Short",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 106
+        }
+      },
+      {
+        "comment": "",
+        "key": "Long",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 114
+        }
+      }
+    ]
+  },
+  "version": 1
+}

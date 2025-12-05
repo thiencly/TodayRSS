@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'VibeRSS_Test' in project 'VibeRSS_Test'
+➜ Explicit dependency on target 'TodayRSSWidgetExtension' in project 'VibeRSS_Test'
+Target 'TodayRSSWidgetExtension' in project 'VibeRSS_Test' (no dependencies)

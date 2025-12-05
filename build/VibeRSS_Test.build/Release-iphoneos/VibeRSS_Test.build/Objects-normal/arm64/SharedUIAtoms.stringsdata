@@ -1,0 +1,24 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/SharedUIAtoms.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Summary",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 73
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add a source to start vibing",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 98
+        }
+      }
+    ]
+  },
+  "version": 1
+}

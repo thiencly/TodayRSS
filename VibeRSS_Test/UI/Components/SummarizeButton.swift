@@ -22,11 +22,13 @@ struct SummarizeButton: View {
 
     // Visual state
     @State private var pulse = false
+    // Each button gets a random color from the AI palette for rainbow variety
+    @State private var sparkleColor: Color = AppleIntelligenceColors.colors.randomElement() ?? .purple
 
-    // Apple Intelligence glow overlay
+    // Apple Intelligence glow overlay - only show when generating
     @ViewBuilder
     private func rotatingGlowOverlay() -> some View {
-        AppleIntelligenceGlow<Capsule>(isActive: isGenerating, idleIntensity: 0.9)
+        AppleIntelligenceGlow<Capsule>(isActive: isGenerating, showIdle: false)
     }
 
     @ViewBuilder
@@ -91,9 +93,11 @@ struct SummarizeButton: View {
                             .frame(width: 16, height: 16)
                             .transition(.scale.combined(with: .opacity))
                     } else {
+                        // Random AI color per button - creates rainbow variety without gradient cost
                         Image(systemName: "sparkles")
                             .font(.subheadline.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(sparkleColor)
                             .frame(width: 16, height: 16)
                             .transition(.scale.combined(with: .opacity))
                     }
