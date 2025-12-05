@@ -104,9 +104,9 @@ actor ImageDiskCache {
     private func predecodedImage(_ image: UIImage) -> UIImage {
         guard let cgImage = image.cgImage else { return image }
 
-        // For thumbnails, downsample to 120x120 (2x for retina)
+        // For thumbnails, downsample to 320x320 (4x for retina at 80pt display)
         // This reduces memory and rendering time for large source images
-        let maxSize: CGFloat = 120
+        let maxSize: CGFloat = 320
         let width = CGFloat(cgImage.width)
         let height = CGFloat(cgImage.height)
 

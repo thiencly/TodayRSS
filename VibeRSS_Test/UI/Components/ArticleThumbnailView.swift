@@ -34,7 +34,7 @@ struct ArticleThumbnailView: View {
     let url: URL
     @State private var loadedImage: UIImage?
 
-    private let size: CGFloat = 60
+    private let size: CGFloat = 80
 
     var body: some View {
         // Fixed-size placeholder that renders immediately

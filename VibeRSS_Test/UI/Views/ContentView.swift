@@ -912,7 +912,8 @@ struct ContentView: View {
                                         Button {
                                             store.assign(source, to: folder)
                                         } label: {
-                                            Label(folder.name, systemImage: "folder")
+                                            let isCurrentFolder = source.folderID == folder.id
+                                            Label(folder.name, systemImage: isCurrentFolder ? "checkmark" : "folder")
                                         }
                                     }
                                     if source.folderID != nil {
@@ -1098,7 +1099,8 @@ struct ContentView: View {
             }
             .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in
-                    Button(folder.name) {
+                    let isCurrentFolder = source.folderID == folder.id
+                    Button(isCurrentFolder ? "\(folder.name) ✓" : folder.name) {
                         store.assign(source, to: folder)
                     }
                 }
