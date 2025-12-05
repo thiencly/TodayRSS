@@ -558,9 +558,23 @@ struct ContentView: View {
                 let data = try JSONEncoder().encode(validEntries)
                 UserDefaults.standard.set(data, forKey: self.heroCacheKey)
 
-                // Also save seen links for persistence across app restarts
-                let links = validEntries.map { $0.link.absoluteString }
-                let linksData = try JSONEncoder().encode(links)
+                // Only save links that are already marked as seen (isNew = false)
+                // This preserves blue dots during the session - they only clear on app restart
+                let seenLinks = validEntries.filter { !$0.isNew }.map { $0.link.absoluteString }
+                let linksData = try JSONEncoder().encode(seenLinks)
+                UserDefaults.standard.set(linksData, forKey: self.seenLinksKey)
+            } catch {}
+        }
+    }
+
+    /// Save all current hero entry links as "seen" - call when app goes to background
+    private func markAllHeroEntriesAsSeen() {
+        let entries = heroEntries
+        Task.detached(priority: .utility) {
+            do {
+                let validEntries = entries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                let allLinks = validEntries.map { $0.link.absoluteString }
+                let linksData = try JSONEncoder().encode(allLinks)
                 UserDefaults.standard.set(linksData, forKey: self.seenLinksKey)
             } catch {}
         }
@@ -593,15 +607,20 @@ struct ContentView: View {
             pendingHeroRefresh = true
             return
         }
-        isLoadingHero = true
+        // Only show loading indicator if we don't have entries yet (initial load)
+        // This prevents UI jank when refreshing with existing content
+        let showLoadingState = heroEntries.isEmpty
+        if showLoadingState {
+            isLoadingHero = true
+        }
         pendingHeroRefresh = false
 
         let selectedIDs = heroSourceIDs
         let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
 
-        // Use persisted seen links (survives app restart) merged with current entries
+        // Use persisted seen links (survives app restart) merged with entries already marked as seen
         var previouslySeenLinks = loadSeenLinks()
-        for entry in heroEntries {
+        for entry in heroEntries where !entry.isNew {
             previouslySeenLinks.insert(entry.link)
         }
 
@@ -1188,6 +1207,10 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await loadHeroEntries() }
+            } else if phase == .background {
+                // Mark all current hero entries as "seen" when app goes to background
+                // This clears blue dots on next launch if no new articles
+                markAllHeroEntriesAsSeen()
             }
         }
         .onChange(of: store.feeds) { _, _ in
