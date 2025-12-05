@@ -17,7 +17,7 @@ final class BackgroundSyncManager {
     static let shared = BackgroundSyncManager()
 
     // Background task identifiers
-    static nonisolated let refreshTaskIdentifier = "IDKN.VibeRSS.refresh"
+    static nonisolated let refreshTaskIdentifier = "IDKN.TodayRSS.refresh"
 
     // Sync interval options (in minutes)
     enum SyncInterval: Int, CaseIterable, Codable, Sendable {

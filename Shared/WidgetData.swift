@@ -6,7 +6,7 @@
 import Foundation
 
 // MARK: - App Group Identifier
-let appGroupIdentifier = "group.IDKN.VibeRSS"
+let appGroupIdentifier = "group.IDKN.TodayRSS"
 
 // MARK: - Widget Article (Codable version for widget)
 struct WidgetArticle: Codable, Identifiable, Hashable {

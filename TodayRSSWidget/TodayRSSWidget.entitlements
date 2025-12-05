@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.IDKN.VibeRSS</string>
+		<string>group.IDKN.TodayRSS</string>
 	</array>
 </dict>
 </plist>

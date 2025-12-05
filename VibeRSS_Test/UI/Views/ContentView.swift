@@ -323,6 +323,19 @@ struct ContentView: View {
 
     private func saveHeroSourceIDs(_ ids: Set<UUID>) {
         heroSourceIDsData = (try? JSONEncoder().encode(ids)) ?? Data()
+        // Sync to iCloud
+        let idStrings = ids.map { $0.uuidString }
+        iCloudSyncManager.shared.saveHeroSourceIDs(idStrings)
+    }
+
+    private func loadHeroSourceIDsFromiCloud() {
+        if let cloudIDs = iCloudSyncManager.shared.loadHeroSourceIDs() {
+            let uuids = Set(cloudIDs.compactMap { UUID(uuidString: $0) })
+            if !uuids.isEmpty && heroSourceIDs.isEmpty {
+                // Only load from cloud if local is empty
+                saveHeroSourceIDs(uuids)
+            }
+        }
     }
 
     private func toggleHeroSource(_ source: Source) {
@@ -1202,6 +1215,7 @@ struct ContentView: View {
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()
+            loadHeroSourceIDsFromiCloud()
             loadHeroEntriesFromCache()
             isHeroCollapsed = heroCollapsedOnLaunch
             Task { await loadHeroEntries() }

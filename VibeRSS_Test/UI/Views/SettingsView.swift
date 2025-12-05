@@ -79,6 +79,35 @@ struct SettingsView: View {
                     Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
                 }
 
+                // MARK: - iCloud Sync Section
+                Section {
+                    HStack {
+                        Label("iCloud Sync", systemImage: "icloud.fill")
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+
+                    if let lastSync = iCloudSyncManager.shared.getLastModified() {
+                        HStack {
+                            Text("Last Synced")
+                            Spacer()
+                            Text(lastSync, style: .relative)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button {
+                        iCloudSyncManager.shared.forceSync()
+                    } label: {
+                        Text("Sync Now")
+                    }
+                } header: {
+                    Text("iCloud")
+                } footer: {
+                    Text("Your feeds, folders, and highlight sources are automatically synced across all your devices using iCloud.")
+                }
+
                 // MARK: - About Section
                 Section {
                     Button {

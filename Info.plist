@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>IDKN.VibeRSS</string>
+			<string>IDKN.TodayRSS</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>todayrss</string>
@@ -20,7 +20,7 @@
 	</dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>IDKN.VibeRSS.refresh</string>
+		<string>IDKN.TodayRSS.refresh</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

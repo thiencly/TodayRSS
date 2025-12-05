@@ -10,6 +10,7 @@
 // Holds app persistence and in-memory state for feeds and folders.
 // Responsibilities:
 // - Load/save feeds and folders to UserDefaults (debounced)
+// - Sync with iCloud for cross-device persistence
 // - Assign/remove feeds to/from folders
 // - Resolve and refresh favicon icons for feeds
 
@@ -36,13 +37,20 @@ final class FeedStore: ObservableObject {
     private let faviconService = FaviconService()
     private let key = "viberss.feeds"
     private let folderKey = "viberss.folders"
+    private let iCloudSync = iCloudSyncManager.shared
 
     private var saveDebounceTask: Task<Void, Never>? = nil
     private var saveFoldersDebounceTask: Task<Void, Never>? = nil
+    private var iCloudSyncTask: Task<Void, Never>? = nil
+    private var isLoadingFromiCloud = false
 
     init() {
         load()
         loadFolders()
+
+        // Try to merge with iCloud data
+        mergeWithiCloud()
+
         if feeds.isEmpty {
             var initialFeeds: [Feed] = []
 
@@ -57,8 +65,56 @@ final class FeedStore: ObservableObject {
             feeds = initialFeeds
         }
 
+        // Listen for iCloud changes from other devices
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleiCloudChange()
+            }
+        }
+
         // Immediately sync widget config on launch (not debounced)
         WidgetUpdater.shared.updateSourceConfig(feeds: feeds, folders: folders)
+    }
+
+    // MARK: - iCloud Sync
+
+    private func mergeWithiCloud() {
+        isLoadingFromiCloud = true
+        defer { isLoadingFromiCloud = false }
+
+        // Merge feeds
+        if let cloudFeeds = iCloudSync.loadFeeds() {
+            let merged = iCloudSync.mergeFeeds(local: feeds, cloud: cloudFeeds)
+            if merged != feeds {
+                feeds = merged
+            }
+        }
+
+        // Merge folders
+        if let cloudFolders = iCloudSync.loadFolders() {
+            let merged = iCloudSync.mergeFolders(local: folders, cloud: cloudFolders)
+            if merged != folders {
+                folders = merged
+            }
+        }
+    }
+
+    private func handleiCloudChange() {
+        mergeWithiCloud()
+    }
+
+    private func syncToiCloud() {
+        iCloudSyncTask?.cancel()
+        iCloudSyncTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
+            guard !Task.isCancelled else { return }
+            iCloudSync.saveFeeds(feeds)
+            iCloudSync.saveFolders(folders)
+        }
     }
 
     private func save() {
@@ -101,7 +157,12 @@ final class FeedStore: ObservableObject {
         saveDebounceTask?.cancel()
         saveDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
-            await MainActor.run { self.save() }
+            await MainActor.run {
+                self.save()
+                if !self.isLoadingFromiCloud {
+                    self.syncToiCloud()
+                }
+            }
         }
     }
 
@@ -109,7 +170,12 @@ final class FeedStore: ObservableObject {
         saveFoldersDebounceTask?.cancel()
         saveFoldersDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
-            await MainActor.run { self.saveFolders() }
+            await MainActor.run {
+                self.saveFolders()
+                if !self.isLoadingFromiCloud {
+                    self.syncToiCloud()
+                }
+            }
         }
     }
 
