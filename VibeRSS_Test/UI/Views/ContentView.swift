@@ -12,7 +12,7 @@ private struct HeroCardHeightKey: PreferenceKey {
 
 // MARK: - Shimmer Modifier
 
-private struct Shimmer: ViewModifier {
+struct Shimmer: ViewModifier {
     @State private var phase: CGFloat = -1
     func body(content: Content) -> some View {
         content
@@ -74,7 +74,7 @@ private struct Shimmer: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func shimmer(if condition: Bool) -> some View {
         if condition {
@@ -126,8 +126,10 @@ private struct SidebarHeroCardView: View {
     var isUpdating: Bool = false
     var isCollapsed: Bool = false
     var loadingSourceIDs: Set<UUID> = []
+    var gradientRevealLinks: Set<URL> = []  // Entries that should show gradient reveal animation
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
+    var onGradientComplete: ((URL) -> Void)? = nil
 
     private var sortedEntries: [Entry] {
         entries.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
@@ -178,7 +180,7 @@ private struct SidebarHeroCardView: View {
                             placeholderRow
                         }
                     } else {
-                        // Show loaded entries - use identity transition to prevent staggered animations
+                        // Show loaded entries
                         ForEach(visibleEntries) { entry in
                             entryRow(entry)
                         }
@@ -224,6 +226,9 @@ private struct SidebarHeroCardView: View {
     @ViewBuilder
     private func entryRow(_ entry: Entry) -> some View {
         let isLoadingSummary = loadingSourceIDs.contains(entry.source.id)
+        let showGradient = gradientRevealLinks.contains(entry.link)
+        let displayText = entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine
+
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 FeedIconView(iconURL: entry.source.iconURL)
@@ -240,31 +245,37 @@ private struct SidebarHeroCardView: View {
                 }
                 Spacer()
             }
-            // Show shimmer placeholder when generating new summary, otherwise show actual text
-            // Use ZStack with opacity to prevent layout jumps during transition
-            ZStack(alignment: .topLeading) {
-                // Actual text (always in layout, controls height)
-                Text(entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine)
+
+            if isLoadingSummary {
+                // Shimmer placeholder while generating summary
+                VStack(alignment: .leading, spacing: 4) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.secondary.opacity(0.15))
+                        .frame(height: 11)
+                        .shimmer(if: true)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.secondary.opacity(0.15))
+                        .frame(width: 160, height: 11)
+                        .shimmer(if: true)
+                }
+            } else if showGradient {
+                // Text with gradient overlay that fades away
+                GradientRevealText(
+                    text: displayText,
+                    font: .footnote,
+                    foregroundStyle: .secondary,
+                    gradientDuration: 1.0,
+                    onComplete: {
+                        onGradientComplete?(entry.link)
+                    }
+                )
+            } else {
+                // Static text
+                Text(displayText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
-                    .opacity(isLoadingSummary ? 0 : 1)
-
-                // Shimmer overlay when loading
-                if isLoadingSummary {
-                    VStack(alignment: .leading, spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(height: 10)
-                            .shimmer(if: true)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(width: 180, height: 10)
-                            .shimmer(if: true)
-                    }
-                }
             }
-            .animation(.easeInOut(duration: 0.2), value: isLoadingSummary)
         }
         .contentShape(Rectangle())
         .onTapGesture { onTapLink?(entry.link) }
@@ -335,6 +346,7 @@ struct ContentView: View {
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
     @State private var loadingSummarySourceIDs: Set<UUID> = []
+    @State private var gradientRevealLinks: Set<URL> = []
     @State private var heroCardHeight: CGFloat = 200
     @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
@@ -692,92 +704,137 @@ struct ContentView: View {
         // Sort by most recent first
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
 
-        // Step 2: Process summaries one by one, most recent first
-        var builtEntries: [SidebarHeroCardView.Entry] = []
-        var processedSourceIDs: Set<UUID> = []
-        var hasNewContent = false
+        // Step 2: Determine which sources need new summaries
+        var sourcesNeedingNewSummary: Set<UUID> = []
+        var articleByFeedID: [UUID: (feed: Feed, article: FeedItem)] = [:]
 
         for (feed, article) in feedArticles {
-            processedSourceIDs.insert(feed.id)
-            let isNew = !previouslySeenLinks.contains(article.link)
-            if isNew { hasNewContent = true }
-
-            // Check if this source has a different article than before (needs new summary)
+            articleByFeedID[feed.id] = (feed, article)
             let existingEntry = existingEntriesBySource[feed.id]
-            let needsNewSummary = existingEntry?.link != article.link
-
-            // Mark source as loading if it needs a new summary
-            if needsNewSummary && existingEntry != nil {
-                loadingSummarySourceIDs.insert(feed.id)
+            if existingEntry?.link != article.link {
+                sourcesNeedingNewSummary.insert(feed.id)
             }
-
-            // Use fast hero summary - pass RSS description to avoid network fetch
-            let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
-
-            // If summary generation failed, try to keep existing entry for this source
-            if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                loadingSummarySourceIDs.remove(feed.id)
-                if let existingEntry = existingEntry {
-                    // Update isNew flag on existing entry (it's now been "seen")
-                    var updatedEntry = existingEntry
-                    updatedEntry.isNew = false
-                    builtEntries.append(updatedEntry)
-                }
-                continue
-            }
-
-            let entry = SidebarHeroCardView.Entry(
-                source: feed,
-                title: article.title,
-                oneLine: summary,
-                link: article.link,
-                isNew: isNew,
-                pubDate: article.pubDate
-            )
-            builtEntries.append(entry)
-
-            // Update entries first, then remove loading state so shimmer fades to reveal new content
-            if hasNewContent {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    heroEntries = builtEntries
-                }
-            }
-            // Now remove loading state - shimmer will fade to reveal the new entry
-            loadingSummarySourceIDs.remove(feed.id)
         }
 
-        // For sources where feed fetch failed entirely, keep existing entries (mark as seen)
+        // If any sources have new articles, show shimmer on ALL sources to hide reordering
+        let hasAnyNewArticles = !sourcesNeedingNewSummary.isEmpty
+        if hasAnyNewArticles {
+            for feed in feeds {
+                loadingSummarySourceIDs.insert(feed.id)
+            }
+        }
+
+        // Build entries map starting with existing
+        var entriesBySourceID: [UUID: SidebarHeroCardView.Entry] = existingEntriesBySource
+        var processedSourceIDs: Set<UUID> = []
+
+        // Process all feeds concurrently
+        await withTaskGroup(of: (UUID, SidebarHeroCardView.Entry?, URL?, Bool).self) { group in
+            for (feed, article) in feedArticles {
+                let isNew = !previouslySeenLinks.contains(article.link)
+                let existingEntry = existingEntriesBySource[feed.id]
+                let needsNewSummary = sourcesNeedingNewSummary.contains(feed.id)
+
+                group.addTask {
+                    if needsNewSummary {
+                        // Generate new summary (no delay)
+                        let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+
+                        if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            if let existingEntry = existingEntry {
+                                var updatedEntry = existingEntry
+                                updatedEntry.isNew = false
+                                return (feed.id, updatedEntry, nil, true)
+                            }
+                            return (feed.id, nil, nil, true)
+                        } else {
+                            let entry = SidebarHeroCardView.Entry(
+                                source: feed,
+                                title: article.title,
+                                oneLine: summary,
+                                link: article.link,
+                                isNew: isNew,
+                                pubDate: article.pubDate
+                            )
+                            return (feed.id, entry, article.link, true)
+                        }
+                    } else {
+                        // No new summary needed - wait 1s then reveal
+                        if hasAnyNewArticles {
+                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        }
+
+                        let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+
+                        if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            let entry = SidebarHeroCardView.Entry(
+                                source: feed,
+                                title: article.title,
+                                oneLine: summary,
+                                link: article.link,
+                                isNew: false,
+                                pubDate: article.pubDate
+                            )
+                            return (feed.id, entry, nil, false)
+                        }
+                        return (feed.id, nil, nil, false)
+                    }
+                }
+            }
+
+            // Process results as they complete
+            for await (feedID, entry, gradientLink, needsGradient) in group {
+                processedSourceIDs.insert(feedID)
+
+                if let entry = entry {
+                    entriesBySourceID[feedID] = entry
+                }
+
+                // Remove shimmer for this source
+                loadingSummarySourceIDs.remove(feedID)
+
+                // Show gradient reveal for new summaries
+                if let link = gradientLink, needsGradient {
+                    gradientRevealLinks.insert(link)
+                }
+
+                // Update UI after each source completes
+                updateHeroEntriesFromMap(entriesBySourceID)
+            }
+        }
+
+        // For sources where feed fetch failed entirely, keep existing entries
         for (sourceID, existingEntry) in existingEntriesBySource {
             if !processedSourceIDs.contains(sourceID) && selectedIDs.contains(sourceID) {
                 var updatedEntry = existingEntry
                 updatedEntry.isNew = false
-                builtEntries.append(updatedEntry)
+                entriesBySourceID[sourceID] = updatedEntry
+                loadingSummarySourceIDs.remove(sourceID)
             }
         }
 
-        // Final sort by date
-        builtEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-
-        // Update hero entries without animation to prevent janky expand/collapse
-        if heroEntries != builtEntries {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                heroEntries = builtEntries
-            }
-        }
+        // Final update
+        updateHeroEntriesFromMap(entriesBySourceID)
 
         saveHeroEntriesToCache()
         isLoadingHero = false
         isInitialLoad = false
-        loadingSummarySourceIDs.removeAll()  // Clear any remaining loading state
+        loadingSummarySourceIDs.removeAll()
 
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
             pendingHeroRefresh = false
             Task { await loadHeroEntries() }
+        }
+    }
+
+    /// Helper to update heroEntries from a source ID -> entry map, sorted by date
+    private func updateHeroEntriesFromMap(_ map: [UUID: SidebarHeroCardView.Entry]) {
+        let sorted = map.values.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            heroEntries = sorted
         }
     }
 
@@ -1047,6 +1104,7 @@ struct ContentView: View {
                         isUpdating: isLoadingHero,
                         isCollapsed: isHeroCollapsed,
                         loadingSourceIDs: loadingSummarySourceIDs,
+                        gradientRevealLinks: gradientRevealLinks,
                         onTapLink: { url in
                             heroWebLink = WebLink(url: url)
                         },
@@ -1054,6 +1112,9 @@ struct ContentView: View {
                             withAnimation(.snappy(duration: 0.25)) {
                                 isHeroCollapsed.toggle()
                             }
+                        },
+                        onGradientComplete: { link in
+                            gradientRevealLinks.remove(link)
                         }
                     )
                     .padding(.horizontal, 20)
