@@ -93,7 +93,9 @@ final class BackgroundSyncManager {
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.refreshTaskIdentifier)
 
         guard let interval = syncInterval.timeInterval else {
-            // Manual mode - don't schedule
+            // Manual mode - don't schedule background task
+            // But still schedule a minimal refresh to keep widget data fresh
+            scheduleMinimalBackgroundRefresh()
             return
         }
 
@@ -107,6 +109,21 @@ final class BackgroundSyncManager {
             print("Background refresh scheduled for \(syncInterval.displayName)")
         } catch {
             print("Failed to schedule background refresh: \(error)")
+        }
+    }
+
+    /// Schedule a minimal background refresh even in manual mode
+    /// This helps keep widget timelines populated
+    private func scheduleMinimalBackgroundRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
+        // Schedule for 4 hours from now - just to ensure widget doesn't go completely stale
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 4 * 60 * 60)
+
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            print("Minimal background refresh scheduled (4 hours)")
+        } catch {
+            print("Failed to schedule minimal background refresh: \(error)")
         }
     }
 

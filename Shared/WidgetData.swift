@@ -138,7 +138,9 @@ class WidgetDataManager {
     // Get articles for a specific feed (sorted by date, newest first)
     func articles(for feedID: String) -> [WidgetArticle] {
         let articles = loadArticles()
-        let feedArticles = articles[feedID] ?? []
+        // Use case-insensitive lookup to handle potential UUID format differences
+        let normalizedID = feedID.uppercased()
+        let feedArticles = articles.first { $0.key.uppercased() == normalizedID }?.value ?? []
         return feedArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
     }
 
@@ -146,10 +148,14 @@ class WidgetDataManager {
     func articles(forFolder folderID: String) -> [WidgetArticle] {
         let config = loadSourceConfig()
         let articles = loadArticles()
-        let feedsInFolder = config.feeds.filter { $0.folderID == folderID }
+        let normalizedFolderID = folderID.uppercased()
+        // Case-insensitive folder ID matching
+        let feedsInFolder = config.feeds.filter { $0.folderID?.uppercased() == normalizedFolderID }
         var allArticles: [WidgetArticle] = []
         for feed in feedsInFolder {
-            if let feedArticles = articles[feed.id] {
+            // Case-insensitive feed ID lookup
+            let normalizedFeedID = feed.id.uppercased()
+            if let feedArticles = articles.first(where: { $0.key.uppercased() == normalizedFeedID })?.value {
                 allArticles.append(contentsOf: feedArticles)
             }
         }

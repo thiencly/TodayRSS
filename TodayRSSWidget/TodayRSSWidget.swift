@@ -158,6 +158,22 @@ struct SourceQuery: EntityQuery {
                 results.append(SourceEntity(id: feed.id, displayName: feed.title, isFolder: false))
             } else if let folder = config.folders.first(where: { $0.id == id }) {
                 results.append(SourceEntity(id: folder.id, displayName: folder.name, isFolder: true))
+            } else {
+                // Entity not found in config - this can happen if:
+                // 1. Config hasn't been synced from main app yet
+                // 2. The folder/feed was deleted
+                // Return a placeholder entity to preserve the user's selection
+                // and allow the widget to retry when config is synced
+                //
+                // Try to determine if this was a folder by checking if any feeds reference it
+                let isFolderID = config.feeds.contains { $0.folderID == id }
+                if isFolderID {
+                    // This ID is referenced as a folderID, so it's a folder
+                    results.append(SourceEntity(id: id, displayName: "📁 Folder", isFolder: true))
+                } else {
+                    // Unknown - assume it's a feed
+                    results.append(SourceEntity(id: id, displayName: "Source", isFolder: false))
+                }
             }
         }
         return results
@@ -220,19 +236,44 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: SmallWidgetIntent, in context: Context) async -> Timeline<SmallWidgetEntry> {
         var articles = getArticles(for: configuration.source)
+        let sourceName = configuration.source?.displayName ?? "All Sources"
 
         if articles.isEmpty {
             articles = sampleArticles
         }
 
-        let entry = SmallWidgetEntry(
-            date: Date(),
-            articles: articles,
-            sourceName: configuration.source?.displayName ?? "All Sources"
-        )
+        // Create multiple timeline entries to rotate through articles
+        // This ensures content updates even when iOS throttles refresh requests
+        var entries: [SmallWidgetEntry] = []
+        let now = Date()
+        let rotationInterval: TimeInterval = 30 * 60 // 30 minutes per article
 
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        return Timeline(entries: [entry], policy: .after(nextUpdate))
+        // Create entries for each article, rotating every 30 minutes
+        // This gives the widget content for 12+ hours without needing a refresh
+        let articlesToShow = Array(articles.prefix(24)) // Up to 24 articles = 12 hours of content
+        for (index, _) in articlesToShow.enumerated() {
+            let entryDate = now.addingTimeInterval(Double(index) * rotationInterval)
+            // Rotate the articles array so each entry shows a different article first
+            let rotatedArticles = Array(articlesToShow.dropFirst(index)) + Array(articlesToShow.prefix(index))
+            entries.append(SmallWidgetEntry(
+                date: entryDate,
+                articles: rotatedArticles,
+                sourceName: sourceName
+            ))
+        }
+
+        // If we have fewer entries, ensure we have at least one
+        if entries.isEmpty {
+            entries.append(SmallWidgetEntry(
+                date: now,
+                articles: articles,
+                sourceName: sourceName
+            ))
+        }
+
+        // Request refresh after all entries are exhausted (12+ hours from now)
+        // Using .atEnd tells iOS to reload only when timeline runs out
+        return Timeline(entries: entries, policy: .atEnd)
     }
 }
 
@@ -531,7 +572,7 @@ struct MediumWidgetProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: MediumWidgetIntent, in context: Context) async -> MediumWidgetEntry {
-        let (left, right) = getLeftRightArticles(for: configuration)
+        let (left, right) = getLeftRightArticles(for: configuration, offset: 0)
         return MediumWidgetEntry(
             date: Date(),
             leftArticle: left ?? sampleArticles[0],
@@ -540,31 +581,81 @@ struct MediumWidgetProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: MediumWidgetIntent, in context: Context) async -> Timeline<MediumWidgetEntry> {
-        let (left, right) = getLeftRightArticles(for: configuration)
-
-        let entry = MediumWidgetEntry(
-            date: Date(),
-            leftArticle: left ?? sampleArticles.first,
-            rightArticle: right ?? (sampleArticles.count > 1 ? sampleArticles[1] : nil)
-        )
-
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        return Timeline(entries: [entry], policy: .after(nextUpdate))
-    }
-
-    private func getLeftRightArticles(for configuration: MediumWidgetIntent) -> (WidgetArticle?, WidgetArticle?) {
         let leftArticles = getArticles(for: configuration.leftSource)
         let rightArticles = getArticles(for: configuration.rightSource)
 
+        // Create multiple timeline entries to rotate through articles
+        // This ensures content updates even when iOS throttles refresh requests
+        var entries: [MediumWidgetEntry] = []
+        let now = Date()
+        let rotationInterval: TimeInterval = 30 * 60 // 30 minutes per rotation
+
+        // Determine how many rotations we can do (up to 24 = 12 hours)
+        let sameSource = configuration.leftSource?.id == configuration.rightSource?.id
+        let maxRotations: Int
+        if sameSource {
+            // For same source, we need pairs of articles
+            maxRotations = min(24, max(1, leftArticles.count / 2))
+        } else {
+            // For different sources, rotate each independently
+            maxRotations = min(24, max(leftArticles.count, rightArticles.count, 1))
+        }
+
+        for offset in 0..<maxRotations {
+            let entryDate = now.addingTimeInterval(Double(offset) * rotationInterval)
+            let (left, right) = getLeftRightArticles(
+                for: configuration,
+                offset: offset,
+                leftArticles: leftArticles,
+                rightArticles: rightArticles
+            )
+            entries.append(MediumWidgetEntry(
+                date: entryDate,
+                leftArticle: left ?? sampleArticles.first,
+                rightArticle: right ?? (sampleArticles.count > 1 ? sampleArticles[1] : nil)
+            ))
+        }
+
+        // Ensure at least one entry
+        if entries.isEmpty {
+            entries.append(MediumWidgetEntry(
+                date: now,
+                leftArticle: sampleArticles.first,
+                rightArticle: sampleArticles.count > 1 ? sampleArticles[1] : nil
+            ))
+        }
+
+        // Request refresh after all entries are exhausted
+        return Timeline(entries: entries, policy: .atEnd)
+    }
+
+    private func getLeftRightArticles(for configuration: MediumWidgetIntent, offset: Int) -> (WidgetArticle?, WidgetArticle?) {
+        let leftArticles = getArticles(for: configuration.leftSource)
+        let rightArticles = getArticles(for: configuration.rightSource)
+        return getLeftRightArticles(for: configuration, offset: offset, leftArticles: leftArticles, rightArticles: rightArticles)
+    }
+
+    private func getLeftRightArticles(
+        for configuration: MediumWidgetIntent,
+        offset: Int,
+        leftArticles: [WidgetArticle],
+        rightArticles: [WidgetArticle]
+    ) -> (WidgetArticle?, WidgetArticle?) {
         // If same source selected for both (or both nil), show 2 articles from that source
         if configuration.leftSource?.id == configuration.rightSource?.id {
             let allFromSource = leftArticles
-            let left = allFromSource.first
-            let right = allFromSource.dropFirst().first
+            guard !allFromSource.isEmpty else { return (nil, nil) }
+            // Rotate through pairs
+            let leftIndex = (offset * 2) % allFromSource.count
+            let rightIndex = (offset * 2 + 1) % allFromSource.count
+            let left = allFromSource[leftIndex]
+            let right = leftIndex != rightIndex ? allFromSource[rightIndex] : nil
             return (left, right)
         } else {
-            // Different sources - take first article from each
-            return (leftArticles.first, rightArticles.first)
+            // Different sources - rotate each independently
+            let left = leftArticles.isEmpty ? nil : leftArticles[offset % leftArticles.count]
+            let right = rightArticles.isEmpty ? nil : rightArticles[offset % rightArticles.count]
+            return (left, right)
         }
     }
 }
