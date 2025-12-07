@@ -111,7 +111,8 @@ private struct PlainDisclosureStyle: DisclosureGroupStyle {
 
 private struct SidebarHeroCardView: View {
     struct Entry: Identifiable, Hashable, Codable {
-        let id = UUID()
+        // Use link as stable identity to prevent animation jank when entries update
+        var id: URL { link }
         let source: Source
         let title: String
         let oneLine: String
@@ -124,6 +125,7 @@ private struct SidebarHeroCardView: View {
     var expectedCount: Int = 3
     var isUpdating: Bool = false
     var isCollapsed: Bool = false
+    var loadingSourceIDs: Set<UUID> = []
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
 
@@ -176,7 +178,7 @@ private struct SidebarHeroCardView: View {
                             placeholderRow
                         }
                     } else {
-                        // Show loaded entries
+                        // Show loaded entries - use identity transition to prevent staggered animations
                         ForEach(visibleEntries) { entry in
                             entryRow(entry)
                         }
@@ -188,9 +190,9 @@ private struct SidebarHeroCardView: View {
                         }
                     }
                 }
+                .animation(nil, value: entries.count)  // Disable animation for entry count changes
             }
             .animation(.snappy(duration: 0.25), value: isCollapsed)
-            .animation(.snappy(duration: 0.25), value: entries.count)
         }
         .padding(16)
         .background(
@@ -221,6 +223,7 @@ private struct SidebarHeroCardView: View {
 
     @ViewBuilder
     private func entryRow(_ entry: Entry) -> some View {
+        let isLoadingSummary = loadingSourceIDs.contains(entry.source.id)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 FeedIconView(iconURL: entry.source.iconURL)
@@ -237,10 +240,31 @@ private struct SidebarHeroCardView: View {
                 }
                 Spacer()
             }
-            Text(entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // Show shimmer placeholder when generating new summary, otherwise show actual text
+            // Use ZStack with opacity to prevent layout jumps during transition
+            ZStack(alignment: .topLeading) {
+                // Actual text (always in layout, controls height)
+                Text(entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .opacity(isLoadingSummary ? 0 : 1)
+
+                // Shimmer overlay when loading
+                if isLoadingSummary {
+                    VStack(alignment: .leading, spacing: 4) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 10)
+                            .shimmer(if: true)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(width: 180, height: 10)
+                            .shimmer(if: true)
+                    }
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: isLoadingSummary)
         }
         .contentShape(Rectangle())
         .onTapGesture { onTapLink?(entry.link) }
@@ -310,6 +334,7 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
+    @State private var loadingSummarySourceIDs: Set<UUID> = []
     @State private var heroCardHeight: CGFloat = 200
     @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
@@ -677,12 +702,22 @@ struct ContentView: View {
             let isNew = !previouslySeenLinks.contains(article.link)
             if isNew { hasNewContent = true }
 
+            // Check if this source has a different article than before (needs new summary)
+            let existingEntry = existingEntriesBySource[feed.id]
+            let needsNewSummary = existingEntry?.link != article.link
+
+            // Mark source as loading if it needs a new summary
+            if needsNewSummary && existingEntry != nil {
+                loadingSummarySourceIDs.insert(feed.id)
+            }
+
             // Use fast hero summary - pass RSS description to avoid network fetch
             let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
 
             // If summary generation failed, try to keep existing entry for this source
             if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                if let existingEntry = existingEntriesBySource[feed.id] {
+                loadingSummarySourceIDs.remove(feed.id)
+                if let existingEntry = existingEntry {
                     // Update isNew flag on existing entry (it's now been "seen")
                     var updatedEntry = existingEntry
                     updatedEntry.isNew = false
@@ -701,7 +736,7 @@ struct ContentView: View {
             )
             builtEntries.append(entry)
 
-            // Only update UI progressively if there's actually new content
+            // Update entries first, then remove loading state so shimmer fades to reveal new content
             if hasNewContent {
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
@@ -709,6 +744,8 @@ struct ContentView: View {
                     heroEntries = builtEntries
                 }
             }
+            // Now remove loading state - shimmer will fade to reveal the new entry
+            loadingSummarySourceIDs.remove(feed.id)
         }
 
         // For sources where feed fetch failed entirely, keep existing entries (mark as seen)
@@ -735,6 +772,7 @@ struct ContentView: View {
         saveHeroEntriesToCache()
         isLoadingHero = false
         isInitialLoad = false
+        loadingSummarySourceIDs.removeAll()  // Clear any remaining loading state
 
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
@@ -1008,6 +1046,7 @@ struct ContentView: View {
                         expectedCount: heroSourceIDs.count,
                         isUpdating: isLoadingHero,
                         isCollapsed: isHeroCollapsed,
+                        loadingSourceIDs: loadingSummarySourceIDs,
                         onTapLink: { url in
                             heroWebLink = WebLink(url: url)
                         },
