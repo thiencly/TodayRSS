@@ -15,6 +15,8 @@ struct AllArticlesView: View {
     @State private var currentDay: Date? = nil
     @State private var suppressNextRowTap = false
     @State private var hasCachedSummaryCache: Set<UUID> = []
+    @State private var showLengthChangeAlert: Bool = false
+    @State private var pendingLengthChange: String? = nil
 
     var body: some View {
         Group {
@@ -100,7 +102,10 @@ struct AllArticlesView: View {
                 Menu {
                     Section("Summary Length") {
                         Button {
-                            summaryLengthRaw = "short"
+                            if summaryLengthRaw != "short" {
+                                pendingLengthChange = "short"
+                                showLengthChangeAlert = true
+                            }
                         } label: {
                             HStack {
                                 Text("Short")
@@ -108,7 +113,10 @@ struct AllArticlesView: View {
                             }
                         }
                         Button {
-                            summaryLengthRaw = "long"
+                            if summaryLengthRaw != "long" {
+                                pendingLengthChange = "long"
+                                showLengthChangeAlert = true
+                            }
                         } label: {
                             HStack {
                                 Text("Long")
@@ -130,6 +138,28 @@ struct AllArticlesView: View {
         }
         .onDisappear {
             NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+        }
+        .alert("Change Summary Length?", isPresented: $showLengthChangeAlert) {
+            Button("Cancel", role: .cancel) {
+                pendingLengthChange = nil
+            }
+            Button("Continue", role: .destructive) {
+                if let newLength = pendingLengthChange {
+                    // Clear local state
+                    inlineSummaries.removeAll()
+                    aiSummarized.removeAll()
+                    expandedSummaries.removeAll()
+                    summaryErrors.removeAll()
+                    hasCachedSummaryCache.removeAll()
+                    // Clear cached summaries (not hero summaries)
+                    Task { await ArticleSummarizer.shared.clearArticleSummaries() }
+                    // Apply new length
+                    summaryLengthRaw = newLength
+                    pendingLengthChange = nil
+                }
+            }
+        } message: {
+            Text("Changing summary length will clear all existing article summaries. This won't affect Today Highlights.")
         }
     }
 

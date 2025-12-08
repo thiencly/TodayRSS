@@ -70,6 +70,11 @@ final class BackgroundSyncManager {
         if let lastSync = UserDefaults.standard.object(forKey: lastSyncKey) as? Date {
             self.lastSyncDate = lastSync
         }
+
+        // Sync interval to App Group for widget access
+        if let sharedDefaults = UserDefaults(suiteName: "group.IDKN.TodayRSS") {
+            sharedDefaults.set(syncInterval.rawValue, forKey: "widgetRefreshInterval")
+        }
     }
 
     // MARK: - Task Registration
@@ -345,6 +350,10 @@ final class BackgroundSyncManager {
 
     private func saveSyncInterval() {
         UserDefaults.standard.set(syncInterval.rawValue, forKey: syncIntervalKey)
+        // Also save to App Group so widget can read it
+        if let sharedDefaults = UserDefaults(suiteName: "group.IDKN.TodayRSS") {
+            sharedDefaults.set(syncInterval.rawValue, forKey: "widgetRefreshInterval")
+        }
     }
 
     // MARK: - Manual Sync

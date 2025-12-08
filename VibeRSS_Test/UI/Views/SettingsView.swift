@@ -1,14 +1,41 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
+    @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
 
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Background Refresh Warning
+                if backgroundRefreshStatus != .available {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Background Refresh Disabled")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Widgets won't update automatically. Enable Background App Refresh in Settings → General → Background App Refresh.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    }
+                }
+
                 // MARK: - Background Sync Section
                 Section {
                     Picker("Sync Interval", selection: $syncManager.syncInterval) {
@@ -130,6 +157,9 @@ struct SettingsView: View {
             }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView(isPresented: $showOnboarding)
+            }
+            .onAppear {
+                backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

@@ -379,6 +379,8 @@ struct ContentView: View {
         var ids = heroSourceIDs
         if ids.contains(source.id) {
             ids.remove(source.id)
+            // Immediately remove the entry from heroEntries for instant UI feedback
+            heroEntries.removeAll { $0.source.id == source.id }
         } else if ids.count < 3 {
             ids.insert(source.id)
         }
@@ -737,27 +739,36 @@ struct ContentView: View {
 
                 group.addTask {
                     if needsNewSummary {
-                        // Generate new summary (no delay)
-                        let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+                        // Generate new summary with retry on failure
+                        var summary = ""
+                        for attempt in 1...3 {
+                            summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+                            if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                break
+                            }
+                            // Wait before retry (increasing delay)
+                            if attempt < 3 {
+                                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000) // 0.5s, 1s
+                            }
+                        }
 
+                        // If summary still empty after retries, keep existing entry
                         if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if let existingEntry = existingEntry {
-                                var updatedEntry = existingEntry
-                                updatedEntry.isNew = false
-                                return (feed.id, updatedEntry, nil, true)
+                                return (feed.id, existingEntry, nil, false)
                             }
-                            return (feed.id, nil, nil, true)
-                        } else {
-                            let entry = SidebarHeroCardView.Entry(
-                                source: feed,
-                                title: article.title,
-                                oneLine: summary,
-                                link: article.link,
-                                isNew: isNew,
-                                pubDate: article.pubDate
-                            )
-                            return (feed.id, entry, article.link, true)
+                            return (feed.id, nil, nil, false)
                         }
+
+                        let entry = SidebarHeroCardView.Entry(
+                            source: feed,
+                            title: article.title,
+                            oneLine: summary,
+                            link: article.link,
+                            isNew: isNew,
+                            pubDate: article.pubDate
+                        )
+                        return (feed.id, entry, article.link, true)
                     } else {
                         // No new summary needed - wait 1s then reveal
                         if hasAnyNewArticles {
@@ -894,7 +905,7 @@ struct ContentView: View {
                 toggleHeroSource(source)
             } label: {
                 Label(
-                    isHeroSource(source) ? "Remove from Today" : "Add to Today",
+                    isHeroSource(source) ? "Remove from Highlights" : "Add to Highlights",
                     systemImage: isHeroSource(source) ? "minus.circle" : "plus.circle"
                 )
             }
@@ -995,11 +1006,11 @@ struct ContentView: View {
                                     toggleHeroSource(source)
                                 } label: {
                                     if isHeroSource(source) {
-                                        Label("Remove from Hero Card", systemImage: "star.slash")
+                                        Label("Remove from Highlights", systemImage: "star.slash")
                                     } else if heroSourceIDs.count < 3 {
-                                        Label("Add to Hero Card", systemImage: "star")
+                                        Label("Add to Highlights", systemImage: "star")
                                     } else {
-                                        Label("Hero Card Full (3 max)", systemImage: "star.slash")
+                                        Label("Highlights Full (3 max)", systemImage: "star.slash")
                                     }
                                 }
                                 .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)

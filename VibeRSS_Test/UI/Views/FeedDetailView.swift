@@ -12,6 +12,8 @@ struct FeedDetailView: View {
 
     @State private var summaryLengthRaw: String = "short"
     @State private var aiSummarized: Set<UUID> = []
+    @State private var showLengthChangeAlert: Bool = false
+    @State private var pendingLengthChange: String? = nil
 
     // Per-source summary length storage
     private var summaryLengthKey: String { "summaryLength_source_\(source.id.uuidString)" }
@@ -118,8 +120,10 @@ struct FeedDetailView: View {
                 Menu {
                     Section("Summary Length") {
                         Button {
-                            summaryLengthRaw = "short"
-                            saveSummaryLength("short")
+                            if summaryLengthRaw != "short" {
+                                pendingLengthChange = "short"
+                                showLengthChangeAlert = true
+                            }
                         } label: {
                             HStack {
                                 Text("Short")
@@ -127,8 +131,10 @@ struct FeedDetailView: View {
                             }
                         }
                         Button {
-                            summaryLengthRaw = "long"
-                            saveSummaryLength("long")
+                            if summaryLengthRaw != "long" {
+                                pendingLengthChange = "long"
+                                showLengthChangeAlert = true
+                            }
                         } label: {
                             HStack {
                                 Text("Long")
@@ -147,6 +153,29 @@ struct FeedDetailView: View {
                     Image(systemName: "sparkles")
                 }
             }
+        }
+        .alert("Change Summary Length?", isPresented: $showLengthChangeAlert) {
+            Button("Cancel", role: .cancel) {
+                pendingLengthChange = nil
+            }
+            Button("Continue", role: .destructive) {
+                if let newLength = pendingLengthChange {
+                    // Clear local state
+                    inlineSummaries.removeAll()
+                    aiSummarized.removeAll()
+                    expandedSummaries.removeAll()
+                    summaryErrors.removeAll()
+                    hasCachedSummaryCache.removeAll()
+                    // Clear cached summaries (not hero summaries)
+                    Task { await ArticleSummarizer.shared.clearArticleSummaries() }
+                    // Apply new length
+                    summaryLengthRaw = newLength
+                    saveSummaryLength(newLength)
+                    pendingLengthChange = nil
+                }
+            }
+        } message: {
+            Text("Changing summary length will clear all existing article summaries. This won't affect Today Highlights.")
         }
         .onDisappear {
             NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
