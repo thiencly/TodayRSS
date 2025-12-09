@@ -337,6 +337,8 @@ struct ContentView: View {
     @AppStorage("lastRefreshAllDate") private var lastRefreshAllDate: Double = 0
     @AppStorage("areSourcesCollapsed") private var areSourcesCollapsed: Bool = false
     @AppStorage("areFoldersCollapsed") private var areFoldersCollapsed: Bool = false
+    @AppStorage("showLatestView") private var showLatestView: Bool = true
+    @AppStorage("showTodayView") private var showTodayView: Bool = true
     @State private var showingSettings: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
@@ -353,6 +355,7 @@ struct ContentView: View {
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
     @State private var isInitialLoad: Bool = true
+    @State private var sidebarRefreshTrigger: UUID = UUID()
 
     private var heroSourceIDs: Set<UUID> {
         (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
@@ -740,10 +743,13 @@ struct ContentView: View {
                 group.addTask {
                     if needsNewSummary {
                         // Generate new summary with retry on failure
+                        // Minimum 50 chars to avoid very short/useless summaries
+                        let minSummaryLength = 50
                         var summary = ""
                         for attempt in 1...3 {
                             summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
-                            if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !trimmed.isEmpty && trimmed.count >= minSummaryLength {
                                 break
                             }
                             // Wait before retry (increasing delay)
@@ -752,8 +758,9 @@ struct ContentView: View {
                             }
                         }
 
-                        // If summary still empty after retries, keep existing entry
-                        if summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // If summary still too short after retries, keep existing entry
+                        let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmedSummary.isEmpty || trimmedSummary.count < minSummaryLength {
                             if let existingEntry = existingEntry {
                                 return (feed.id, existingEntry, nil, false)
                             }
@@ -778,12 +785,14 @@ struct ContentView: View {
                         let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
 
                         if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            // Preserve isNew status from existing entry (don't reset blue dot)
+                            let preservedIsNew = existingEntry?.isNew ?? isNew
                             let entry = SidebarHeroCardView.Entry(
                                 source: feed,
                                 title: article.title,
                                 oneLine: summary,
                                 link: article.link,
-                                isNew: false,
+                                isNew: preservedIsNew,
                                 pubDate: article.pubDate
                             )
                             return (feed.id, entry, nil, false)
@@ -814,12 +823,10 @@ struct ContentView: View {
             }
         }
 
-        // For sources where feed fetch failed entirely, keep existing entries
+        // For sources where feed fetch failed entirely, keep existing entries (preserve isNew status)
         for (sourceID, existingEntry) in existingEntriesBySource {
             if !processedSourceIDs.contains(sourceID) && selectedIDs.contains(sourceID) {
-                var updatedEntry = existingEntry
-                updatedEntry.isNew = false
-                entriesBySourceID[sourceID] = updatedEntry
+                entriesBySourceID[sourceID] = existingEntry
                 loadingSummarySourceIDs.remove(sourceID)
             }
         }
@@ -849,9 +856,40 @@ struct ContentView: View {
         }
     }
 
+    /// Fetch latest articles for all sources to populate sidebar blue dots on app launch
+    @MainActor private func refreshLatestArticlesForSidebar() async {
+        let feeds = store.feeds
+        let service = refreshService
+
+        await withTaskGroup(of: (UUID, [URL]).self) { group in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        let items = try await service.loadItems(from: feed.url)
+                        let urls = items.prefix(20).map { $0.link }
+                        return (feed.id, urls)
+                    } catch {
+                        return (feed.id, [])
+                    }
+                }
+            }
+            for await (feedID, urls) in group {
+                if !urls.isEmpty {
+                    // Use immediate save so sidebar refresh sees the updated data
+                    await ArticleReadStateManager.shared.updateLatestArticlesImmediate(for: feedID, urls: urls)
+                }
+            }
+        }
+
+        // Refresh sidebar to show blue dots
+        sidebarRefreshTrigger = UUID()
+    }
+
     @ViewBuilder
     private func folderRow(_ folder: Folder) -> some View {
         let folderFeeds = store.feeds.filter { $0.folderID == folder.id }
+        let sourceIDs = folderFeeds.map { $0.id }
+        let hasNewArticles = ArticleReadStateManager.folderHasNewArticlesSync(folder.id, sourceIDs: sourceIDs)
 
         NavigationLink {
             FolderDetailView(folder: folder, refreshID: refreshID)
@@ -859,6 +897,11 @@ struct ContentView: View {
         } label: {
             HStack {
                 Label(folder.name, systemImage: "folder")
+                if hasNewArticles {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                }
                 Spacer()
                 Text("\(folderFeeds.count)")
                     .font(.caption)
@@ -884,12 +927,19 @@ struct ContentView: View {
 
     @ViewBuilder
     private func folderSourceRow(_ source: Feed) -> some View {
+        let hasNewArticles = ArticleReadStateManager.sourceHasNewArticlesSync(source.id)
+
         NavigationLink {
             FeedDetailView(source: source, refreshID: refreshID)
         } label: {
             HStack(spacing: 12) {
                 FeedIconView(iconURL: source.iconURL)
                 Text(source.title)
+                if hasNewArticles {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                }
                 Spacer()
                 if isHeroSource(source) {
                     Image(systemName: "checkmark.circle.fill")
@@ -935,20 +985,24 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             List {
                 Section {
-                    NavigationLink {
-                        CurrentView(refreshID: refreshID)
-                            .environmentObject(store)
-                    } label: {
-                        Label("Latest", systemImage: "sparkles.rectangle.stack")
-                            .contentShape(Rectangle())
+                    if showLatestView {
+                        NavigationLink {
+                            CurrentView(refreshID: refreshID)
+                                .environmentObject(store)
+                        } label: {
+                            Label("Latest", systemImage: "sparkles.rectangle.stack")
+                                .contentShape(Rectangle())
+                        }
                     }
 
-                    NavigationLink {
-                        AllArticlesView(refreshID: refreshID)
-                            .environmentObject(store)
-                    } label: {
-                        Label("Today", systemImage: "newspaper.fill")
-                            .contentShape(Rectangle())
+                    if showTodayView {
+                        NavigationLink {
+                            AllArticlesView(refreshID: refreshID)
+                                .environmentObject(store)
+                        } label: {
+                            Label("Today", systemImage: "newspaper.fill")
+                                .contentShape(Rectangle())
+                        }
                     }
 
                     ForEach(store.folders) { folder in
@@ -986,12 +1040,18 @@ struct ContentView: View {
                 Section {
                     if !areSourcesCollapsed {
                         ForEach(store.feeds) { source in
+                            let hasNewArticles = ArticleReadStateManager.sourceHasNewArticlesSync(source.id)
                             NavigationLink {
                                 FeedDetailView(source: source, refreshID: refreshID)
                             } label: {
                                 HStack(spacing: 12) {
                                     FeedIconView(iconURL: source.iconURL)
                                     Text(source.title)
+                                    if hasNewArticles {
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 8, height: 8)
+                                    }
                                     Spacer()
                                     if isHeroSource(source) {
                                         Image(systemName: "checkmark.circle.fill")
@@ -1105,6 +1165,7 @@ struct ContentView: View {
                 }
                 .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
             }
+            .id(sidebarRefreshTrigger)
             .navigationTitle("TodayRSS")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -1329,10 +1390,16 @@ struct ContentView: View {
             loadHeroSourceIDsFromiCloud()
             loadHeroEntriesFromCache()
             isHeroCollapsed = heroCollapsedOnLaunch
-            Task { await loadHeroEntries() }
+            Task {
+                await loadHeroEntries()
+                // Fetch latest articles to show blue dots on sources/folders
+                await refreshLatestArticlesForSidebar()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                // Refresh sidebar to update blue dot indicators when app becomes active
+                sidebarRefreshTrigger = UUID()
                 Task { await loadHeroEntries() }
             } else if phase == .background {
                 // Mark all current hero entries as "seen" when app goes to background
@@ -1344,10 +1411,13 @@ struct ContentView: View {
             Task { await loadHeroEntries() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReturnToSourceList)) { _ in
+            // Refresh sidebar to update blue dot indicators
+            sidebarRefreshTrigger = UUID()
             Task { await loadHeroEntries() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .backgroundSyncCompleted)) { _ in
-            // Refresh hero entries after background sync completes (RSSCache now has fresh data)
+            // Refresh hero entries and sidebar after background sync completes
+            sidebarRefreshTrigger = UUID()
             Task { await loadHeroEntries() }
         }
     }

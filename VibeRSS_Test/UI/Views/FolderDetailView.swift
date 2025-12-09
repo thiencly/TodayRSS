@@ -27,6 +27,8 @@ struct FolderDetailView: View {
     }
     @State private var suppressNextRowTap = false
     @State private var hasCachedSummaryCache: Set<UUID> = []
+    @State private var readURLs: Set<URL> = []
+    @State private var seenURLs: Set<URL> = []
 
     var body: some View {
         Group {
@@ -44,6 +46,8 @@ struct FolderDetailView: View {
                     ArticleRowView(
                         state: rowState,
                         onTapArticle: {
+                            readURLs.insert(item.link)
+                            Task { await ArticleReadStateManager.shared.markAsRead(item.link) }
                             webLink = WebLink(url: item.link)
                         },
                         onTapSummarize: {
@@ -104,6 +108,26 @@ struct FolderDetailView: View {
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
         .onAppear {
             summaryLengthRaw = loadSummaryLength()
+            // Load initial read/seen state
+            Task {
+                let urls = vm.items.map { $0.link }
+                let states = await ArticleReadStateManager.shared.getStates(for: urls)
+                for state in states {
+                    if !state.isNew { seenURLs.insert(state.url) }
+                    if state.isRead { readURLs.insert(state.url) }
+                }
+            }
+        }
+        .onChange(of: vm.items) { _, newItems in
+            // Load read/seen state for new items
+            Task {
+                let urls = newItems.map { $0.link }
+                let states = await ArticleReadStateManager.shared.getStates(for: urls)
+                for state in states {
+                    if !state.isNew { seenURLs.insert(state.url) }
+                    if state.isRead { readURLs.insert(state.url) }
+                }
+            }
         }
         .navigationTitle(folder.name)
         .navigationBarTitleDisplayMode(.large)
@@ -150,7 +174,12 @@ struct FolderDetailView: View {
             }
         }
         .onDisappear {
-            NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+            // Mark all articles as seen first, then notify sidebar to refresh
+            let urls = vm.items.map { $0.link }
+            Task {
+                await ArticleReadStateManager.shared.markAllAsSeen(urls)
+                NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+            }
         }
         .alert("Change Summary Length?", isPresented: $showLengthChangeAlert) {
             Button("Cancel", role: .cancel) {
@@ -182,6 +211,8 @@ struct FolderDetailView: View {
     private func makeRowState(for item: Article) -> ArticleRowState {
         let aiSummary = inlineSummaries[item.id]
         let hasCached = (aiSummary != nil) || hasCachedSummaryCache.contains(item.id)
+        let isNew = !seenURLs.contains(item.link)
+        let isRead = readURLs.contains(item.link)
 
         return ArticleRowState(
             id: item.id,
@@ -191,7 +222,8 @@ struct FolderDetailView: View {
             thumbnailURL: item.thumbnailURL,
             sourceIconURL: item.sourceIconURL,
             sourceTitle: item.sourceTitle ?? "Source",
-            isNew: vm.newArticleIDs.contains(item.id),
+            isNew: isNew,
+            isRead: isRead,
             hasSummary: hasCached,
             summaryText: aiSummary,
             isExpanded: expandedSummaries.contains(item.id),

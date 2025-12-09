@@ -191,8 +191,10 @@ final class BackgroundSyncManager {
                             items[i].sourceTitle = feed.title
                             items[i].sourceIconURL = feed.iconURL
                         }
-                        // Keep only recent items (last 3 days)
-                        let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date()
+                        // Keep only recent items based on user's retention setting
+                        let retentionDays = UserDefaults.standard.integer(forKey: "articleRetentionDays")
+                        let days = retentionDays > 0 ? retentionDays : 3 // Default to 3 days
+                        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
                         items = items.filter { item in
                             if let d = item.pubDate { return d >= cutoff } else { return true }
                         }

@@ -3,10 +3,27 @@ import UIKit
 
 struct SettingsView: View {
     @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
+    @AppStorage("showLatestView") private var showLatestView: Bool = true
+    @AppStorage("showTodayView") private var showTodayView: Bool = true
     @Environment(\.dismiss) private var dismiss
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
+    @State private var currentAppIcon: AppIconOption = .automatic
+
+    enum AppIconOption: String, CaseIterable {
+        case automatic = "Automatic"
+        case light = "Light"
+        case dark = "Dark"
+
+        var iconName: String? {
+            switch self {
+            case .automatic: return nil // Use default
+            case .light: return "AppIconLight"
+            case .dark: return "AppIconDark"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -106,6 +123,32 @@ struct SettingsView: View {
                     Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
                 }
 
+                // MARK: - Sidebar Section
+                Section {
+                    Toggle("Show Latest", isOn: $showLatestView)
+                    Toggle("Show Today", isOn: $showTodayView)
+                } header: {
+                    Text("Sidebar")
+                } footer: {
+                    Text("Choose which views appear in the sidebar. Latest shows the newest article from each source. Today shows all articles from the past 24 hours.")
+                }
+
+                // MARK: - App Icon Section
+                Section {
+                    Picker("App Icon", selection: $currentAppIcon) {
+                        ForEach(AppIconOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .onChange(of: currentAppIcon) { _, newValue in
+                        setAppIcon(newValue)
+                    }
+                } header: {
+                    Text("App Icon")
+                } footer: {
+                    Text("Automatic follows your device's appearance. Choose Light or Dark to always use that icon.")
+                }
+
                 // MARK: - iCloud Sync Section
                 Section {
                     HStack {
@@ -160,6 +203,7 @@ struct SettingsView: View {
             }
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
+                loadCurrentAppIcon()
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -169,6 +213,28 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            }
+        }
+    }
+
+    private func loadCurrentAppIcon() {
+        let currentIconName = UIApplication.shared.alternateIconName
+        if currentIconName == "AppIconLight" {
+            currentAppIcon = .light
+        } else if currentIconName == "AppIconDark" {
+            currentAppIcon = .dark
+        } else {
+            currentAppIcon = .automatic
+        }
+    }
+
+    private func setAppIcon(_ option: AppIconOption) {
+        let iconName = option.iconName
+        guard UIApplication.shared.alternateIconName != iconName else { return }
+
+        UIApplication.shared.setAlternateIconName(iconName) { error in
+            if let error = error {
+                print("Failed to change app icon: \(error.localizedDescription)")
             }
         }
     }

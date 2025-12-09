@@ -17,6 +17,7 @@ struct ArticleRowState: Equatable {
     let sourceIconURL: URL?
     let sourceTitle: String
     let isNew: Bool
+    let isRead: Bool
     let hasSummary: Bool
     let summaryText: String?
     let isExpanded: Bool
@@ -41,6 +42,7 @@ struct ArticleRowView: View, Equatable {
                 // Title
                 Text(state.title)
                     .font(.headline)
+                    .foregroundStyle(state.isRead ? .secondary : .primary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)

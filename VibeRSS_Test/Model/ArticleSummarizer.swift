@@ -246,8 +246,8 @@ actor ArticleSummarizer {
             return nil
         }
 
-        // Use smaller primer for faster processing
-        let primer = selectPrimerSlice(from: baseText, maxChars: 400)
+        // Use moderate primer size - enough context for quality summary while staying fast
+        let primer = selectPrimerSlice(from: baseText, maxChars: 800)
         if primer.isEmpty { return nil }
 
         do {

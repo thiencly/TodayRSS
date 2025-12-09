@@ -24,6 +24,8 @@ struct CurrentView: View {
     @State private var hasCachedSummaryCache: Set<UUID> = []
     @State private var showLengthChangeAlert: Bool = false
     @State private var pendingLengthChange: String? = nil
+    @State private var readURLs: Set<URL> = []
+    @State private var seenURLs: Set<URL> = []
 
     private let service = FeedService()
 
@@ -43,6 +45,8 @@ struct CurrentView: View {
                     ArticleRowView(
                         state: rowState,
                         onTapArticle: {
+                            readURLs.insert(item.link)
+                            Task { await ArticleReadStateManager.shared.markAsRead(item.link) }
                             webLink = WebLink(url: item.link)
                         },
                         onTapSummarize: {
@@ -82,6 +86,28 @@ struct CurrentView: View {
             }
         }
         .task(id: refreshID) { await loadLatestPerSource() }
+        .onAppear {
+            // Load initial read/seen state
+            Task {
+                let urls = items.map { $0.link }
+                let states = await ArticleReadStateManager.shared.getStates(for: urls)
+                for state in states {
+                    if !state.isNew { seenURLs.insert(state.url) }
+                    if state.isRead { readURLs.insert(state.url) }
+                }
+            }
+        }
+        .onChange(of: items) { _, newItems in
+            // Load read/seen state for new items
+            Task {
+                let urls = newItems.map { $0.link }
+                let states = await ArticleReadStateManager.shared.getStates(for: urls)
+                for state in states {
+                    if !state.isNew { seenURLs.insert(state.url) }
+                    if state.isRead { readURLs.insert(state.url) }
+                }
+            }
+        }
         .navigationTitle("Latest")
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $webLink) { w in
@@ -119,7 +145,12 @@ struct CurrentView: View {
             }
         }
         .onDisappear {
-            NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+            // Mark all articles as seen first, then notify sidebar to refresh
+            let urls = items.map { $0.link }
+            Task {
+                await ArticleReadStateManager.shared.markAllAsSeen(urls)
+                NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
+            }
         }
         .alert("Change Summary Length?", isPresented: $showLengthChangeAlert) {
             Button("Cancel", role: .cancel) {
@@ -180,6 +211,12 @@ struct CurrentView: View {
         // Sync to widgets
         if !articlesByFeed.isEmpty {
             WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
+
+            // Track latest articles for new indicator in sidebar
+            for (feedID, articles) in articlesByFeed {
+                let urls = articles.map { $0.link }
+                Task { await ArticleReadStateManager.shared.updateLatestArticles(for: feedID, urls: urls) }
+            }
         }
 
         collected.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
@@ -201,6 +238,8 @@ struct CurrentView: View {
     private func makeRowState(for item: Article) -> ArticleRowState {
         let aiSummary = inlineSummaries[item.id]
         let hasCached = (aiSummary != nil) || hasCachedSummaryCache.contains(item.id)
+        let isNew = !seenURLs.contains(item.link)
+        let isRead = readURLs.contains(item.link)
 
         return ArticleRowState(
             id: item.id,
@@ -210,7 +249,8 @@ struct CurrentView: View {
             thumbnailURL: item.thumbnailURL,
             sourceIconURL: item.sourceIconURL,
             sourceTitle: item.sourceTitle ?? "Source",
-            isNew: newArticleIDs.contains(item.id),
+            isNew: isNew,
+            isRead: isRead,
             hasSummary: hasCached,
             summaryText: aiSummary,
             isExpanded: expandedSummaries.contains(item.id),

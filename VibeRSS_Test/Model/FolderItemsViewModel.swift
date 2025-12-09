@@ -55,19 +55,15 @@ final class FolderItemsViewModel: ObservableObject {
         if !articlesByFeed.isEmpty {
             lastLoadedArticlesByFeed.merge(articlesByFeed) { _, new in new }
             WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
+
+            // Track latest articles for new indicator in sidebar
+            for (feedID, articles) in articlesByFeed {
+                let urls = articles.map { $0.link }
+                Task { await ArticleReadStateManager.shared.updateLatestArticles(for: feedID, urls: urls) }
+            }
         }
 
-        guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
-            // If date math fails, sort without filtering
-            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            updateNewArticles(from: sorted)
-            items = sorted
-            isLoading = false
-            return
-        }
-        // Updated filter logic for pubDate nil items kept
-        let filtered = all.filter { if let d = $0.pubDate { return d >= cutoff } else { return true } }
-        let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
         updateNewArticles(from: sorted)
         items = sorted
         isLoading = false

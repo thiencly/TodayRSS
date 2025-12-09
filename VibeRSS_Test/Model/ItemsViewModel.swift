@@ -25,18 +25,10 @@ final class ItemsViewModel: ObservableObject {
             // Sync to widgets
             WidgetUpdater.shared.syncFeedToWidget(feedID: source.id, articles: result)
 
-            guard let cutoff = Calendar.current.date(byAdding: .day, value: -3, to: Date()) else {
-                // If date math fails, keep existing items order without filtering
-                let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-                updateNewArticles(from: sorted)
-                items = sorted
-                isLoading = false
-                return
-            }
-            // Updated filter logic for pubDate nil items kept
-            result = result.filter { item in
-                if let d = item.pubDate { return d >= cutoff } else { return true }
-            }
+            // Track latest articles for new indicator in sidebar
+            let articleURLs = result.map { $0.link }
+            Task { await ArticleReadStateManager.shared.updateLatestArticles(for: source.id, urls: articleURLs) }
+
             let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
             updateNewArticles(from: sorted)
             items = sorted
