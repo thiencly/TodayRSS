@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "TodayRSS_3.png",
+      "filename" : "TodayRSS - App Icon.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "TodayRSS - App Icon Dark Color.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
