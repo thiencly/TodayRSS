@@ -59,8 +59,9 @@ struct ArticleRowView: View, Equatable {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onTapArticle)
 
-                // Summarize button
-                SummarizeButton(
+                // Summarize button - using liquid glass version
+                // To revert to old style, change SummarizeButtonLiquidGlass to SummarizeButton
+                SummarizeButtonLiquidGlass(
                     state: buttonState
                 ) {
                     onTapSummarize()
@@ -106,7 +107,8 @@ struct ArticleRowView: View, Equatable {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var buttonState: SummarizeButton.ButtonState {
+    // Change to SummarizeButton.ButtonState to revert to old style
+    private var buttonState: SummarizeButtonLiquidGlass.ButtonState {
         if state.isGenerating {
             return .generating
         } else if state.hasSummary {

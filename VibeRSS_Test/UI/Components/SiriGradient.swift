@@ -122,15 +122,16 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
     var isActive: Bool = false
     var showIdle: Bool = true  // Show subtle idle glow when not active
     var idleIntensity: Double = 1.0  // Multiplier for idle glow opacity
+    var scale: CGFloat = 1.0  // Scale factor for glow size (0.5 = half size)
 
     // Layer configuration for active state: (lineWidth, blurRadius)
     private var activeLayers: [(CGFloat, CGFloat)] {
         [
-            (3, 0),     // Sharp edge
-            (5, 5),     // Close glow
-            (8, 14),    // Mid glow
-            (12, 26),   // Outer glow
-            (16, 40),   // Far outer glow
+            (3 * scale, 0),           // Sharp edge
+            (5 * scale, 5 * scale),   // Close glow
+            (8 * scale, 14 * scale),  // Mid glow
+            (12 * scale, 26 * scale), // Outer glow
+            (16 * scale, 40 * scale), // Far outer glow
         ]
     }
 
@@ -146,9 +147,9 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
                             startAngle: .degrees(0),
                             endAngle: .degrees(360)
                         ),
-                        lineWidth: 3
+                        lineWidth: 3 * scale
                     )
-                    .blur(radius: 4)
+                    .blur(radius: 4 * scale)
                     .opacity(0.6 * idleIntensity)
                     .transition(.opacity)
             }
@@ -192,19 +193,21 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
 
 // MARK: - Convenience initializers for common shapes
 extension AppleIntelligenceGlow where S == Capsule {
-    init(isActive: Bool = false, showIdle: Bool = true, idleIntensity: Double = 1.0) {
+    init(isActive: Bool = false, showIdle: Bool = true, idleIntensity: Double = 1.0, scale: CGFloat = 1.0) {
         self.shape = Capsule()
         self.isActive = isActive
         self.showIdle = showIdle
         self.idleIntensity = idleIntensity
+        self.scale = scale
     }
 }
 
 extension AppleIntelligenceGlow where S == RoundedRectangle {
-    init(cornerRadius: CGFloat, isActive: Bool = false, showIdle: Bool = true, idleIntensity: Double = 1.0) {
+    init(cornerRadius: CGFloat, isActive: Bool = false, showIdle: Bool = true, idleIntensity: Double = 1.0, scale: CGFloat = 1.0) {
         self.shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         self.isActive = isActive
         self.showIdle = showIdle
         self.idleIntensity = idleIntensity
+        self.scale = scale
     }
 }
