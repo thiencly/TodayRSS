@@ -161,12 +161,14 @@ struct FolderDetailView: View {
                             }
                         }
                     }
-                    Button("Clear Summaries", role: .destructive) {
+                    Button(role: .destructive) {
                         inlineSummaries.removeAll()
                         aiSummarized.removeAll()
                         expandedSummaries.removeAll()
                         summaryErrors.removeAll()
                         Task { await ArticleSummarizer.shared.clearArticleSummaries() }
+                    } label: {
+                        Label("Clear Summaries", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "sparkles")
