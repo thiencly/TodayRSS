@@ -39,25 +39,14 @@ struct ArticleRowView: View, Equatable {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
-                // Title
-                Text(state.title)
-                    .font(.headline)
-                    .foregroundStyle(state.isRead ? .secondary : .primary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(2)
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: onTapArticle)
-
-                // Summarize button
-                HStack(spacing: 6) {
-                    SummarizeButton(
-                        state: buttonState
-                    ) {
-                        onTapSummarize()
-                    }
-                    .disabled(state.isError)
+                // Title with unread indicator
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(state.title)
+                        .font(.headline)
+                        .foregroundStyle(state.isRead ? .secondary : .primary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if state.isNew {
                         Circle()
@@ -66,6 +55,17 @@ struct ArticleRowView: View, Equatable {
                             .accessibilityLabel("New article")
                     }
                 }
+                .layoutPriority(2)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTapArticle)
+
+                // Summarize button
+                SummarizeButton(
+                    state: buttonState
+                ) {
+                    onTapSummarize()
+                }
+                .disabled(state.isError)
 
                 // AI Summary or error
                 if let summaryText = state.summaryText {

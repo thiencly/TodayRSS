@@ -13,8 +13,17 @@ extension URL: @retroactive Identifiable {
 @main
 struct VibeRSSApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("appearanceMode") private var appearanceMode: String = "auto"
     @State private var deepLinkURL: URL?
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+
+    private var preferredColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
 
     init() {
         // Register background tasks
@@ -44,6 +53,7 @@ struct VibeRSSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(preferredColorScheme)
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)
                 }

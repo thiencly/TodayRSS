@@ -18,15 +18,11 @@ struct FloatingRefreshButton: View {
                         .font(.system(size: 18, weight: .semibold))
                 }
             }
+            .foregroundStyle(.primary)
             .frame(width: 52, height: 52)
-            .contentShape(Circle())
+            .glassEffect(.regular.interactive())
         }
         .buttonStyle(.plain)
-        .background(.ultraThinMaterial, in: Circle())
-        .overlay(
-            Circle().strokeBorder(Color.secondary.opacity(0.2))
-        )
-        .shadow(radius: 2, x: 0, y: 1)
         .disabled(isLoading)
         .accessibilityLabel("Refresh")
     }

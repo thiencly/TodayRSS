@@ -1,6 +1,37 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Appearance Mode
+enum AppearanceMode: String, CaseIterable {
+    case auto = "auto"
+    case light = "light"
+    case dark = "dark"
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .auto: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .auto: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 // MARK: - App Icon Option
 enum AppIconOption: String, CaseIterable {
     case auto = "auto"
@@ -44,6 +75,7 @@ struct SettingsView: View {
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
+    @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Bindable private var syncManager = BackgroundSyncManager.shared
@@ -146,6 +178,23 @@ struct SettingsView: View {
                     Text("Highlights")
                 } footer: {
                     Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
+                }
+
+                // MARK: - Appearance Section
+                Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { AppearanceMode(rawValue: appearanceMode) ?? .auto },
+                        set: { appearanceMode = $0.rawValue }
+                    )) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            Label(mode.displayName, systemImage: mode.iconName)
+                                .tag(mode)
+                        }
+                    }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Choose between light mode, dark mode, or auto to follow your device's setting.")
                 }
 
                 // MARK: - Sidebar Section

@@ -1196,73 +1196,13 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showingAddFolder = true } label: { Image(systemName: "folder.badge.plus") }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button {
-                            if let until = cooldownUntil, until > Date() { return }
-                            guard !isRefreshingAll else { return }
-                            isRefreshingAll = true
-                            currentRefreshRunID = UUID()
-                            Task {
-                                await feedGate.reset()
-                                await articleGate.reset()
-                                await MainActor.run {
-                                    refreshCompleted = 0
-                                    refreshTotal = store.feeds.count
-                                    refreshArticlesCachedThisRun = 0
-                                    refreshArticlesSkippedThisRun = 0
-                                }
-                                do {
-                                    try await withTimeout(30.0) { await refreshAll() }
-                                } catch {
-                                    await feedGate.reset()
-                                    await articleGate.reset()
-                                }
-                                await MainActor.run {
-                                    refreshID = UUID()
-                                    Task { await loadHeroEntries() }
-                                    isRefreshingAll = false
-                                    refreshCompleted = 0
-                                    refreshTotal = 0
-                                    refreshArticlesCachedThisRun = 0
-                                    refreshArticlesSkippedThisRun = 0
-                                    lastRefreshAllDate = Date().timeIntervalSince1970
-                                    cooldownUntil = Date().addingTimeInterval(1.5)
-                                }
-                            }
-                        } label: {
-                            Label("Refresh All Feeds", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(isRefreshingAll)
-
-                        Divider()
-
-                        Button("Clear Today Highlights") {
-                            heroEntries.removeAll()
-                            UserDefaults.standard.removeObject(forKey: heroCacheKey)
-                            Task {
-                                await ArticleSummarizer.shared.clearHeroSummaries()
-                                await loadHeroEntries()
-                            }
-                        }
-                        Button("Clear All Summaries", role: .destructive) {
-                            Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                        }
-                    } label: {
-                        if isRefreshingAll {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                        }
-                    }
-                    .help("Refresh & Cache Tools")
                 }
             }
             .sheet(isPresented: $showingAdd) {
@@ -1344,31 +1284,93 @@ struct ContentView: View {
             }
             .allowsHitTesting(false)
 
-            // Settings button at bottom left
-            VStack {
-                Spacer()
-                HStack {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .padding(12)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .overlay(
-                                Circle().strokeBorder(Color.secondary.opacity(0.2))
-                            )
-                    }
-                    .padding(.leading, 16)
-                    .padding(.bottom, 16)
-                    Spacer()
-                }
-            }
+            // Floating refresh menu at bottom right
+            floatingRefreshMenu
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .presentationDetents([.large])
+        }
+    }
+
+    @ViewBuilder private var floatingRefreshMenu: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Menu {
+                    Button {
+                        triggerRefreshAll()
+                    } label: {
+                        Label("Refresh All Feeds", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(isRefreshingAll)
+
+                    Divider()
+
+                    Button("Clear Today Highlights") {
+                        heroEntries.removeAll()
+                        UserDefaults.standard.removeObject(forKey: heroCacheKey)
+                        Task {
+                            await ArticleSummarizer.shared.clearHeroSummaries()
+                            await loadHeroEntries()
+                        }
+                    }
+                    Button("Clear All Summaries", role: .destructive) {
+                        Task { await ArticleSummarizer.shared.clearArticleSummaries() }
+                    }
+                } label: {
+                    Group {
+                        if isRefreshingAll {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        } else {
+                            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                                .font(.title2)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(width: 56, height: 56)
+                    .glassEffect(.regular.interactive())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func triggerRefreshAll() {
+        if let until = cooldownUntil, until > Date() { return }
+        guard !isRefreshingAll else { return }
+        isRefreshingAll = true
+        currentRefreshRunID = UUID()
+        Task {
+            await feedGate.reset()
+            await articleGate.reset()
+            await MainActor.run {
+                refreshCompleted = 0
+                refreshTotal = store.feeds.count
+                refreshArticlesCachedThisRun = 0
+                refreshArticlesSkippedThisRun = 0
+            }
+            do {
+                try await withTimeout(30.0) { await refreshAll() }
+            } catch {
+                await feedGate.reset()
+                await articleGate.reset()
+            }
+            await MainActor.run {
+                refreshID = UUID()
+                Task { await loadHeroEntries() }
+                isRefreshingAll = false
+                refreshCompleted = 0
+                refreshTotal = 0
+                refreshArticlesCachedThisRun = 0
+                refreshArticlesSkippedThisRun = 0
+                lastRefreshAllDate = Date().timeIntervalSince1970
+                cooldownUntil = Date().addingTimeInterval(1.5)
+            }
         }
     }
 
