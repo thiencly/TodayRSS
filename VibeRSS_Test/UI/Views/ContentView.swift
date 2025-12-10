@@ -617,6 +617,12 @@ struct ContentView: View {
 
     /// Save all current hero entry links as "seen" - call when app goes to background
     private func markAllHeroEntriesAsSeen() {
+        // Update in-memory entries to clear blue dots immediately
+        for i in heroEntries.indices {
+            heroEntries[i].isNew = false
+        }
+
+        // Persist to UserDefaults
         let entries = heroEntries
         Task.detached(priority: .utility) {
             do {
@@ -1395,6 +1401,8 @@ struct ContentView: View {
             Task { await loadHeroEntries() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReturnToSourceList)) { _ in
+            // Mark hero entries as seen when returning from article view
+            markAllHeroEntriesAsSeen()
             // Refresh sidebar to update blue dot indicators
             sidebarRefreshTrigger = UUID()
             Task { await loadHeroEntries() }

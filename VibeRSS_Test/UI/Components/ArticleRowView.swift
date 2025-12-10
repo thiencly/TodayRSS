@@ -39,25 +39,16 @@ struct ArticleRowView: View, Equatable {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
-                // Title with unread indicator
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(state.title)
-                        .font(.headline)
-                        .foregroundStyle(state.isRead ? .secondary : .primary)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if state.isNew {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 6, height: 6)
-                            .accessibilityLabel("New article")
-                    }
-                }
-                .layoutPriority(2)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onTapArticle)
+                // Title with unread indicator (inline at end of text)
+                titleWithNewIndicator
+                    .font(.headline)
+                    .foregroundStyle(state.isRead ? .secondary : .primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(2)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onTapArticle)
 
                 // Summarize button - using liquid glass version
                 // To revert to old style, change SummarizeButtonLiquidGlass to SummarizeButton
@@ -115,6 +106,19 @@ struct ArticleRowView: View, Equatable {
             return .hasSummary(isExpanded: state.isExpanded)
         } else {
             return .none
+        }
+    }
+
+    // Title with inline blue dot at the very end (after last character on last line)
+    private var titleWithNewIndicator: Text {
+        if state.isNew {
+            // Use non-breaking space (\u{00A0}) so dot doesn't wrap to new line alone
+            return Text(state.title) + Text("\u{00A0}") + Text(Image(systemName: "circle.fill"))
+                .font(.system(size: 6))
+                .foregroundColor(.blue)
+                .baselineOffset(4) // Vertically center with headline text
+        } else {
+            return Text(state.title)
         }
     }
 }
