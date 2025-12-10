@@ -51,20 +51,6 @@ final class FeedStore: ObservableObject {
         // Try to merge with iCloud data
         mergeWithiCloud()
 
-        if feeds.isEmpty {
-            var initialFeeds: [Feed] = []
-
-            if let url1 = URL(string: "https://www.theverge.com/rss/index.xml") {
-                let icon1 = URL(string: "https://www.theverge.com/apple-touch-icon.png")
-                initialFeeds.append(Feed(title: "The Verge", url: url1, iconURL: icon1))
-            }
-            if let url2 = URL(string: "https://www.macrumors.com/macrumors.xml") {
-                let icon2 = URL(string: "https://cdn.macrumors.com/images-new/macrumors-og.png")
-                initialFeeds.append(Feed(title: "MacRumors", url: url2, iconURL: icon2))
-            }
-            feeds = initialFeeds
-        }
-
         // Listen for iCloud changes from other devices
         NotificationCenter.default.addObserver(
             forName: .iCloudDataDidChange,

@@ -255,7 +255,21 @@ struct AddFeedView: View {
             }
         } catch {
             if !Task.isCancelled {
-                searchError = "Search failed. Please try again."
+                // Show more descriptive error message
+                if let urlError = error as? URLError {
+                    switch urlError.code {
+                    case .notConnectedToInternet:
+                        searchError = "No internet connection. Please check your network."
+                    case .timedOut:
+                        searchError = "Request timed out. Please try again."
+                    case .cannotFindHost, .cannotConnectToHost:
+                        searchError = "Cannot connect to search service. Please try again later."
+                    default:
+                        searchError = "Network error: \(urlError.localizedDescription)"
+                    }
+                } else {
+                    searchError = "Search failed. Please try again."
+                }
                 searchResults = []
             }
         }
