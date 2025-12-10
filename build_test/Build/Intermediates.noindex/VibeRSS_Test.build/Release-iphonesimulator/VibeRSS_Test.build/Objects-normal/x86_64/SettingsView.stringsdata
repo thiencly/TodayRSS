@@ -1,0 +1,248 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 208
+        }
+      },
+      {
+        "comment": "",
+        "key": "Open Settings",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 48
+        }
+      },
+      {
+        "comment": "",
+        "key": "Background Refresh Disabled",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 39
+        }
+      },
+      {
+        "comment": "",
+        "key": "Widgets won't update automatically. Enable Background App Refresh in Settings → General → Background App Refresh.",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 41
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sync Interval",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 58
+        }
+      },
+      {
+        "comment": "",
+        "key": "Last Synced",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 66
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sync Now",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 79
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh Widget Images",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 96
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reset Widget Data",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 108
+        }
+      },
+      {
+        "comment": "",
+        "key": "Background Sync",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 112
+        }
+      },
+      {
+        "comment": "",
+        "key": "Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 114
+        }
+      },
+      {
+        "comment": "",
+        "key": "Collapse Highlights on Launch",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 119
+        }
+      },
+      {
+        "comment": "",
+        "key": "Highlights",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 121
+        }
+      },
+      {
+        "comment": "",
+        "key": "When enabled, the Today Highlights section will start collapsed when you open the app.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 123
+        }
+      },
+      {
+        "comment": "",
+        "key": "Show Latest",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 128
+        }
+      },
+      {
+        "comment": "",
+        "key": "Show Today",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 129
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sidebar",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 131
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose which views appear in the sidebar. Latest shows the newest article from each source. Today shows all articles from the past 24 hours.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "App Icon",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 138
+        }
+      },
+      {
+        "comment": "",
+        "key": "App Icon",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 147
+        }
+      },
+      {
+        "comment": "",
+        "key": "Automatic follows your device's appearance. Choose Light or Dark to always use that icon.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 149
+        }
+      },
+      {
+        "comment": "",
+        "key": "iCloud Sync",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 155
+        }
+      },
+      {
+        "comment": "",
+        "key": "Last Synced",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 163
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sync Now",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 173
+        }
+      },
+      {
+        "comment": "",
+        "key": "iCloud",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 176
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your feeds, folders, and highlight sources are automatically synced across all your devices using iCloud.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 178
+        }
+      },
+      {
+        "comment": "",
+        "key": "Show Onboarding",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 187
+        }
+      },
+      {
+        "comment": "",
+        "key": "About",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 196
+        }
+      },
+      {
+        "comment": "",
+        "key": "View the welcome tutorial again.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 198
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 212
+        }
+      }
+    ]
+  },
+  "version": 1
+}

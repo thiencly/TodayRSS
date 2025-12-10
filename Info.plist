@@ -2,26 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIcons</key>
-	<dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIconLight</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIconLight</string>
-				</array>
-			</dict>
-			<key>AppIconDark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIconDark</string>
-				</array>
-			</dict>
-		</dict>
-	</dict>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -46,5 +26,32 @@
 	<array>
 		<string>fetch</string>
 	</array>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>IconLight</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconLight</string>
+				</array>
+			</dict>
+			<key>IconDark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconDark</string>
+				</array>
+			</dict>
+			<key>IconDarkColor</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconDarkColor</string>
+				</array>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

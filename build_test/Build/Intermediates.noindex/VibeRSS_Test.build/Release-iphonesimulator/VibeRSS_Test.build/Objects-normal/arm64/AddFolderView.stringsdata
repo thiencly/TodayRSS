@@ -1,0 +1,48 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AddFolderView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Add Folder",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "Details",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 11
+        }
+      },
+      {
+        "comment": "",
+        "key": "Folder name",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 70,
+          "startingLine": 17
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 25
+        }
+      }
+    ]
+  },
+  "version": 1
+}

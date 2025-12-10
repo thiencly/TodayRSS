@@ -1,0 +1,88 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/CurrentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Latest",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 111
+        }
+      },
+      {
+        "comment": "",
+        "key": "Change Summary Length?",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 155
+        }
+      },
+      {
+        "comment": "",
+        "key": "Retry",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "Summary Length",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 119
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear Summaries",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 137
+        }
+      },
+      {
+        "comment": "",
+        "key": "Short",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 126
+        }
+      },
+      {
+        "comment": "",
+        "key": "Long",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 134
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 156
+        }
+      },
+      {
+        "comment": "",
+        "key": "Continue",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 159
+        }
+      },
+      {
+        "comment": "",
+        "key": "Changing summary length will clear all existing article summaries. This won't affect Today Highlights.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 175
+        }
+      }
+    ]
+  },
+  "version": 1
+}

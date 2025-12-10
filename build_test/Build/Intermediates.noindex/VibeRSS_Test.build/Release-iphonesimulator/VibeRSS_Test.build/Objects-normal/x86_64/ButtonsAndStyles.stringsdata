@@ -1,0 +1,16 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ButtonsAndStyles.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Refresh",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 31
+        }
+      }
+    ]
+  },
+  "version": 1
+}

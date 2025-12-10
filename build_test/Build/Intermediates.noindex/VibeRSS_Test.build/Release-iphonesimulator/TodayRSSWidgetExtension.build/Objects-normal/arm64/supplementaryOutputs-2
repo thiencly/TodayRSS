@@ -1,0 +1,12 @@
+{
+  "/Users/thienly/VibeRSS/Shared/WidgetData.swift" : {
+    "abi-baseline-json" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension.abi.json",
+    "const-values" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension-primary.swiftconstvalues",
+    "dependencies" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension-primary.d",
+    "diagnostics" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension-primary.dia",
+    "objc-header" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension-Swift.h",
+    "swiftdoc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension.swiftdoc",
+    "swiftmodule" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension.swiftmodule",
+    "swiftsourceinfo" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/arm64/TodayRSSWidgetExtension.swiftsourceinfo"
+  }
+}

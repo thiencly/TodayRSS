@@ -1,0 +1,40 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/OnboardingView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": " ",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 191
+        }
+      },
+      {
+        "comment": "",
+        "key": "Continue",
+        "location": {
+          "startingColumn": 62,
+          "startingLine": 164
+        }
+      },
+      {
+        "comment": "",
+        "key": "Get Started",
+        "location": {
+          "startingColumn": 75,
+          "startingLine": 164
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 185
+        }
+      }
+    ]
+  },
+  "version": 1
+}

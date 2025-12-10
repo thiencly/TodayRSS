@@ -1,0 +1,168 @@
+{
+  "source": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Source",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 145
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 151
+        }
+      },
+      {
+        "comment": "",
+        "key": "Select Source",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 227
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose a feed or folder to display",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 228
+        }
+      },
+      {
+        "comment": "",
+        "key": "No Articles",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 285
+        }
+      },
+      {
+        "comment": "",
+        "key": "·",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 335
+        }
+      },
+      {
+        "comment": "",
+        "key": "·",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 385
+        }
+      },
+      {
+        "comment": "",
+        "key": "RSS",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 431
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 468
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 481
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 519
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stay updated with your RSS feeds.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 520
+        }
+      },
+      {
+        "comment": "",
+        "key": "Select Sources",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 543
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose feeds or folders for left and right sides",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 544
+        }
+      },
+      {
+        "comment": "",
+        "key": "Left Source"
+      },
+      {
+        "comment": "",
+        "key": "Right Source"
+      },
+      {
+        "comment": "",
+        "key": "No Articles",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 618
+        }
+      },
+      {
+        "comment": "",
+        "key": "·",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 702
+        }
+      },
+      {
+        "comment": "",
+        "key": "·",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 752
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS Dual",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 800
+        }
+      },
+      {
+        "comment": "",
+        "key": "Two sources side by side.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 801
+        }
+      }
+    ]
+  },
+  "version": 1
+}

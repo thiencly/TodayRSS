@@ -1,29 +1,54 @@
 import SwiftUI
 import UIKit
 
+// MARK: - App Icon Option
+enum AppIconOption: String, CaseIterable {
+    case auto = "auto"
+    case light = "IconLight"
+    case dark = "IconDark"
+    case darkColor = "IconDarkColor"
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        case .darkColor: return "Dark Color"
+        }
+    }
+
+    var iconName: String? {
+        switch self {
+        case .auto: return nil // Will be determined by system appearance
+        case .light: return "IconLight"
+        case .dark: return "IconDark"
+        case .darkColor: return "IconDarkColor"
+        }
+    }
+
+    var previewImageName: String {
+        switch self {
+        case .auto, .light: return "IconLight"
+        case .dark: return "IconDark"
+        case .darkColor: return "IconDarkColor"
+        }
+    }
+
+    static func iconForAppearance(_ isDark: Bool) -> String? {
+        return isDark ? AppIconOption.darkColor.iconName : nil
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
+    @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
-    @State private var currentAppIcon: AppIconOption = .automatic
-
-    enum AppIconOption: String, CaseIterable {
-        case automatic = "Automatic"
-        case light = "Light"
-        case dark = "Dark"
-
-        var iconName: String? {
-            switch self {
-            case .automatic: return nil // Use default
-            case .light: return "AppIconLight"
-            case .dark: return "AppIconDark"
-            }
-        }
-    }
 
     var body: some View {
         NavigationStack {
@@ -135,18 +160,20 @@ struct SettingsView: View {
 
                 // MARK: - App Icon Section
                 Section {
-                    Picker("App Icon", selection: $currentAppIcon) {
-                        ForEach(AppIconOption.allCases, id: \.self) { option in
-                            Text(option.rawValue).tag(option)
-                        }
-                    }
-                    .onChange(of: currentAppIcon) { _, newValue in
-                        setAppIcon(newValue)
-                    }
+                    AppIconSelectionView(
+                        selectedIcon: Binding(
+                            get: { AppIconOption(rawValue: selectedAppIcon) ?? .auto },
+                            set: { newValue in
+                                selectedAppIcon = newValue.rawValue
+                                updateAppIcon(to: newValue)
+                            }
+                        ),
+                        colorScheme: colorScheme
+                    )
                 } header: {
                     Text("App Icon")
                 } footer: {
-                    Text("Automatic follows your device's appearance. Choose Light or Dark to always use that icon.")
+                    Text("Auto changes the icon based on your device's light or dark mode setting.")
                 }
 
                 // MARK: - iCloud Sync Section
@@ -203,7 +230,13 @@ struct SettingsView: View {
             }
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
-                loadCurrentAppIcon()
+            }
+            .onChange(of: colorScheme) { _, newScheme in
+                // Update icon when system appearance changes (only if Auto is selected)
+                if AppIconOption(rawValue: selectedAppIcon) == .auto {
+                    let iconName = AppIconOption.iconForAppearance(newScheme == .dark)
+                    setAppIcon(iconName)
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -217,25 +250,128 @@ struct SettingsView: View {
         }
     }
 
-    private func loadCurrentAppIcon() {
-        let currentIconName = UIApplication.shared.alternateIconName
-        if currentIconName == "AppIconLight" {
-            currentAppIcon = .light
-        } else if currentIconName == "AppIconDark" {
-            currentAppIcon = .dark
+    private func updateAppIcon(to option: AppIconOption) {
+        if option == .auto {
+            // Set icon based on current appearance
+            let iconName = AppIconOption.iconForAppearance(colorScheme == .dark)
+            setAppIcon(iconName)
         } else {
-            currentAppIcon = .automatic
+            setAppIcon(option.iconName)
         }
     }
 
-    private func setAppIcon(_ option: AppIconOption) {
-        let iconName = option.iconName
-        guard UIApplication.shared.alternateIconName != iconName else { return }
-
+    private func setAppIcon(_ iconName: String?) {
+        guard UIApplication.shared.supportsAlternateIcons else { return }
         UIApplication.shared.setAlternateIconName(iconName) { error in
             if let error = error {
-                print("Failed to change app icon: \(error.localizedDescription)")
+                print("Failed to set alternate icon: \(error.localizedDescription)")
             }
         }
+    }
+}
+
+// MARK: - App Icon Selection View
+struct AppIconSelectionView: View {
+    @Binding var selectedIcon: AppIconOption
+    let colorScheme: ColorScheme
+
+    private let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(AppIconOption.allCases, id: \.self) { option in
+                AppIconCell(
+                    option: option,
+                    isSelected: selectedIcon == option,
+                    colorScheme: colorScheme
+                ) {
+                    selectedIcon = option
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - App Icon Cell
+struct AppIconCell: View {
+    let option: AppIconOption
+    let isSelected: Bool
+    let colorScheme: ColorScheme
+    let action: () -> Void
+
+    private var previewImage: UIImage? {
+        if option == .auto {
+            // For auto, show the icon that matches current appearance
+            let imageName = colorScheme == .dark ? "IconDarkColor" : "IconLight"
+            return loadPreviewImage(named: imageName)
+        }
+        return loadPreviewImage(named: option.previewImageName)
+    }
+
+    private func loadPreviewImage(named name: String) -> UIImage? {
+        if let path = Bundle.main.path(forResource: name, ofType: "png") {
+            return UIImage(contentsOfFile: path)
+        }
+        return nil
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    if let image = previewImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+                            )
+                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    } else {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Image(systemName: "app.fill")
+                                    .foregroundStyle(.gray)
+                            )
+                    }
+
+                    if option == .auto {
+                        // Badge for Auto option
+                        Image(systemName: "circle.lefthalf.filled")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(Circle().fill(Color.accentColor))
+                            .offset(x: 24, y: -24)
+                    }
+                }
+
+                Text(option.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                        .font(.caption)
+                } else {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

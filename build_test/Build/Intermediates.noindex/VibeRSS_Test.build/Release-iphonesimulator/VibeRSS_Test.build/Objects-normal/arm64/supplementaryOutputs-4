@@ -1,0 +1,12 @@
+{
+  "/Users/thienly/VibeRSS/VibeRSS_Test/Caching/ImageDiskCache.swift" : {
+    "abi-baseline-json" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test.abi.json",
+    "const-values" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.swiftconstvalues",
+    "dependencies" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.d",
+    "diagnostics" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-primary.dia",
+    "objc-header" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test-Swift.h",
+    "swiftdoc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test.swiftdoc",
+    "swiftmodule" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test.swiftmodule",
+    "swiftsourceinfo" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/VibeRSS_Test.build/Objects-normal/arm64/VibeRSS_Test.swiftsourceinfo"
+  }
+}

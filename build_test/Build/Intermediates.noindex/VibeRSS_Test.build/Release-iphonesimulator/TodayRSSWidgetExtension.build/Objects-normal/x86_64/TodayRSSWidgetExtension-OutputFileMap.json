@@ -1,0 +1,31 @@
+{
+  "" : {
+    "const-values" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary.swiftconstvalues",
+    "dependencies" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary.d",
+    "diagnostics" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary.dia",
+    "emit-module-dependencies" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary-emit-module.dia",
+    "pch" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidgetExtension-primary.swiftdeps"
+  },
+  "/Users/thienly/VibeRSS/Shared/WidgetData.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetData.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetData.bc",
+    "object" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetData.o"
+  },
+  "/Users/thienly/VibeRSS/Shared/WidgetImageCache.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetImageCache.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetImageCache.bc",
+    "object" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/WidgetImageCache.o"
+  },
+  "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidget.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidget.bc",
+    "object" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/TodayRSSWidget.o"
+  },
+  "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/thienly/VibeRSS/build_test/Build/Intermediates.noindex/VibeRSS_Test.build/Release-iphonesimulator/TodayRSSWidgetExtension.build/Objects-normal/x86_64/GeneratedAssetSymbols.o"
+  }
+}

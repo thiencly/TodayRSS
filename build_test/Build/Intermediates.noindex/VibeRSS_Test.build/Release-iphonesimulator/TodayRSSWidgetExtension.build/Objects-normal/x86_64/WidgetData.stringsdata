@@ -1,0 +1,32 @@
+{
+  "source": "/Users/thienly/VibeRSS/Shared/WidgetData.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Source",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 191
+        }
+      },
+      {
+        "comment": "",
+        "key": "Left Source",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 191
+        }
+      },
+      {
+        "comment": "",
+        "key": "Right Source",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 191
+        }
+      }
+    ]
+  },
+  "version": 1
+}

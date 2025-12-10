@@ -1,0 +1,32 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Components/ArticleRowView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "New article",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 66
+        }
+      },
+      {
+        "comment": "",
+        "key": "Summarization unavailable on this device.",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 76
+        }
+      },
+      {
+        "comment": "",
+        "key": "•",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 86
+        }
+      }
+    ]
+  },
+  "version": 1
+}

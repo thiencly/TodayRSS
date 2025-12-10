@@ -1,0 +1,344 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Today Highlights",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 161
+        }
+      },
+      {
+        "comment": "",
+        "key": "New article",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 244
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 906
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 916
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Highlights",
+        "location": {
+          "startingColumn": 44,
+          "startingLine": 958
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add to Highlights",
+        "location": {
+          "startingColumn": 71,
+          "startingLine": 958
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 967
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 972
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 979
+        }
+      },
+      {
+        "comment": "",
+        "key": "TodayRSS",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1169
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move to Folder",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 1285
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename Source",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 1301
+        }
+      },
+      {
+        "comment": "",
+        "key": "Latest",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 993
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 1003
+        }
+      },
+      {
+        "comment": "",
+        "key": "Folders",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1017
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1026
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Highlights",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 1069
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add to Highlights",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 1071
+        }
+      },
+      {
+        "comment": "",
+        "key": "Highlights Full (3 max)",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 1073
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh Icon",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1081
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rename",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1087
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 51,
+          "startingLine": 1102
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move to Folder",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1106
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1117
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1125
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 1135
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sources",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1145
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1154
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh & Cache Tools",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 1265
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear Today Highlights",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 1245
+        }
+      },
+      {
+        "comment": "",
+        "key": "Clear All Summaries",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 1253
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refresh All Feeds",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 1239
+        }
+      },
+      {
+        "comment": "",
+        "key": "Remove from Folder",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 1293
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1297
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose a folder for %@",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1299
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 1305
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1306
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 1309
+        }
+      },
+      {
+        "comment": "",
+        "key": "Enter a new name for this source",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1317
+        }
+      },
+      {
+        "comment": "",
+        "key": "Refreshing feeds: %lld/%lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1329
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cached (new): %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1330
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skipped (already cached): %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 1331
+        }
+      }
+    ]
+  },
+  "version": 1
+}

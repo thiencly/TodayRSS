@@ -1,0 +1,843 @@
+[
+  {
+    "typeName": "TodayRSSWidgetExtension.SourceEntity",
+    "mangledTypeName": "23TodayRSSWidgetExtension12SourceEntityV",
+    "kind": "struct",
+    "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+    "line": 139,
+    "conformances": [
+      "AppIntents.AppEntity",
+      "Swift.Identifiable",
+      "Swift.Hashable",
+      "AppIntents.AppValue",
+      "AppIntents.DisplayRepresentable",
+      "Swift.Equatable",
+      "AppIntents.PersistentlyIdentifiable",
+      "AppIntents.TypeDisplayRepresentable",
+      "AppIntents._IntentValue",
+      "Swift.Sendable",
+      "AppIntents.InstanceDisplayRepresentable",
+      "Swift.SendableMetatype",
+      "Foundation.CustomLocalizedStringResourceConvertible"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.AppEntity",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Identifiable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Hashable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.AppValue",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.DisplayRepresentable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Equatable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.TypeDisplayRepresentable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents._IntentValue",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.InstanceDisplayRepresentable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Foundation.CustomLocalizedStringResourceConvertible",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "DefaultQuery",
+        "substitutedTypeName": "TodayRSSWidgetExtension.SourceQuery",
+        "substitutedMangledTypeName": "23TodayRSSWidgetExtension11SourceQueryV"
+      },
+      {
+        "typeAliasName": "ID",
+        "substitutedTypeName": "Swift.String",
+        "substitutedMangledTypeName": "SS"
+      },
+      {
+        "typeAliasName": "ValueType",
+        "substitutedTypeName": "TodayRSSWidgetExtension.SourceEntity",
+        "substitutedMangledTypeName": "23TodayRSSWidgetExtension12SourceEntityV"
+      },
+      {
+        "typeAliasName": "UnwrappedType",
+        "substitutedTypeName": "TodayRSSWidgetExtension.SourceEntity",
+        "substitutedMangledTypeName": "23TodayRSSWidgetExtension12SourceEntityV"
+      },
+      {
+        "typeAliasName": "Specification",
+        "substitutedTypeName": "AppIntents.EmptyResolverSpecification<TodayRSSWidgetExtension.SourceEntity>",
+        "substitutedMangledTypeName": "10AppIntents26EmptyResolverSpecificationVy23TodayRSSWidgetExtension12SourceEntityVG"
+      }
+    ],
+    "properties": [
+      {
+        "label": "id",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 140,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "displayName",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 141,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "isFolder",
+        "type": "Swift.Bool",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 142,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "typeDisplayRepresentation",
+        "type": "AppIntents.TypeDisplayRepresentation",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 144,
+        "valueKind": "RawLiteral",
+        "value": "Source"
+      },
+      {
+        "label": "defaultQuery",
+        "type": "TodayRSSWidgetExtension.SourceQuery",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 148,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "TodayRSSWidgetExtension.SourceQuery",
+          "arguments": []
+        }
+      },
+      {
+        "label": "displayRepresentation",
+        "type": "AppIntents.DisplayRepresentation",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 150,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.DisplayRepresentation",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "InterpolatedStringLiteral",
+              "value": {
+                "segments": [
+                  {
+                    "valueKind": "RawLiteral",
+                    "value": ""
+                  },
+                  {
+                    "valueKind": "Runtime"
+                  },
+                  {
+                    "valueKind": "RawLiteral",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "label": "subtitle",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "image",
+              "type": "Swift.Optional<AppIntents.DisplayRepresentation.Image>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            }
+          ]
+        }
+      },
+      {
+        "label": "hashValue",
+        "type": "Swift.Int",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "valueKind": "FunctionCall",
+        "value": {
+          "name": "_hashValue",
+          "arguments": [
+            {
+              "label": "for",
+              "type": "TodayRSSWidgetExtension.SourceEntity",
+              "valueKind": "Runtime"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "typeName": "TodayRSSWidgetExtension.SourceQuery",
+    "mangledTypeName": "23TodayRSSWidgetExtension11SourceQueryV",
+    "kind": "struct",
+    "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+    "line": 163,
+    "conformances": [
+      "AppIntents.EntityQuery",
+      "AppIntents.DynamicOptionsProvider",
+      "AppIntents.PersistentlyIdentifiable",
+      "Swift.Sendable",
+      "AppIntents._SupportsAppDependencies",
+      "Swift.SendableMetatype",
+      "Swift.BitwiseCopyable"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.EntityQuery",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.DynamicOptionsProvider",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents._SupportsAppDependencies",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.BitwiseCopyable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "Entity",
+        "substitutedTypeName": "TodayRSSWidgetExtension.SourceEntity",
+        "substitutedMangledTypeName": "23TodayRSSWidgetExtension12SourceEntityV"
+      },
+      {
+        "typeAliasName": "Result",
+        "substitutedTypeName": "Swift.Array<TodayRSSWidgetExtension.SourceEntity>",
+        "substitutedMangledTypeName": "Say23TodayRSSWidgetExtension12SourceEntityVG"
+      },
+      {
+        "typeAliasName": "Result",
+        "substitutedTypeName": "Swift.Array<TodayRSSWidgetExtension.SourceEntity>",
+        "substitutedMangledTypeName": "Say23TodayRSSWidgetExtension12SourceEntityVG"
+      },
+      {
+        "typeAliasName": "DefaultValue",
+        "substitutedTypeName": "TodayRSSWidgetExtension.SourceEntity",
+        "substitutedMangledTypeName": "23TodayRSSWidgetExtension12SourceEntityV"
+      }
+    ],
+    "properties": []
+  },
+  {
+    "typeName": "TodayRSSWidgetExtension.SmallWidgetIntent",
+    "mangledTypeName": "23TodayRSSWidgetExtension17SmallWidgetIntentV",
+    "kind": "struct",
+    "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+    "line": 226,
+    "conformances": [
+      "AppIntents.WidgetConfigurationIntent",
+      "AppIntents.AppIntent",
+      "AppIntents.PersistentlyIdentifiable",
+      "AppIntents._SupportsAppDependencies",
+      "Swift.Sendable",
+      "Swift.SendableMetatype"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.WidgetConfigurationIntent",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.AppIntent",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents._SupportsAppDependencies",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "NeverResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "PerformResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "SummaryContent",
+        "substitutedTypeName": "some AppIntents.ParameterSummary",
+        "substitutedMangledTypeName": "10AppIntents0A6IntentPAAE16parameterSummaryQrvpZQOy23TodayRSSWidgetExtension011SmallWidgetC0V_Qo_",
+        "opaqueTypeProtocolRequirements": [
+          "AppIntents.ParameterSummary"
+        ],
+        "opaqueTypeSameTypeRequirements": []
+      }
+    ],
+    "properties": [
+      {
+        "label": "_source",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 231,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        }
+      },
+      {
+        "label": "title",
+        "type": "Foundation.LocalizedStringResource",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 227,
+        "valueKind": "RawLiteral",
+        "value": "Select Source"
+      },
+      {
+        "label": "description",
+        "type": "AppIntents.IntentDescription",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 228,
+        "valueKind": "RawLiteral",
+        "value": "Choose a feed or folder to display"
+      },
+      {
+        "label": "source",
+        "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 231,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        },
+        "propertyWrappers": [
+          {
+            "type": "AppIntents.IntentParameter",
+            "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+            "line": 230,
+            "arguments": [
+              {
+                "label": "title",
+                "type": "Foundation.LocalizedStringResource",
+                "valueKind": "RawLiteral",
+                "value": "Source"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "$source",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 231,
+        "valueKind": "Runtime"
+      }
+    ]
+  },
+  {
+    "typeName": "TodayRSSWidgetExtension.MediumWidgetIntent",
+    "mangledTypeName": "23TodayRSSWidgetExtension18MediumWidgetIntentV",
+    "kind": "struct",
+    "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+    "line": 542,
+    "conformances": [
+      "AppIntents.WidgetConfigurationIntent",
+      "AppIntents.AppIntent",
+      "AppIntents.PersistentlyIdentifiable",
+      "AppIntents._SupportsAppDependencies",
+      "Swift.Sendable",
+      "Swift.SendableMetatype"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.WidgetConfigurationIntent",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.AppIntent",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "AppIntents._SupportsAppDependencies",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "TodayRSSWidgetExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "NeverResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "PerformResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "SummaryContent",
+        "substitutedTypeName": "some AppIntents.ParameterSummary",
+        "substitutedMangledTypeName": "10AppIntents0A6IntentPAAE16parameterSummaryQrvpZQOy23TodayRSSWidgetExtension012MediumWidgetC0V_Qo_",
+        "opaqueTypeProtocolRequirements": [
+          "AppIntents.ParameterSummary"
+        ],
+        "opaqueTypeSameTypeRequirements": []
+      }
+    ],
+    "properties": [
+      {
+        "label": "_leftSource",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 547,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Left Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        }
+      },
+      {
+        "label": "_rightSource",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 550,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Right Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        }
+      },
+      {
+        "label": "title",
+        "type": "Foundation.LocalizedStringResource",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 543,
+        "valueKind": "RawLiteral",
+        "value": "Select Sources"
+      },
+      {
+        "label": "description",
+        "type": "AppIntents.IntentDescription",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 544,
+        "valueKind": "RawLiteral",
+        "value": "Choose feeds or folders for left and right sides"
+      },
+      {
+        "label": "leftSource",
+        "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 547,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Left Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        },
+        "propertyWrappers": [
+          {
+            "type": "AppIntents.IntentParameter",
+            "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+            "line": 546,
+            "arguments": [
+              {
+                "label": "title",
+                "type": "Foundation.LocalizedStringResource",
+                "valueKind": "RawLiteral",
+                "value": "Left Source"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "$leftSource",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 547,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "rightSource",
+        "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 550,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Right Source"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<TodayRSSWidgetExtension.SourceEntity>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "RawLiteral",
+              "value": "nil"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        },
+        "propertyWrappers": [
+          {
+            "type": "AppIntents.IntentParameter",
+            "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+            "line": 549,
+            "arguments": [
+              {
+                "label": "title",
+                "type": "Foundation.LocalizedStringResource",
+                "valueKind": "RawLiteral",
+                "value": "Right Source"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "$rightSource",
+        "type": "AppIntents.IntentParameter<Swift.Optional<TodayRSSWidgetExtension.SourceEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/thienly/VibeRSS/TodayRSSWidget/TodayRSSWidget.swift",
+        "line": 550,
+        "valueKind": "Runtime"
+      }
+    ]
+  }
+]

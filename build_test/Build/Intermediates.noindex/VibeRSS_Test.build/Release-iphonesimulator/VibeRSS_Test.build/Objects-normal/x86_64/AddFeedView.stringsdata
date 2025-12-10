@@ -1,0 +1,120 @@
+{
+  "source": "/Users/thienly/VibeRSS/VibeRSS_Test/UI/Views/AddFeedView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Add Source",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 125
+        }
+      },
+      {
+        "comment": "",
+        "key": "Search for RSS feeds...",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 33
+        }
+      },
+      {
+        "comment": "",
+        "key": "Search",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 52
+        }
+      },
+      {
+        "comment": "",
+        "key": "Search by publication name, topic, or website",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "Results",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 79
+        }
+      },
+      {
+        "comment": "",
+        "key": "No results found. Try a different search or add manually below.",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Feed URL (https://...)",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 91
+        }
+      },
+      {
+        "comment": "",
+        "key": "Title (optional)",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 96
+        }
+      },
+      {
+        "comment": "",
+        "key": "Adding...",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 105
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add Feed",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 108
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add Manually",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 120
+        }
+      },
+      {
+        "comment": "",
+        "key": "Paste a direct RSS/Atom feed URL if you can't find it via search",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 122
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 129
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ subscribers",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 185
+        }
+      }
+    ]
+  },
+  "version": 1
+}
