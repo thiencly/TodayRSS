@@ -191,6 +191,57 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
     }
 }
 
+// MARK: - Priority Notification Glow (iOS 26 style)
+// Animated moving gradient fill - optimized for scroll performance
+struct PriorityNotificationGlow: View {
+    var isActive: Bool = true
+    var cornerRadius: CGFloat = 20
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Static cache - randomized once per app launch, persists across view recreations
+    // Uses all 7 Apple Intelligence colors for smoother, more varied gradient
+    private static let cachedConfig: GlowConfig = {
+        let shuffled = AppleIntelligenceColors.colors.shuffled()
+        let offset = Double.random(in: 0..<100)
+        return GlowConfig(colors: shuffled, phaseOffset: offset)
+    }()
+
+    private struct GlowConfig {
+        let colors: [Color]
+        let phaseOffset: Double
+    }
+
+    // Reduce intensity by 20% in dark mode
+    private var glowOpacity: Double {
+        colorScheme == .dark ? 0.4 : 0.5
+    }
+
+    var body: some View {
+        if isActive {
+            TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { context in
+                let seconds = context.date.timeIntervalSinceReferenceDate + Self.cachedConfig.phaseOffset
+
+                // Use sine wave for smooth back-and-forth motion (no jump at loop)
+                let wave = sin(seconds * 0.3) * 0.5  // Slow oscillation between -0.5 and 0.5
+
+                // Gradient moves smoothly back and forth
+                LinearGradient(
+                    colors: Self.cachedConfig.colors,
+                    startPoint: UnitPoint(x: wave - 0.3, y: 0.2),
+                    endPoint: UnitPoint(x: wave + 0.7, y: 0.8)
+                )
+                .blur(radius: 30)
+                .opacity(glowOpacity)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .drawingGroup()
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
 // MARK: - Convenience initializers for common shapes
 extension AppleIntelligenceGlow where S == Capsule {
     init(isActive: Bool = false, showIdle: Bool = true, idleIntensity: Double = 1.0, scale: CGFloat = 1.0) {

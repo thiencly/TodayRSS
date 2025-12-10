@@ -154,71 +154,64 @@ private struct SidebarHeroCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    RainbowGlowSymbol(systemName: "sparkles", font: .caption, subtle: true)
-                    Text("Today Highlights")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.right")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-                        .animation(.snappy(duration: 0.25), value: isCollapsed)
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    onToggleCollapse?()
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            // Header row
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
 
-                Group {
-                    if entries.isEmpty {
-                        // No entries yet - show all placeholders
-                        ForEach(0..<visibleEntryCount, id: \.self) { _ in
+                Text("Today Highlights")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Image(systemName: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                // Collapse chevron
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .animation(.snappy(duration: 0.25), value: isCollapsed)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onToggleCollapse?()
+            }
+
+            // Entries
+            Group {
+                if entries.isEmpty {
+                    ForEach(0..<visibleEntryCount, id: \.self) { _ in
+                        placeholderRow
+                    }
+                } else {
+                    ForEach(visibleEntries) { entry in
+                        entryRow(entry)
+                    }
+                    if !isCollapsed && isUpdating && remainingPlaceholderCount > 0 {
+                        ForEach(0..<remainingPlaceholderCount, id: \.self) { _ in
                             placeholderRow
-                        }
-                    } else {
-                        // Show loaded entries
-                        ForEach(visibleEntries) { entry in
-                            entryRow(entry)
-                        }
-                        // Show shimmer placeholders only while still loading
-                        if !isCollapsed && isUpdating && remainingPlaceholderCount > 0 {
-                            ForEach(0..<remainingPlaceholderCount, id: \.self) { _ in
-                                placeholderRow
-                            }
                         }
                     }
                 }
-                .animation(nil, value: entries.count)  // Disable animation for entry count changes
             }
-            .animation(.snappy(duration: 0.25), value: isCollapsed)
+            .animation(nil, value: entries.count)
         }
-        .padding(16)
-        .background(
-            ZStack {
-                // Inner ambient glow
-                SiriGlow(cornerRadius: 22, opacity: 0.25)
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
+        .padding(14)
+        .animation(.snappy(duration: 0.25), value: isCollapsed)
+        .background {
+            // Priority notification glow effect - fills the card with ambient animated colors
+            PriorityNotificationGlow(isActive: true, cornerRadius: 20)
+        }
+        .glassEffect(
+            .regular.interactive(),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                .blendMode(.overlay)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-        )
-        // Apple Intelligence glow effect (idle state)
-        .background(
-            AppleIntelligenceGlow(cornerRadius: 22, isActive: false)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.snappy(duration: 0.2), value: isUpdating)
     }

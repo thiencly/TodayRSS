@@ -168,7 +168,8 @@ struct SummarizeButtonLiquidGlass: View {
     // Apple Intelligence glow overlay - only show when generating (reduced size to avoid clipping)
     @ViewBuilder
     private func rotatingGlowOverlay() -> some View {
-        AppleIntelligenceGlow<Capsule>(isActive: isGenerating, showIdle: false, scale: 0.4)
+        AppleIntelligenceGlow<Capsule>(isActive: isGenerating, showIdle: false, scale: 0.6)
+            .brightness(0.1)  // Boost visibility in light mode
     }
 
     private var title: String { "Summary" }
