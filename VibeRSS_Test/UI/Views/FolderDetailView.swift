@@ -107,6 +107,8 @@ struct FolderDetailView: View {
         }
         .task(id: refreshID) { await vm.load(for: folder, feeds: store.feeds) }
         .onAppear {
+            // Notify ContentView that user navigated to article list
+            NotificationCenter.default.post(name: .didNavigateToArticleList, object: nil)
             summaryLengthRaw = loadSummaryLength()
             // Load initial read/seen state
             Task {

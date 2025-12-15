@@ -181,6 +181,11 @@ final class FeedStore: ObservableObject {
         folders.removeAll { $0.id == folder.id }
     }
 
+    func renameFolder(_ folder: Folder, to newName: String) {
+        guard let idx = folders.firstIndex(where: { $0.id == folder.id }) else { return }
+        folders[idx].name = newName
+    }
+
     func sources(in folder: Folder?) -> [Feed] {
         guard let folder else { return feeds }
         return feeds.filter { $0.folderID == folder.id }

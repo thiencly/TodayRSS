@@ -112,6 +112,8 @@ struct FeedDetailView: View {
             await vm.load(for: source)
         }
         .onAppear {
+            // Notify ContentView that user navigated to article list
+            NotificationCenter.default.post(name: .didNavigateToArticleList, object: nil)
             summaryLengthRaw = loadSummaryLength()
             // Load initial read/seen state
             Task {

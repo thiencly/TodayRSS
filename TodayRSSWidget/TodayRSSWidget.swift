@@ -60,18 +60,6 @@ private let sampleArticles: [WidgetArticle] = [
     )
 ]
 
-// MARK: - Widget Refresh Interval
-/// Get the user's configured refresh interval from App Group (defaults to 60 minutes)
-/// Adds 5 minute offset so widget refreshes after the app's background sync completes
-private func getRefreshIntervalMinutes() -> Int {
-    let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier)
-    let intervalRaw = sharedDefaults?.integer(forKey: "widgetRefreshInterval") ?? 60
-    // If manual (0), use 60 minutes as fallback for widget
-    let baseInterval = intervalRaw > 0 ? intervalRaw : 60
-    // Add 5 minute offset so widget refreshes after app finishes syncing
-    return baseInterval + 5
-}
-
 // MARK: - Time Formatter
 private func formatTime(_ date: Date) -> String {
     let formatter = DateFormatter()
@@ -259,10 +247,10 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
             sourceName: configuration.source?.displayName ?? "All Sources"
         )
 
-        // Request refresh based on user's configured sync interval
-        let refreshMinutes = getRefreshIntervalMinutes()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date()) ?? Date()
-        return Timeline(entries: [entry], policy: .after(nextUpdate))
+        // Use .atEnd policy so widget responds immediately to reloadTimelines() calls
+        // The main app controls when to refresh via WidgetCenter.reloadTimelines()
+        // This makes updates more predictable than .after() which iOS may ignore
+        return Timeline(entries: [entry], policy: .atEnd)
     }
 }
 
@@ -578,10 +566,10 @@ struct MediumWidgetProvider: AppIntentTimelineProvider {
             rightArticle: right ?? (sampleArticles.count > 1 ? sampleArticles[1] : nil)
         )
 
-        // Request refresh based on user's configured sync interval
-        let refreshMinutes = getRefreshIntervalMinutes()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date()) ?? Date()
-        return Timeline(entries: [entry], policy: .after(nextUpdate))
+        // Use .atEnd policy so widget responds immediately to reloadTimelines() calls
+        // The main app controls when to refresh via WidgetCenter.reloadTimelines()
+        // This makes updates more predictable than .after() which iOS may ignore
+        return Timeline(entries: [entry], policy: .atEnd)
     }
 
     private func getLeftRightArticles(for configuration: MediumWidgetIntent) -> (WidgetArticle?, WidgetArticle?) {

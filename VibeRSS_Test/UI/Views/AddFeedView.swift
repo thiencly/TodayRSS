@@ -51,7 +51,11 @@ struct AddFeedView: View {
                 } header: {
                     Text("Search")
                 } footer: {
-                    Text("Search by publication name, topic, or website")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Search by publication name, topic, or website")
+                        Text("Tip: The Feedly database may contain outdated URLs that cause errors. If a source doesn't work, try selecting a different result with the same name or add the feed URL manually.")
+                            .foregroundStyle(.orange)
+                    }
                 }
 
                 // Search Results

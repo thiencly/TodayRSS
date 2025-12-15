@@ -5,12 +5,49 @@
 
 import Foundation
 import WidgetKit
+import os.log
+
+private let widgetLogger = Logger(subsystem: "IDKN.TodayRSS", category: "WidgetUpdater")
 
 @MainActor
 class WidgetUpdater {
     static let shared = WidgetUpdater()
 
     private var debounceTask: Task<Void, Never>?
+    private var installedWidgetKinds: Set<String> = []
+    private var lastWidgetCheck: Date = .distantPast
+
+    /// Check which widgets are currently installed and cache the result
+    private func refreshInstalledWidgets() async {
+        // Only check every 30 seconds to avoid excessive calls
+        guard Date().timeIntervalSince(lastWidgetCheck) > 30 else { return }
+        lastWidgetCheck = Date()
+
+        do {
+            let configurations = try await WidgetCenter.shared.currentConfigurations()
+            installedWidgetKinds = Set(configurations.map { $0.kind })
+            widgetLogger.info("📱 Installed widgets: \(self.installedWidgetKinds.joined(separator: ", "))")
+        } catch {
+            widgetLogger.error("❌ Failed to get widget configurations: \(error.localizedDescription)")
+            // Assume both widgets might be installed if we can't check
+            installedWidgetKinds = ["SmallRSSWidget", "MediumRSSWidget"]
+        }
+    }
+
+    /// Reload timelines only for widgets that are actually installed
+    private func reloadInstalledWidgets() {
+        if installedWidgetKinds.isEmpty {
+            // If we haven't checked yet, reload both (safe fallback)
+            widgetLogger.info("🔄 Reloading all widget timelines (no cache)")
+            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+        } else {
+            for kind in installedWidgetKinds {
+                widgetLogger.info("🔄 Reloading timeline for: \(kind)")
+                WidgetCenter.shared.reloadTimelines(ofKind: kind)
+            }
+        }
+    }
 
     /// Update widget source config (feeds & folders list)
     /// Call this when feeds or folders change
@@ -41,10 +78,13 @@ class WidgetUpdater {
 
         // Save to App Group
         WidgetDataManager.shared.saveSourceConfig(config)
+        widgetLogger.info("💾 Saved widget config: \(feeds.count) feeds, \(folders.count) folders")
 
-        // Reload widget timelines (explicit kinds for lock screen widgets)
-        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+        // Refresh widget cache and reload timelines
+        Task {
+            await refreshInstalledWidgets()
+            reloadInstalledWidgets()
+        }
 
         // Invalidate configuration recommendations so new sources appear in widget picker
         WidgetCenter.shared.invalidateConfigurationRecommendations()
@@ -82,18 +122,21 @@ class WidgetUpdater {
 
             // Save merged articles to App Group
             WidgetDataManager.shared.saveArticles(widgetArticles)
+            widgetLogger.info("💾 Saved \(articlesByFeed.count) feeds to widget storage (debounced)")
 
-            // Reload widget timelines (explicit kinds for lock screen widgets)
-            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
-            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+            // Refresh widget cache and reload timelines
+            await refreshInstalledWidgets()
+            reloadInstalledWidgets()
         }
     }
 
     /// Quick update just to refresh timelines
     func reloadTimelines() {
-        // Reload all widget kinds explicitly to ensure lock screen widgets update
-        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+        widgetLogger.info("🔄 Manual timeline reload requested")
+        Task {
+            await refreshInstalledWidgets()
+            reloadInstalledWidgets()
+        }
     }
 
     /// Update articles immediately without debounce (for background sync)
@@ -121,6 +164,11 @@ class WidgetUpdater {
 
         // Save merged articles to App Group immediately (no debounce)
         WidgetDataManager.shared.saveArticles(widgetArticles)
+        widgetLogger.info("💾 Saved \(articlesByFeed.count) feeds to widget storage (immediate)")
+
+        // Refresh widget cache and reload timelines
+        await refreshInstalledWidgets()
+        reloadInstalledWidgets()
     }
 
     /// Sync a single feed's articles to widgets (with thumbnail caching)

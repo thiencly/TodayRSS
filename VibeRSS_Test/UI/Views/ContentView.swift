@@ -318,6 +318,8 @@ struct ContentView: View {
     @State private var showingMoveDialog = false
     @State private var renamingSource: Source?
     @State private var renameText: String = ""
+    @State private var renamingFolder: Folder?
+    @State private var renameFolderText: String = ""
     @State private var refreshID = UUID()
     @State private var isRefreshingAll = false
     @State private var refreshTotal: Int = 0
@@ -349,6 +351,7 @@ struct ContentView: View {
     private let seenLinksKey = "viberss.heroSeenLinks"
     @State private var isInitialLoad: Bool = true
     @State private var sidebarRefreshTrigger: UUID = UUID()
+    @State private var isSourceListVisible: Bool = true
 
     private var heroSourceIDs: Set<UUID> {
         (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
@@ -909,6 +912,12 @@ struct ContentView: View {
             .contentShape(Rectangle())
         }
         .contextMenu {
+            Button {
+                renameFolderText = folder.name
+                renamingFolder = folder
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
             Button(role: .destructive) {
                 store.removeFolder(folder)
             } label: {
@@ -1294,6 +1303,26 @@ struct ContentView: View {
             } message: {
                 Text("Enter a new name for this source")
             }
+            .alert("Rename Folder", isPresented: Binding(
+                get: { renamingFolder != nil },
+                set: { if !$0 { renamingFolder = nil } }
+            )) {
+                TextField("Name", text: $renameFolderText)
+                Button("Cancel", role: .cancel) {
+                    renamingFolder = nil
+                }
+                Button("Save") {
+                    if let folder = renamingFolder {
+                        let newName = renameFolderText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !newName.isEmpty {
+                            store.renameFolder(folder, to: newName)
+                        }
+                    }
+                    renamingFolder = nil
+                }
+            } message: {
+                Text("Enter a new name for this folder")
+            }
 
             // Refresh progress overlay at bottom
             VStack {
@@ -1381,7 +1410,14 @@ struct ContentView: View {
             loadHeroEntriesFromCache()
             isHeroCollapsed = heroCollapsedOnLaunch
             Task {
-                await loadHeroEntries()
+                // Small delay to allow child views (article list) to register their appearance first
+                // This ensures isSourceListVisible is set correctly before we check it
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+                // Only generate hero summaries if source list is visible
+                // This handles the case when app is restored with article list visible
+                if isSourceListVisible {
+                    await loadHeroEntries()
+                }
                 // Fetch latest articles to show blue dots on sources/folders
                 await refreshLatestArticlesForSidebar()
             }
@@ -1390,7 +1426,11 @@ struct ContentView: View {
             if phase == .active {
                 // Refresh sidebar to update blue dot indicators when app becomes active
                 sidebarRefreshTrigger = UUID()
-                Task { await loadHeroEntries() }
+                // Only generate hero summaries if source list is visible
+                // This prevents generating summaries while on article list view
+                if isSourceListVisible {
+                    Task { await loadHeroEntries() }
+                }
             } else if phase == .background {
                 // Mark all current hero entries as "seen" when app goes to background
                 // This clears blue dots on next launch if no new articles
@@ -1398,19 +1438,31 @@ struct ContentView: View {
             }
         }
         .onChange(of: store.feeds) { _, _ in
-            Task { await loadHeroEntries() }
+            // Only generate hero summaries if source list is visible
+            if isSourceListVisible {
+                Task { await loadHeroEntries() }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReturnToSourceList)) { _ in
-            // Mark hero entries as seen when returning from article view
-            markAllHeroEntriesAsSeen()
+            // User returned to source list - mark as visible and load hero entries
+            isSourceListVisible = true
             // Refresh sidebar to update blue dot indicators
             sidebarRefreshTrigger = UUID()
+            // Load hero entries now that source list is visible
+            // Don't mark as seen first - let user see blue dots for new articles
             Task { await loadHeroEntries() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .backgroundSyncCompleted)) { _ in
             // Refresh hero entries and sidebar after background sync completes
+            // Only if source list is visible
             sidebarRefreshTrigger = UUID()
-            Task { await loadHeroEntries() }
+            if isSourceListVisible {
+                Task { await loadHeroEntries() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didNavigateToArticleList)) { _ in
+            // User navigated to an article list view - mark source list as not visible
+            isSourceListVisible = false
         }
     }
 }
@@ -1418,5 +1470,6 @@ struct ContentView: View {
 // MARK: - Notifications
 extension Notification.Name {
     static let didReturnToSourceList = Notification.Name("didReturnToSourceList")
+    static let didNavigateToArticleList = Notification.Name("didNavigateToArticleList")
     static let backgroundSyncCompleted = Notification.Name("backgroundSyncCompleted")
 }

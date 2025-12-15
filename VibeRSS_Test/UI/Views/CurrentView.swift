@@ -87,6 +87,8 @@ struct CurrentView: View {
         }
         .task(id: refreshID) { await loadLatestPerSource() }
         .onAppear {
+            // Notify ContentView that user navigated to article list
+            NotificationCenter.default.post(name: .didNavigateToArticleList, object: nil)
             // Load initial read/seen state
             Task {
                 let urls = items.map { $0.link }

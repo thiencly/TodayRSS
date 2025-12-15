@@ -97,6 +97,8 @@ struct AllArticlesView: View {
         }
         .task(id: refreshID) { await vm.loadAll(feeds: store.feeds) }
         .onAppear {
+            // Notify ContentView that user navigated to article list
+            NotificationCenter.default.post(name: .didNavigateToArticleList, object: nil)
             // Load initial read/seen state
             Task {
                 let urls = vm.items.map { $0.link }
