@@ -999,7 +999,7 @@ struct ContentView: View {
                             CurrentView(refreshID: refreshID)
                                 .environmentObject(store)
                         } label: {
-                            Label("Latest", systemImage: "sparkles.rectangle.stack")
+                            Label("Latest", systemImage: "clock")
                                 .contentShape(Rectangle())
                         }
                     }
@@ -1009,7 +1009,7 @@ struct ContentView: View {
                             AllArticlesView(refreshID: refreshID)
                                 .environmentObject(store)
                         } label: {
-                            Label("Today", systemImage: "newspaper.fill")
+                            Label("Today", systemImage: "newspaper")
                                 .contentShape(Rectangle())
                         }
                     }
@@ -1205,51 +1205,66 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button { showingAddFolder = true } label: {
-                            Label("New Folder", systemImage: "folder.badge.plus")
-                        }
+                    HStack(spacing: 16) {
+                        Menu {
+                            Button { showingAddFolder = true } label: {
+                                Label("New Folder", systemImage: "folder.badge.plus")
+                            }
 
-                        Divider()
+                            Divider()
 
-                        Button {
-                            triggerRefreshAll()
-                        } label: {
-                            Label("Refresh All Feeds", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(isRefreshingAll)
+                            Button {
+                                triggerRefreshAll()
+                            } label: {
+                                Label("Refresh All Feeds", systemImage: "arrow.clockwise")
+                            }
+                            .disabled(isRefreshingAll)
 
-                        Divider()
+                            Divider()
 
-                        Button {
-                            heroEntries.removeAll()
-                            UserDefaults.standard.removeObject(forKey: heroCacheKey)
-                            Task {
-                                await ArticleSummarizer.shared.clearHeroSummaries()
-                                await loadHeroEntries()
+                            Button {
+                                heroEntries.removeAll()
+                                UserDefaults.standard.removeObject(forKey: heroCacheKey)
+                                Task {
+                                    await ArticleSummarizer.shared.clearHeroSummaries()
+                                    await loadHeroEntries()
+                                }
+                            } label: {
+                                Label("Clear Today Highlights", systemImage: "sun.horizon")
+                            }
+                            Button(role: .destructive) {
+                                Task { await ArticleSummarizer.shared.clearArticleSummaries() }
+                            } label: {
+                                Label("Clear All Summaries", systemImage: "trash")
+                            }
+
+                            Divider()
+
+                            Button { showingSettings = true } label: {
+                                Label("Settings", systemImage: "gearshape")
                             }
                         } label: {
-                            Label("Clear Today Highlights", systemImage: "sun.horizon")
+                            if isRefreshingAll {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "ellipsis.circle")
+                            }
                         }
-                        Button(role: .destructive) {
-                            Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                        } label: {
-                            Label("Clear All Summaries", systemImage: "trash")
+
+                        Button { showingAdd = true } label: {
+                            Image(systemName: "plus")
                         }
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        HapticManager.shared.click()
+                        showingNewsReel = true
                     } label: {
-                        if isRefreshingAll {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "ellipsis.circle")
-                        }
+                        Image(systemName: "bolt.fill")
                     }
                 }
             }
@@ -1355,23 +1370,6 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .presentationDetents([.large])
-        }
-        .overlay(alignment: .bottomTrailing) {
-            // News Reel floating button
-            Button {
-                HapticManager.shared.click()
-                showingNewsReel = true
-            } label: {
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-            }
-            .padding(.trailing, 20)
-            .padding(.bottom, 24)
         }
         .fullScreenCover(isPresented: $showingNewsReel) {
             NewsReelView()
