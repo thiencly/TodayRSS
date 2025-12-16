@@ -43,13 +43,43 @@ struct NewsReelCardView: View {
             let availableSummaryHeight: CGFloat = geometry.size.height * 0.20 + slideOffset - 100
 
             ZStack(alignment: .top) {
-                // Background - use extracted dominant color
-                dominantColor.ignoresSafeArea()
+                // Background
+                if article.thumbnailURL != nil {
+                    // Use extracted dominant color for articles with images
+                    dominantColor.ignoresSafeArea()
+                } else {
+                    // Full-screen animated glow for articles without images
+                    Color.black.ignoresSafeArea()
+                    NewsReelGlow()
+                        .ignoresSafeArea()
 
-                // Thumbnail takes up 70% of screen from the top, fills and crops
-                // Slides up when expanded
-                VStack(spacing: 0) {
-                    if let thumbnailURL = article.thumbnailURL {
+                    // Large favicon in upper area
+                    VStack {
+                        Spacer()
+                            .frame(height: geometry.size.height * 0.25)
+                        if let iconURL = article.sourceIconURL {
+                            CachedAsyncImage(url: iconURL, contentMode: .fill, size: CGSize(width: 120, height: 120)) {
+                                Image(systemName: "newspaper.fill")
+                                    .font(.system(size: 60))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
+                            .frame(width: 120, height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+                            .opacity(0.9)
+                        } else {
+                            Image(systemName: "newspaper.fill")
+                                .font(.system(size: 80))
+                                .foregroundStyle(.white.opacity(0.25))
+                        }
+                        Spacer()
+                    }
+                }
+
+                // Thumbnail takes up 80% of screen from the top, fills and crops
+                // Only show image area if there's a thumbnail
+                if let thumbnailURL = article.thumbnailURL {
+                    VStack(spacing: 0) {
                         HighResThumbnailView(url: thumbnailURL, contentMode: .fill) { extractedColor in
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 dominantColor = extractedColor
@@ -57,37 +87,28 @@ struct NewsReelCardView: View {
                         }
                         .frame(width: geometry.size.width, height: imageHeight)
                         .clipped()
-                    } else {
-                        // Placeholder gradient when no image
-                        LinearGradient(
-                            colors: [Color(.systemGray4), Color(.systemGray5)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .frame(height: imageHeight)
+
+                        Spacer()
                     }
+                    .offset(y: -slideOffset)
 
-                    Spacer()
+                    // Gradient overlay - only needed for images
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: dominantColor, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: geometry.size.width, height: gradientHeight)
+                    .position(x: geometry.size.width / 2, y: imageHeight - gradientHeight / 2 - slideOffset)
+
+                    // Solid color fill below the image - only needed for images
+                    dominantColor
+                        .frame(width: geometry.size.width, height: geometry.size.height * 0.3 + slideOffset)
+                        .position(x: geometry.size.width / 2, y: imageHeight + (geometry.size.height * 0.3 + slideOffset) / 2 - slideOffset)
                 }
-                .offset(y: -slideOffset)
-
-                // Gradient overlay - starts at bottom edge of image, fills 1/3 of image height upward
-                // Goes from 100% dominant color at bottom to 0% at top
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: dominantColor, location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(width: geometry.size.width, height: gradientHeight)
-                .position(x: geometry.size.width / 2, y: imageHeight - gradientHeight / 2 - slideOffset)
-
-                // Solid color fill below the image
-                dominantColor
-                    .frame(width: geometry.size.width, height: geometry.size.height * 0.3 + slideOffset)
-                    .position(x: geometry.size.width / 2, y: imageHeight + (geometry.size.height * 0.3 + slideOffset) / 2 - slideOffset)
 
                 // Content overlay - text overlaps 20% of image height
                 VStack(spacing: 0) {
@@ -246,9 +267,6 @@ struct HighResThumbnailView: View {
                         .aspectRatio(contentMode: contentMode)
                         .frame(width: geometry.size.width + panAmount * 2, height: geometry.size.height)
                         .offset(x: panOffset)
-                        .onAppear {
-                            startPanAnimation()
-                        }
                 } else if isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -260,7 +278,14 @@ struct HighResThumbnailView: View {
         .onAppear { loadImage() }
         .onChange(of: url) { _, _ in
             panOffset = 0
+            image = nil  // Clear old image to force reload
             loadImage()
+        }
+        .onChange(of: image) { _, newImage in
+            // Start pan animation whenever image changes
+            if newImage != nil {
+                startPanAnimation()
+            }
         }
     }
 
@@ -543,3 +568,41 @@ private struct ScrollOffsetPreferenceKey: PreferenceKey {
         value = nextValue()
     }
 }
+
+// MARK: - News Reel Glow (same colors as Today Highlights / PriorityNotificationGlow)
+
+struct NewsReelGlow: View {
+    // Static cache - randomized once, same as PriorityNotificationGlow
+    private static let cachedConfig: GlowConfig = {
+        let shuffled = AppleIntelligenceColors.colors.shuffled()
+        let offset = Double.random(in: 0..<100)
+        return GlowConfig(colors: shuffled, phaseOffset: offset)
+    }()
+
+    private struct GlowConfig {
+        let colors: [Color]
+        let phaseOffset: Double
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate + Self.cachedConfig.phaseOffset
+
+            // Use sine wave for smooth back-and-forth motion (no jump at loop)
+            let wave = sin(seconds * 0.3) * 0.5
+
+            // Gradient moves smoothly back and forth
+            LinearGradient(
+                colors: Self.cachedConfig.colors,
+                startPoint: UnitPoint(x: wave - 0.3, y: 0.2),
+                endPoint: UnitPoint(x: wave + 0.7, y: 0.8)
+            )
+            .blur(radius: 50)
+            .opacity(0.6)
+            .drawingGroup()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
