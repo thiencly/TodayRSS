@@ -13,6 +13,13 @@ import Foundation
 import UIKit
 import CryptoKit
 import UniformTypeIdentifiers
+import CoreImage
+
+/// Holds image data with its dominant color
+struct ImageWithColor {
+    let image: UIImage
+    let dominantColor: UIColor?
+}
 
 actor ImageDiskCache {
     static let shared = ImageDiskCache()
@@ -24,6 +31,9 @@ actor ImageDiskCache {
 
     // Thread-safe synchronous access to memory cache
     private static let syncMemCache = NSCache<NSString, UIImage>()
+
+    // Thread-safe synchronous access to color cache
+    private static let syncColorCache = NSCache<NSString, UIColor>()
 
     // Dedicated session with aggressive timeout to prevent UI freezes
     private static let imageSession: URLSession = {
@@ -101,12 +111,10 @@ actor ImageDiskCache {
 
     // Force decode image off main thread to prevent lag during rendering
     // UIImage defers decoding until first render - this forces it early
-    private func predecodedImage(_ image: UIImage) -> UIImage {
+    private func predecodedImage(_ image: UIImage, maxSize: CGFloat = 320) -> UIImage {
         guard let cgImage = image.cgImage else { return image }
 
-        // For thumbnails, downsample to 320x320 (4x for retina at 80pt display)
-        // This reduces memory and rendering time for large source images
-        let maxSize: CGFloat = 320
+        // Downsample to maxSize (default 320 for thumbnails, higher for full-screen)
         let width = CGFloat(cgImage.width)
         let height = CGFloat(cgImage.height)
 
@@ -203,6 +211,64 @@ actor ImageDiskCache {
         return nil
     }
 
+    /// Load high-resolution image for full-screen display (e.g., news reel)
+    /// Uses larger maxSize (1200px) for better quality on large screens
+    func highResImage(for url: URL) async -> UIImage? {
+        let file = fileURL(for: url)
+
+        // Check disk cache first
+        if fm.fileExists(atPath: file.path),
+           let data = try? Data(contentsOf: file),
+           let rawImage = UIImage(data: data),
+           isValidImage(rawImage) {
+            // Use higher resolution for full-screen
+            return predecodedImage(rawImage, maxSize: 1200)
+        }
+
+        // Limit concurrent downloads
+        while activeDownloads >= maxConcurrentDownloads {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            if Task.isCancelled { return nil }
+        }
+
+        activeDownloads += 1
+        defer { activeDownloads -= 1 }
+
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 8
+            try Task.checkCancellation()
+            let (data, response) = try await Self.imageSession.data(for: req)
+            if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                if let rawImage = UIImage(data: data), isValidImage(rawImage) {
+                    try? data.write(to: file, options: [.atomic])
+                    return predecodedImage(rawImage, maxSize: 1200)
+                }
+            }
+        } catch {}
+        return nil
+    }
+
+    /// Get high-res image with its dominant color
+    func highResImageWithColor(for url: URL) async -> ImageWithColor? {
+        guard let image = await highResImage(for: url) else { return nil }
+
+        let key = Self.cacheKey(for: url)
+
+        // Check color cache first
+        if let cachedColor = Self.syncColorCache.object(forKey: key) {
+            return ImageWithColor(image: image, dominantColor: cachedColor)
+        }
+
+        // Extract color and cache it
+        let color = extractDominantColor(from: image)
+        if let color = color {
+            Self.syncColorCache.setObject(color, forKey: key)
+        }
+
+        return ImageWithColor(image: image, dominantColor: color)
+    }
+
     private func fileURL(for url: URL) -> URL {
         let name = sha256(url.absoluteString)
         return directory.appendingPathComponent(name).appendingPathExtension("img")
@@ -231,5 +297,109 @@ actor ImageDiskCache {
     private func storeInSyncCache(_ image: UIImage, for url: URL) {
         let key = Self.cacheKey(for: url)
         Self.syncMemCache.setObject(image, forKey: key)
+    }
+
+    // MARK: - Dominant Color Extraction
+
+    /// Get image with its dominant color
+    func imageWithColor(for url: URL) async -> ImageWithColor? {
+        guard let image = await image(for: url) else { return nil }
+
+        let key = Self.cacheKey(for: url)
+
+        // Check color cache first
+        if let cachedColor = Self.syncColorCache.object(forKey: key) {
+            return ImageWithColor(image: image, dominantColor: cachedColor)
+        }
+
+        // Extract color and cache it
+        let color = extractDominantColor(from: image)
+        if let color = color {
+            Self.syncColorCache.setObject(color, forKey: key)
+        }
+
+        return ImageWithColor(image: image, dominantColor: color)
+    }
+
+    /// Synchronous check for cached dominant color
+    nonisolated static func cachedColor(for url: URL) -> UIColor? {
+        let key = cacheKey(for: url)
+        return syncColorCache.object(forKey: key)
+    }
+
+    /// Extract dominant color from image using average color calculation (from bottom half)
+    private func extractDominantColor(from image: UIImage) -> UIColor? {
+        // Use CIImage for more reliable color extraction
+        guard let ciImage = CIImage(image: image) else {
+            return extractDominantColorFromCG(image)
+        }
+
+        let extent = ciImage.extent
+        guard extent.width > 0 && extent.height > 0 else { return nil }
+
+        // Sample from bottom half of image (where gradient will blend)
+        let bottomHalf = ciImage.cropped(to: CGRect(
+            x: extent.origin.x,
+            y: extent.origin.y,
+            width: extent.width,
+            height: extent.height / 2
+        ))
+
+        // Use CIAreaAverage filter to get average color
+        guard let filter = CIFilter(name: "CIAreaAverage") else {
+            return extractDominantColorFromCG(image)
+        }
+
+        filter.setValue(bottomHalf, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgRect: bottomHalf.extent), forKey: kCIInputExtentKey)
+
+        guard let outputImage = filter.outputImage else {
+            return extractDominantColorFromCG(image)
+        }
+
+        // Get the single pixel color
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: NSNull()])
+        context.render(outputImage, toBitmap: &bitmap, rowBytes: 4,
+                      bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                      format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+
+        let r = CGFloat(bitmap[0]) / 255.0
+        let g = CGFloat(bitmap[1]) / 255.0
+        let b = CGFloat(bitmap[2]) / 255.0
+
+        return UIColor(red: r, green: g, blue: b, alpha: 1.0)
+    }
+
+    /// Fallback color extraction using CGImage
+    private func extractDominantColorFromCG(_ image: UIImage) -> UIColor? {
+        guard let cgImage = image.cgImage else { return nil }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0 && height > 0 else { return nil }
+
+        // Scale down to 1x1 to get average color
+        let bytesPerPixel = 4
+        var pixelData = [UInt8](repeating: 0, count: bytesPerPixel)
+
+        guard let context = CGContext(
+            data: &pixelData,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerPixel,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        // Draw entire image scaled to 1x1
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+
+        let r = CGFloat(pixelData[0]) / 255.0
+        let g = CGFloat(pixelData[1]) / 255.0
+        let b = CGFloat(pixelData[2]) / 255.0
+
+        return UIColor(red: r, green: g, blue: b, alpha: 1.0)
     }
 }

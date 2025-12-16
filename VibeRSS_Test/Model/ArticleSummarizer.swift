@@ -35,7 +35,9 @@ actor ArticleSummarizer {
 
     enum Length {
         case quick
-        case short, long
+        case reel       // ~50 words, between quick (25) and short (80)
+        case reelExpanded  // ~100-120 words, for news reel expanded view
+        case short
     }
 
     private var cache: [String: String] = [:] // key: "<url>#<length>"
@@ -98,8 +100,9 @@ actor ArticleSummarizer {
         let len: String
         switch length {
         case .quick: len = "quick"
+        case .reel:  len = "reel"
+        case .reelExpanded: len = "reelExpanded"
         case .short: len = "short"
-        case .long:  len = "long"
         }
         let key = url.absoluteString + "#" + len
         lookupLock.lock()
@@ -132,14 +135,16 @@ actor ArticleSummarizer {
 
     #if canImport(FoundationModels)
     private var heroSession: LanguageModelSession?
+    private var reelSession: LanguageModelSession?
+    private var reelExpandedSession: LanguageModelSession?
     private var summarySessionShort: LanguageModelSession?
-    private var summarySessionLong: LanguageModelSession?
 
     /// Reset all cached sessions - call when sessions become stale
     private func resetSessions() {
         heroSession = nil
+        reelSession = nil
+        reelExpandedSession = nil
         summarySessionShort = nil
-        summarySessionLong = nil
     }
 
     /// Re-warm a specific session type in the background after reset
@@ -153,12 +158,15 @@ actor ArticleSummarizer {
             case .quick:
                 let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
                 await self.setHeroSession(session)
+            case .reel:
+                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis.")
+                await self.setReelSession(session)
+            case .reelExpanded:
+                let session = LanguageModelSession(instructions: "Summarize in 4-5 sentences (100-120 words). Cover the main point, key facts, and important context. Make it informative and complete. No lists, no emojis.")
+                await self.setReelExpandedSession(session)
             case .short:
-                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points.")
+                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences (60-80 words). Cover the main point and key facts. Make it concise and informative. No lists, no emojis.")
                 await self.setShortSession(session)
-            case .long:
-                let session = LanguageModelSession(instructions: "Summarize for busy readers in 5-8 sentences (250-300 words). Cover key facts, context, implications, and outcomes. Include relevant numbers, quotes, and decisions. Preserve qualifiers and avoid overstating certainty.")
-                await self.setLongSession(session)
             }
         }
     }
@@ -167,12 +175,16 @@ actor ArticleSummarizer {
         if heroSession == nil { heroSession = session }
     }
 
-    private func setShortSession(_ session: LanguageModelSession) {
-        if summarySessionShort == nil { summarySessionShort = session }
+    private func setReelSession(_ session: LanguageModelSession) {
+        if reelSession == nil { reelSession = session }
     }
 
-    private func setLongSession(_ session: LanguageModelSession) {
-        if summarySessionLong == nil { summarySessionLong = session }
+    private func setReelExpandedSession(_ session: LanguageModelSession) {
+        if reelExpandedSession == nil { reelExpandedSession = session }
+    }
+
+    private func setShortSession(_ session: LanguageModelSession) {
+        if summarySessionShort == nil { summarySessionShort = session }
     }
     #endif
 
@@ -189,11 +201,13 @@ actor ArticleSummarizer {
         let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
         heroSession = session
 
-        // Pre-create summary sessions for faster first summarization
-        let shortInstructions = "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points."
-        let longInstructions = "Summarize for busy readers in 5-8 sentences (250-300 words). Cover key facts, context, implications, and outcomes. Include relevant numbers, quotes, and decisions. Preserve qualifiers and avoid overstating certainty."
+        // Pre-create reel session for news reel summaries (~50 words)
+        let reelInstructions = "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis."
+        reelSession = LanguageModelSession(instructions: reelInstructions)
+
+        // Pre-create summary session for faster first summarization
+        let shortInstructions = "Summarize in 2-3 sentences (60-80 words). Cover the main point and key facts. Make it concise and informative. No lists, no emojis."
         summarySessionShort = LanguageModelSession(instructions: shortInstructions)
-        summarySessionLong = LanguageModelSession(instructions: longInstructions)
 
         // Run a tiny prompt to trigger model loading
         do {
@@ -274,6 +288,67 @@ actor ArticleSummarizer {
         return nil
     }
 
+    /// Reel summary for news reel cards - ~50 words, 2-3 sentences
+    /// Optimized for speed like fastHeroSummary but with slightly more detail
+    func fastReelSummary(url: URL, articleText fallbackText: String?) async -> String? {
+        let key = makeCacheKey(url: url, length: .reel)
+        if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return cached
+        } else if cache[key] != nil {
+            // Remove invalid empty cache entry
+            cache.removeValue(forKey: key)
+            Self.removeFromLookup(key)
+        }
+
+        #if canImport(FoundationModels)
+        let model = SystemLanguageModel.default
+        guard case .available = model.availability else { return nil }
+
+        // Priority: 1) Cached full article, 2) Fetch HTML, 3) RSS description fallback
+        let baseText: String
+        if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
+            baseText = cachedText
+        } else if let html = try? await fetchHTML(url: url) {
+            let extracted = extractReadableText(from: String(html.prefix(100_000)))
+            if !extracted.isEmpty {
+                baseText = extracted
+                await ArticleTextCache.shared.storeText(extracted, for: url)
+            } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                baseText = fallback
+            } else {
+                return nil
+            }
+        } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            baseText = fallback
+        } else {
+            return nil
+        }
+
+        // Larger primer than hero for reel summaries (~50 words needs more context)
+        let primer = selectPrimerSlice(from: baseText, maxChars: 1200)
+        if primer.isEmpty { return nil }
+
+        do {
+            let session = reelSession ?? LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis.")
+            if reelSession == nil { reelSession = session }
+
+            let result = try await session.respond(to: primer, generating: InlineSummary.self)
+            let text = result.content.text
+            if !text.isEmpty {
+                cache[key] = text
+                Self.addToLookup(key)
+                saveCache()
+                return text
+            }
+        } catch {
+            reelSession = nil
+            rewarmSession(.reel)
+        }
+        #endif
+
+        return nil
+    }
+
     private static func loadCacheFromDefaults() -> [String: String] {
         if let data = UserDefaults.standard.data(forKey: "viberss.summaryCache"),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
@@ -319,13 +394,10 @@ actor ArticleSummarizer {
         UserDefaults.standard.removeObject(forKey: expandedStoreKey)
     }
 
-    /// Clears only article summaries (short/long) used by the Summarize button, not hero summaries
+    /// Clears all summaries of every kind (quick, reel, reelExpanded, short)
     func clearArticleSummaries() {
-        let keysToRemove = cache.keys.filter { $0.hasSuffix("#short") || $0.hasSuffix("#long") }
-        for key in keysToRemove {
-            cache.removeValue(forKey: key)
-            Self.removeFromLookup(key)
-        }
+        cache.removeAll()
+        Self.clearLookup()
         expandedState.removeAll()
         saveCache()
         saveExpanded()
@@ -372,8 +444,9 @@ actor ArticleSummarizer {
         let len: String
         switch length {
         case .quick: len = "quick"
+        case .reel:  len = "reel"
+        case .reelExpanded: len = "reelExpanded"
         case .short: len = "short"
-        case .long:  len = "long"
         }
         return url.absoluteString + "#" + len
     }
@@ -544,8 +617,10 @@ actor ArticleSummarizer {
                     let primer = self.selectPrimerSlice(from: baseText, maxChars: 800)
                     let promptPrimer = prompt + primer
                     do {
-                        let sessionPrimer = LanguageModelSession(instructions: instructions)
-                        let streamPrimer = sessionPrimer.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        let session = self.heroSession ?? LanguageModelSession(instructions: instructions)
+                        if self.heroSession == nil { self.heroSession = session }
+
+                        let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
                         var finalTextPrimer: String = ""
                         var revealedCountPrimer: Int = 0
                         let step = 2
@@ -577,239 +652,185 @@ actor ArticleSummarizer {
                             HapticManager.shared.success()
                             continuation.finish()
                             return
+                        } else {
+                            self.heroSession = nil
+                            self.rewarmSession(.quick)
                         }
                     } catch {
+                        self.heroSession = nil
+                        self.rewarmSession(.quick)
                         continuation.finish()
                         return
                     }
-                case .short:
-                    let instructions = "Summarize in 2-3 sentences (80-100 words). Cover the main point, key facts, and one important implication or outcome. Include relevant numbers or decisions. No bullet points."
-
+                case .reel:
+                    // Reel summaries (~50 words) - similar to quick but slightly longer
+                    let instructions = "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis."
                     var prompt = "Summarize this article:\n\n"
                     if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
                         let s = String(seed.prefix(900))
                         prompt += "Preview/context from feed:\n\(s)\n\n"
                     }
-
-                    // Reuse cached session or create new one
-                    let session = self.summarySessionShort ?? LanguageModelSession(instructions: instructions)
-                    if self.summarySessionShort == nil { self.summarySessionShort = session }
-
-                    // Stage 1: quick primer
-                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1500)
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 1200)
                     let promptPrimer = prompt + primer
                     do {
-                        let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
-                        var finalTextPrimer: String = ""
-                        var revealedCountPrimer: Int = 0
+                        let session = self.reelSession ?? LanguageModelSession(instructions: instructions)
+                        if self.reelSession == nil { self.reelSession = session }
+
+                        let streamReel = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalTextReel: String = ""
+                        var revealedCountReel: Int = 0
                         let step = 2
-                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
-                        for try await partial in streamPrimer {
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms
+                        for try await partial in streamReel {
                             if Task.isCancelled { continuation.finish(); return }
                             guard let t = partial.content.text, !t.isEmpty else { continue }
-                            finalTextPrimer = t
-                            if t.count <= revealedCountPrimer { continue }
-                            var target = min(revealedCountPrimer + step, t.count)
+                            finalTextReel = t
+                            if t.count <= revealedCountReel { continue }
+                            var target = min(revealedCountReel + step, t.count)
                             while target < t.count {
                                 let idx = t.index(t.startIndex, offsetBy: target)
                                 let prefix = String(t[..<idx])
                                 continuation.yield(prefix)
                                 HapticManager.shared.typingHaptic()
-                                revealedCountPrimer = target
+                                revealedCountReel = target
                                 try? await Task.sleep(nanoseconds: stepDelay)
                                 if Task.isCancelled { continuation.finish(); return }
-                                target = min(revealedCountPrimer + step, t.count)
+                                target = min(revealedCountReel + step, t.count)
                             }
                             continuation.yield(t)
                             HapticManager.shared.typingHaptic()
-                            revealedCountPrimer = t.count
+                            revealedCountReel = t.count
                         }
-                        if !finalTextPrimer.isEmpty {
-                            self.cache[key] = finalTextPrimer
-                            Self.addToLookup(key)
-                            self.saveCache()
-                            // Skip Stage 2 if primer covers enough content or result is sufficient
-                            if finalTextPrimer.count >= 100 || primer.count >= baseText.count / 2 {
-                                HapticManager.shared.success()
-                                continuation.finish()
-                                return
-                            }
-                        } else {
-                            // Stage 1 produced no output - session may be stale
-                            self.summarySessionShort = nil; self.rewarmSession(.short)
-                        }
-                    } catch {
-                        // Stage 1 failed, reset session and fall through to Stage 2
-                        self.summarySessionShort = nil; self.rewarmSession(.short)
-                    }
-
-                    // Stage 2: fuller body (create fresh session since Stage 1 may have failed)
-                    do {
-                        let stage2Session = self.summarySessionShort ?? LanguageModelSession(instructions: instructions)
-                        if self.summarySessionShort == nil { self.summarySessionShort = stage2Session }
-
-                        let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 8000)
-                        let fullBody = String(selected.prefix(8000))
-                        let streamFull = stage2Session.streamResponse(to: prompt + fullBody, generating: InlineSummary.self)
-                        var finalTextFull: String = ""
-                        var revealedCountFull: Int = 0
-                        let step = 2
-                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
-                        for try await partial in streamFull {
-                            if Task.isCancelled { continuation.finish(); return }
-                            guard let t = partial.content.text, !t.isEmpty else { continue }
-                            finalTextFull = t
-                            if t.count <= revealedCountFull { continue }
-                            var target = min(revealedCountFull + step, t.count)
-                            while target < t.count {
-                                let idx = t.index(t.startIndex, offsetBy: target)
-                                let prefix = String(t[..<idx])
-                                continuation.yield(prefix)
-                                HapticManager.shared.typingHaptic()
-                                revealedCountFull = target
-                                try? await Task.sleep(nanoseconds: stepDelay)
-                                if Task.isCancelled { continuation.finish(); return }
-                                target = min(revealedCountFull + step, t.count)
-                            }
-                            continuation.yield(t)
-                            HapticManager.shared.typingHaptic()
-                            revealedCountFull = t.count
-                        }
-                        if !finalTextFull.isEmpty {
-                            self.cache[key] = finalTextFull
+                        if !finalTextReel.isEmpty {
+                            self.cache[key] = finalTextReel
                             Self.addToLookup(key)
                             self.saveCache()
                             HapticManager.shared.success()
+                            continuation.finish()
+                            return
                         } else {
-                            // Stream produced no output - session may be stale
-                            self.summarySessionShort = nil; self.rewarmSession(.short)
+                            self.reelSession = nil
+                            self.rewarmSession(.reel)
                         }
                     } catch {
-                        // Stage 2 failed - reset session for next attempt
-                        self.summarySessionShort = nil; self.rewarmSession(.short)
+                        self.reelSession = nil
+                        self.rewarmSession(.reel)
+                        continuation.finish()
+                        return
                     }
-                    continuation.finish()
-                    return
-                case .long:
-                    let instructions = """
-Summarize for busy readers in 5–8 sentences (250-300 words).
-Cover key facts, context, implications, and outcomes.
-Include relevant numbers, quotes, and decisions.
-Preserve qualifiers (e.g., "may", "could", "report suggests") and avoid overstating certainty.
-Do not introduce any information that isn't present in the text.
-"""
-
-                    var promptBase = "Summarize this article:\n\n"
+                case .reelExpanded:
+                    // Reel expanded summaries (~100-120 words) - for news reel expanded view
+                    let instructions = "Summarize in 4-5 sentences (100-120 words). Cover the main point, key facts, and important context. Make it informative and complete. No lists, no emojis."
+                    var prompt = "Summarize this article:\n\n"
                     if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
                         let s = String(seed.prefix(900))
-                        promptBase += "Preview/context from feed:\n\(s)\n\n"
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
                     }
-
-                    // Reuse cached session or create new one
-                    let session = self.summarySessionLong ?? LanguageModelSession(instructions: instructions)
-                    if self.summarySessionLong == nil { self.summarySessionLong = session }
-
-                    // Stage 1: primer
-                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 2000)
-                    let promptPrimer = promptBase + primer
+                    // Use more context for expanded summaries
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 2500)
+                    let promptPrimer = prompt + primer
                     do {
-                        let streamPrimer = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
-                        var finalTextPrimer: String = ""
-                        var revealedCountPrimer: Int = 0
+                        let session = self.reelExpandedSession ?? LanguageModelSession(instructions: instructions)
+                        if self.reelExpandedSession == nil { self.reelExpandedSession = session }
+
+                        let streamReelExp = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalText: String = ""
+                        var revealedCount: Int = 0
                         let step = 2
-                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
-                        for try await partial in streamPrimer {
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms
+                        for try await partial in streamReelExp {
                             if Task.isCancelled { continuation.finish(); return }
                             guard let t = partial.content.text, !t.isEmpty else { continue }
-                            finalTextPrimer = t
-                            if t.count <= revealedCountPrimer { continue }
-                            var target = min(revealedCountPrimer + step, t.count)
+                            finalText = t
+                            if t.count <= revealedCount { continue }
+                            var target = min(revealedCount + step, t.count)
                             while target < t.count {
                                 let idx = t.index(t.startIndex, offsetBy: target)
                                 let prefix = String(t[..<idx])
                                 continuation.yield(prefix)
                                 HapticManager.shared.typingHaptic()
-                                revealedCountPrimer = target
+                                revealedCount = target
                                 try? await Task.sleep(nanoseconds: stepDelay)
                                 if Task.isCancelled { continuation.finish(); return }
-                                target = min(revealedCountPrimer + step, t.count)
+                                target = min(revealedCount + step, t.count)
                             }
                             continuation.yield(t)
                             HapticManager.shared.typingHaptic()
-                            revealedCountPrimer = t.count
+                            revealedCount = t.count
                         }
-                        if !finalTextPrimer.isEmpty {
-                            self.cache[key] = finalTextPrimer
-                            Self.addToLookup(key)
-                            self.saveCache()
-                            // Skip Stage 2 if primer covers enough content or result is sufficient
-                            if finalTextPrimer.count >= 140 || primer.count >= baseText.count / 2 {
-                                HapticManager.shared.success()
-                                continuation.finish()
-                                return
-                            }
-                        } else {
-                            // Stage 1 produced no output - session may be stale
-                            self.summarySessionLong = nil; self.rewarmSession(.long)
-                        }
-                    } catch {
-                        // Stage 1 failed, reset session and fall through to Stage 2
-                        self.summarySessionLong = nil; self.rewarmSession(.long)
-                    }
-
-                    // Stage 2: full body (create fresh session since Stage 1 may have failed)
-                    do {
-                        let stage2Session = self.summarySessionLong ?? LanguageModelSession(instructions: instructions)
-                        if self.summarySessionLong == nil { self.summarySessionLong = stage2Session }
-
-                        let selected = self.selectStructureAwareSlice(from: baseText, targetChars: 15_000)
-                        let body = String(selected.prefix(15_000))
-                        let promptFull = promptBase + body
-
-                        let streamFull = stage2Session.streamResponse(to: promptFull, generating: InlineSummary.self)
-                        var finalTextFull: String = ""
-                        var revealedCountFull: Int = 0
-                        let step = 2
-                        let stepDelay: UInt64 = 20_000_000 // 20 ms (faster typewriter)
-
-                        for try await partial in streamFull {
-                            if Task.isCancelled { continuation.finish(); return }
-                            guard let t = partial.content.text, !t.isEmpty else { continue }
-                            finalTextFull = t
-
-                            if t.count <= revealedCountFull { continue }
-                            var target = min(revealedCountFull + step, t.count)
-                            while target < t.count {
-                                let idx = t.index(t.startIndex, offsetBy: target)
-                                let prefix = String(t[..<idx])
-                                continuation.yield(prefix)
-                                HapticManager.shared.typingHaptic()
-                                revealedCountFull = target
-                                try? await Task.sleep(nanoseconds: stepDelay)
-                                if Task.isCancelled { continuation.finish(); return }
-                                target = min(revealedCountFull + step, t.count)
-                            }
-
-                            continuation.yield(t)
-                            HapticManager.shared.typingHaptic()
-                            revealedCountFull = t.count
-                        }
-
-                        if !finalTextFull.isEmpty {
-                            self.cache[key] = finalTextFull
+                        if !finalText.isEmpty {
+                            self.cache[key] = finalText
                             Self.addToLookup(key)
                             self.saveCache()
                             HapticManager.shared.success()
+                            continuation.finish()
+                            return
                         } else {
-                            // Stream produced no output - session may be stale
-                            self.summarySessionLong = nil; self.rewarmSession(.long)
+                            self.reelExpandedSession = nil
+                            self.rewarmSession(.reelExpanded)
                         }
                     } catch {
-                        // Stage 2 failed - reset session for next attempt
-                        self.summarySessionLong = nil; self.rewarmSession(.long)
+                        self.reelExpandedSession = nil
+                        self.rewarmSession(.reelExpanded)
+                        continuation.finish()
+                        return
                     }
-                    continuation.finish()
-                    return
+                case .short:
+                    // Short summaries (~60-80 words) - single stage approach
+                    let instructions = "Summarize in 2-3 sentences (60-80 words). Cover the main point and key facts. Make it concise and informative. No lists, no emojis."
+                    var prompt = "Summarize this article:\n\n"
+                    if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
+                        let s = String(seed.prefix(900))
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
+                    }
+                    let primer = self.selectPrimerSlice(from: baseText, maxChars: 2000)
+                    let promptPrimer = prompt + primer
+                    do {
+                        let session = self.summarySessionShort ?? LanguageModelSession(instructions: instructions)
+                        if self.summarySessionShort == nil { self.summarySessionShort = session }
+
+                        let streamShort = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalText: String = ""
+                        var revealedCount: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms
+                        for try await partial in streamShort {
+                            if Task.isCancelled { continuation.finish(); return }
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalText = t
+                            if t.count <= revealedCount { continue }
+                            var target = min(revealedCount + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
+                                revealedCount = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCount + step, t.count)
+                            }
+                            continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
+                            revealedCount = t.count
+                        }
+                        if !finalText.isEmpty {
+                            self.cache[key] = finalText
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            HapticManager.shared.success()
+                            continuation.finish()
+                            return
+                        } else {
+                            self.summarySessionShort = nil
+                            self.rewarmSession(.short)
+                        }
+                    } catch {
+                        self.summarySessionShort = nil
+                        self.rewarmSession(.short)
+                        continuation.finish()
+                        return
+                    }
                 }
 #else
                 continuation.finish()

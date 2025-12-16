@@ -352,6 +352,7 @@ struct ContentView: View {
     @State private var isInitialLoad: Bool = true
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
+    @State private var showingNewsReel: Bool = false
 
     private var heroSourceIDs: Set<UUID> {
         (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
@@ -1354,6 +1355,27 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .presentationDetents([.large])
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // News Reel floating button
+            Button {
+                HapticManager.shared.click()
+                showingNewsReel = true
+            } label: {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            }
+            .padding(.trailing, 20)
+            .padding(.bottom, 24)
+        }
+        .fullScreenCover(isPresented: $showingNewsReel) {
+            NewsReelView()
+                .environmentObject(store)
         }
     }
 

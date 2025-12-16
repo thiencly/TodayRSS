@@ -10,13 +10,10 @@ struct AllArticlesView: View {
     @State private var expandedSummaries: Set<UUID> = []
     @State private var summaryErrors: Set<UUID> = []
 
-    @AppStorage("summaryLength") private var summaryLengthRaw: String = "short"
     @State private var aiSummarized: Set<UUID> = []
     @State private var currentDay: Date? = nil
     @State private var suppressNextRowTap = false
     @State private var hasCachedSummaryCache: Set<UUID> = []
-    @State private var showLengthChangeAlert: Bool = false
-    @State private var pendingLengthChange: String? = nil
     @State private var readURLs: Set<URL> = []
     @State private var seenURLs: Set<URL> = []
 
@@ -86,15 +83,6 @@ struct AllArticlesView: View {
                 }
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            if !vm.items.isEmpty {
-                FloatingRefreshButton(isLoading: vm.isLoading) {
-                    Task { await vm.loadAll(feeds: store.feeds) }
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 24)
-            }
-        }
         .task(id: refreshID) { await vm.loadAll(feeds: store.feeds) }
         .onAppear {
             // Notify ContentView that user navigated to article list
@@ -127,43 +115,16 @@ struct AllArticlesView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Section("Summary Length") {
-                        Button {
-                            if summaryLengthRaw != "short" {
-                                pendingLengthChange = "short"
-                                showLengthChangeAlert = true
-                            }
-                        } label: {
-                            HStack {
-                                Text("Short")
-                                if summaryLengthRaw == "short" { Image(systemName: "checkmark") }
-                            }
-                        }
-                        Button {
-                            if summaryLengthRaw != "long" {
-                                pendingLengthChange = "long"
-                                showLengthChangeAlert = true
-                            }
-                        } label: {
-                            HStack {
-                                Text("Long")
-                                if summaryLengthRaw == "long" { Image(systemName: "checkmark") }
-                            }
-                        }
-                    }
-                    Button(role: .destructive) {
-                        inlineSummaries.removeAll()
-                        aiSummarized.removeAll()
-                        expandedSummaries.removeAll()
-                        summaryErrors.removeAll()
-                        Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                    } label: {
-                        Label("Clear Summaries", systemImage: "trash")
-                    }
+                Button {
+                    Task { await vm.loadAll(feeds: store.feeds) }
                 } label: {
-                    Image(systemName: "sparkles")
+                    if vm.isLoading {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
                 }
+                .disabled(vm.isLoading)
             }
         }
         .onDisappear {
@@ -173,28 +134,6 @@ struct AllArticlesView: View {
                 await ArticleReadStateManager.shared.markAllAsSeen(urls)
                 NotificationCenter.default.post(name: .didReturnToSourceList, object: nil)
             }
-        }
-        .alert("Change Summary Length?", isPresented: $showLengthChangeAlert) {
-            Button("Cancel", role: .cancel) {
-                pendingLengthChange = nil
-            }
-            Button("Continue", role: .destructive) {
-                if let newLength = pendingLengthChange {
-                    // Clear local state
-                    inlineSummaries.removeAll()
-                    aiSummarized.removeAll()
-                    expandedSummaries.removeAll()
-                    summaryErrors.removeAll()
-                    hasCachedSummaryCache.removeAll()
-                    // Clear cached summaries (not hero summaries)
-                    Task { await ArticleSummarizer.shared.clearArticleSummaries() }
-                    // Apply new length
-                    summaryLengthRaw = newLength
-                    pendingLengthChange = nil
-                }
-            }
-        } message: {
-            Text("Changing summary length will clear all existing article summaries. This won't affect Today Highlights.")
         }
     }
 
@@ -230,7 +169,7 @@ struct AllArticlesView: View {
         let hasSummary = (aiSummary != nil)
 
         if hasSummary {
-            let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
+            let length: ArticleSummarizer.Length = .short
             if expandedSummaries.contains(item.id) {
                 // No animation for collapse to avoid List jumping
                 expandedSummaries.remove(item.id)
@@ -247,7 +186,7 @@ struct AllArticlesView: View {
     }
 
     private func preloadSummaries(for items: [Article]) {
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
+        let length: ArticleSummarizer.Length = .short
         Task { @MainActor in
             var updated = inlineSummaries
             var expanded = expandedSummaries
@@ -277,7 +216,7 @@ struct AllArticlesView: View {
     @MainActor private func summarize(_ item: Article) async {
         summaryErrors.remove(item.id)
         summarizingID = item.id
-        let length: ArticleSummarizer.Length = (summaryLengthRaw == "long") ? .long : .short
+        let length: ArticleSummarizer.Length = .short
 
         if !expandedSummaries.contains(item.id) {
             withAnimation(.easeInOut(duration: 0.2)) {

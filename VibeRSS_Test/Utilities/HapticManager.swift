@@ -45,7 +45,7 @@ final class HapticManager {
 
         // Fire haptic on main thread
         DispatchQueue.main.async { [weak self] in
-            self?.softImpact.impactOccurred(intensity: 0.4)
+            self?.lightImpact.impactOccurred(intensity: 0.7)
         }
     }
 
