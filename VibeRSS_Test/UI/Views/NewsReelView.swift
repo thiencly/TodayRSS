@@ -9,6 +9,7 @@ import SwiftUI
 
 struct NewsReelView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: FeedStore
     @StateObject private var viewModel = NewsReelViewModel()
 
@@ -78,8 +79,12 @@ struct NewsReelView: View {
                     if !viewModel.currentArticles.isEmpty {
                         Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.currentArticles.count)")
                             .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .glassEffect(.clear)
                     }
                 }
 

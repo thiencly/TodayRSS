@@ -85,6 +85,7 @@ struct NewsReelCardView: View {
                                 dominantColor = extractedColor
                             }
                         }
+                        .id(thumbnailURL) // Force new view instance for each URL to reset pan animation
                         .frame(width: geometry.size.width, height: imageHeight)
                         .clipped()
 
@@ -250,8 +251,7 @@ struct HighResThumbnailView: View {
 
     @State private var image: UIImage?
     @State private var isLoading: Bool = false
-    @State private var panOffset: CGFloat = 0
-    @State private var panDirection: CGFloat = 1  // 1 = right, -1 = left
+    @State private var startTime: Date = Date()
 
     // Pan animation settings
     private let panAmount: CGFloat = 30  // How far to pan (points)
@@ -261,12 +261,18 @@ struct HighResThumbnailView: View {
         GeometryReader { geometry in
             ZStack {
                 if let image = image {
-                    // Make image wider to allow panning
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: contentMode)
-                        .frame(width: geometry.size.width + panAmount * 2, height: geometry.size.height)
-                        .offset(x: panOffset)
+                    // Use TimelineView for reliable continuous animation
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                        let elapsed = context.date.timeIntervalSince(startTime)
+                        // Sine wave oscillation between -panAmount and +panAmount
+                        let offset = sin(elapsed * .pi / (panDuration / 2)) * panAmount
+
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: contentMode)
+                            .frame(width: geometry.size.width + panAmount * 2, height: geometry.size.height)
+                            .offset(x: offset)
+                    }
                 } else if isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -275,35 +281,14 @@ struct HighResThumbnailView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
         }
-        .onAppear { loadImage() }
-        .onChange(of: url) { _, _ in
-            panOffset = 0
-            image = nil  // Clear old image to force reload
-            loadImage()
-        }
-        .onChange(of: image) { _, newImage in
-            // Start pan animation whenever image changes
-            if newImage != nil {
-                startPanAnimation()
-            }
+        .task(id: url) {
+            await loadImage()
         }
     }
 
-    private func startPanAnimation() {
-        // Start from left edge
-        panOffset = -panAmount
-
-        // Animate to right, then back continuously
-        withAnimation(
-            .easeInOut(duration: panDuration / 2)
-            .repeatForever(autoreverses: true)
-        ) {
-            panOffset = panAmount
-        }
-    }
-
-    private func loadImage() {
-        guard !isLoading else { return }
+    private func loadImage() async {
+        // Reset start time for this image
+        startTime = Date()
 
         // Check for cached color first
         if let cachedColor = ImageDiskCache.cachedColor(for: url) {
@@ -311,17 +296,17 @@ struct HighResThumbnailView: View {
         }
 
         isLoading = true
-        Task(priority: .userInitiated) {
-            // Load high-resolution image for full-screen display
-            let result = await ImageDiskCache.shared.highResImageWithColor(for: url)
-            await MainActor.run {
-                image = result?.image
-                if let uiColor = result?.dominantColor {
-                    onColorExtracted?(Color(uiColor))
-                }
-                isLoading = false
-            }
+
+        // Load high-resolution image for full-screen display
+        let result = await ImageDiskCache.shared.highResImageWithColor(for: url)
+
+        guard !Task.isCancelled else { return }
+
+        image = result?.image
+        if let uiColor = result?.dominantColor {
+            onColorExtracted?(Color(uiColor))
         }
+        isLoading = false
     }
 }
 

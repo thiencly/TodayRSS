@@ -1,6 +1,47 @@
 import SwiftUI
 import UIKit
 
+// MARK: - App Tint
+enum AppTint: String, CaseIterable {
+    case blue = "blue"
+    case purple = "purple"
+    case pink = "pink"
+    case red = "red"
+    case orange = "orange"
+    case yellow = "yellow"
+    case green = "green"
+    case teal = "teal"
+    case indigo = "indigo"
+
+    var displayName: String {
+        switch self {
+        case .blue: return "Blue"
+        case .purple: return "Purple"
+        case .pink: return "Pink"
+        case .red: return "Red"
+        case .orange: return "Orange"
+        case .yellow: return "Yellow"
+        case .green: return "Green"
+        case .teal: return "Teal"
+        case .indigo: return "Indigo"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .blue: return .blue
+        case .purple: return .purple
+        case .pink: return .pink
+        case .red: return .red
+        case .orange: return .orange
+        case .yellow: return .yellow
+        case .green: return .green
+        case .teal: return .teal
+        case .indigo: return .indigo
+        }
+    }
+}
+
 // MARK: - Appearance Mode
 enum AppearanceMode: String, CaseIterable {
     case auto = "auto"
@@ -76,6 +117,7 @@ struct SettingsView: View {
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
+    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Bindable private var syncManager = BackgroundSyncManager.shared
@@ -195,6 +237,20 @@ struct SettingsView: View {
                     Text("Appearance")
                 } footer: {
                     Text("Choose between light mode, dark mode, or auto to follow your device's setting.")
+                }
+
+                // MARK: - App Tint Section
+                Section {
+                    AppTintSelectionView(
+                        selectedTint: Binding(
+                            get: { AppTint(rawValue: appTint) ?? .blue },
+                            set: { appTint = $0.rawValue }
+                        )
+                    )
+                } header: {
+                    Text("App Tint")
+                } footer: {
+                    Text("Choose the accent color used throughout the app.")
                 }
 
                 // MARK: - Sidebar Section
@@ -413,6 +469,70 @@ struct AppIconCell: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Color.accentColor)
+                        .font(.caption)
+                } else {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - App Tint Selection View
+struct AppTintSelectionView: View {
+    @Binding var selectedTint: AppTint
+
+    private let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(AppTint.allCases, id: \.self) { tint in
+                AppTintCell(
+                    tint: tint,
+                    isSelected: selectedTint == tint
+                ) {
+                    selectedTint = tint
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - App Tint Cell
+struct AppTintCell: View {
+    let tint: AppTint
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Circle()
+                    .fill(tint.color)
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
+                    )
+                    .shadow(color: tint.color.opacity(0.4), radius: 4, x: 0, y: 2)
+
+                Text(tint.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(tint.color)
                         .font(.caption)
                 } else {
                     Image(systemName: "circle")

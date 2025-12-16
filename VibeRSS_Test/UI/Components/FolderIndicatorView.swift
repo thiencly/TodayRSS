@@ -24,15 +24,14 @@ struct FolderIndicatorView: View {
                             name: source.displayName,
                             isSelected: index == selectedIndex,
                             namespace: pillAnimation
-                        )
-                        .id(index)
-                        .onTapGesture {
+                        ) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedIndex = index
                             }
                             onSelect?(index)
                             HapticManager.shared.click()
                         }
+                        .id(index)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -52,16 +51,35 @@ struct FolderPill: View {
     let name: String
     let isSelected: Bool
     var namespace: Namespace.ID
+    var action: () -> Void
+
+    @AppStorage("appTint") private var appTint: String = "blue"
+
+    private var tintColor: Color {
+        (AppTint(rawValue: appTint) ?? .blue).color
+    }
 
     var body: some View {
-        Text(name)
-            .font(.subheadline)
-            .fontWeight(isSelected ? .semibold : .medium)
-            .foregroundStyle(isSelected ? .primary : .secondary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .glassEffect(isSelected ? .regular.interactive() : .regular)
-            .contentShape(Capsule())
+        Button(action: action) {
+            Text(name)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(tintColor)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        // Use .clear glass for media-rich backgrounds - no adaptive light/dark flipping
+        // The .interactive() modifier enables native Liquid Glass press animation
+        .glassEffect(.clear.interactive())
+        .contentShape(Capsule())
     }
 }
 
