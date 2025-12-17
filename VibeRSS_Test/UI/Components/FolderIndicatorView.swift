@@ -25,11 +25,16 @@ struct FolderIndicatorView: View {
                             isSelected: index == selectedIndex,
                             namespace: pillAnimation
                         ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedIndex = index
+                            if let onSelect = onSelect {
+                                // Let the callback handle selection and haptics
+                                onSelect(index)
+                            } else {
+                                // Default behavior when no callback
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedIndex = index
+                                }
+                                HapticManager.shared.click()
                             }
-                            onSelect?(index)
-                            HapticManager.shared.click()
                         }
                         .id(index)
                     }

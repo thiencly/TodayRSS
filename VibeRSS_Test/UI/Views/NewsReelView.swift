@@ -32,6 +32,10 @@ struct NewsReelView: View {
     private let swipeThreshold: CGFloat = 50
     private let velocityThreshold: CGFloat = 300
 
+    // Horizontal transition for topic changes
+    @State private var horizontalTransitionOffset: CGFloat = 0
+    @State private var isTransitioningSource: Bool = false
+
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -56,8 +60,11 @@ struct NewsReelView: View {
                             sources: viewModel.sources,
                             selectedIndex: Binding(
                                 get: { viewModel.currentSourceIndex },
-                                set: { viewModel.selectSource(at: $0) }
-                            )
+                                set: { _ in } // Handled by onSelect
+                            ),
+                            onSelect: { newIndex in
+                                transitionToSource(at: newIndex, screenWidth: geometry.size.width)
+                            }
                         )
                         .padding(.top, 4)
                     }
@@ -140,7 +147,10 @@ struct NewsReelView: View {
                         onCollapseTap: { collapseSummary() }
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
-                    .offset(y: cardOffset(for: index, currentIndex: currentIndex, geometry: geometry))
+                    .offset(
+                        x: horizontalTransitionOffset + (isTransitioningSource ? 0 : dragOffset.width * 0.3),
+                        y: cardOffset(for: index, currentIndex: currentIndex, geometry: geometry)
+                    )
                     .opacity(cardOpacity(for: index, currentIndex: currentIndex))
                     .zIndex(index == currentIndex ? 1 : 0)
                     .onAppear {
@@ -155,10 +165,12 @@ struct NewsReelView: View {
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    dragOffset = value.translation
+                    if !isTransitioningSource {
+                        dragOffset = value.translation
+                    }
                 }
                 .onEnded { value in
-                    handleDragEnd(value: value)
+                    handleDragEnd(value: value, screenWidth: geometry.size.width)
                 }
         )
     }
@@ -191,7 +203,7 @@ struct NewsReelView: View {
 
     // MARK: - Gesture Handling
 
-    private func handleDragEnd(value: DragGesture.Value) {
+    private func handleDragEnd(value: DragGesture.Value, screenWidth: CGFloat) {
         let verticalTranslation = value.translation.height
         let horizontalTranslation = value.translation.width
         let verticalVelocity = value.predictedEndTranslation.height - value.translation.height
@@ -238,33 +250,107 @@ struct NewsReelView: View {
             if horizontalTranslation < -swipeThreshold || horizontalVelocity < -velocityThreshold {
                 // Swipe left - next folder
                 if viewModel.hasNextSource {
-                    HapticManager.shared.click()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        // Collapse expanded summary when navigating
-                        showingExpandedSummary = false
-                        expandedSummaryText = ""
-                        viewModel.nextSource()
-                        dragOffset = .zero
-                    }
+                    transitionToNextSource(screenWidth: screenWidth)
                 } else {
                     bounceBack()
                 }
             } else if horizontalTranslation > swipeThreshold || horizontalVelocity > velocityThreshold {
                 // Swipe right - previous folder
                 if viewModel.hasPreviousSource {
-                    HapticManager.shared.click()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        // Collapse expanded summary when navigating
-                        showingExpandedSummary = false
-                        expandedSummaryText = ""
-                        viewModel.previousSource()
-                        dragOffset = .zero
-                    }
+                    transitionToPreviousSource(screenWidth: screenWidth)
                 } else {
                     bounceBack()
                 }
             } else {
                 bounceBack()
+            }
+        }
+    }
+
+    private func transitionToNextSource(screenWidth: CGFloat) {
+        HapticManager.shared.click()
+        isTransitioningSource = true
+        showingExpandedSummary = false
+        expandedSummaryText = ""
+
+        // Animate current content off to the left
+        withAnimation(.easeIn(duration: 0.15)) {
+            horizontalTransitionOffset = -screenWidth
+            dragOffset = .zero
+        }
+
+        // After animation completes, change source and animate new content in from right
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            viewModel.nextSource()
+            horizontalTransitionOffset = screenWidth
+
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                horizontalTransitionOffset = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTransitioningSource = false
+            }
+        }
+    }
+
+    private func transitionToPreviousSource(screenWidth: CGFloat) {
+        HapticManager.shared.click()
+        isTransitioningSource = true
+        showingExpandedSummary = false
+        expandedSummaryText = ""
+
+        // Animate current content off to the right
+        withAnimation(.easeIn(duration: 0.15)) {
+            horizontalTransitionOffset = screenWidth
+            dragOffset = .zero
+        }
+
+        // After animation completes, change source and animate new content in from left
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            viewModel.previousSource()
+            horizontalTransitionOffset = -screenWidth
+
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                horizontalTransitionOffset = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTransitioningSource = false
+            }
+        }
+    }
+
+    private func transitionToSource(at index: Int, screenWidth: CGFloat) {
+        let currentIndex = viewModel.currentSourceIndex
+        guard index != currentIndex else { return }
+        guard !isTransitioningSource else { return }
+
+        HapticManager.shared.click()
+        isTransitioningSource = true
+        showingExpandedSummary = false
+        expandedSummaryText = ""
+
+        // Determine direction: going to higher index = slide left, lower index = slide right
+        let goingForward = index > currentIndex
+
+        // Animate current content off screen
+        withAnimation(.easeIn(duration: 0.15)) {
+            horizontalTransitionOffset = goingForward ? -screenWidth : screenWidth
+            dragOffset = .zero
+        }
+
+        // After animation completes, change source and animate new content in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            viewModel.selectSource(at: index)
+            horizontalTransitionOffset = goingForward ? screenWidth : -screenWidth
+
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                horizontalTransitionOffset = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTransitioningSource = false
             }
         }
     }

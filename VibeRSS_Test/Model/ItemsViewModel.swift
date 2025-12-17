@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import WidgetKit
 
 @MainActor
 final class ItemsViewModel: ObservableObject {
@@ -21,9 +20,6 @@ final class ItemsViewModel: ObservableObject {
                 result[i].sourceTitle = source.title
                 result[i].sourceIconURL = source.iconURL
             }
-
-            // Sync to widgets
-            WidgetUpdater.shared.syncFeedToWidget(feedID: source.id, articles: result)
 
             // Track latest articles for new indicator in sidebar
             let articleURLs = result.map { $0.link }

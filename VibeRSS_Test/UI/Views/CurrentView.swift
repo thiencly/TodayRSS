@@ -1,5 +1,4 @@
 import SwiftUI
-import WidgetKit
 
 struct CurrentView: View {
     @EnvironmentObject private var store: FeedStore
@@ -159,11 +158,8 @@ struct CurrentView: View {
             }
         }
 
-        // Sync to widgets
+        // Track latest articles for new indicator in sidebar
         if !articlesByFeed.isEmpty {
-            WidgetUpdater.shared.syncFeedsToWidget(articlesByFeed: articlesByFeed)
-
-            // Track latest articles for new indicator in sidebar
             for (feedID, articles) in articlesByFeed {
                 let urls = articles.map { $0.link }
                 Task { await ArticleReadStateManager.shared.updateLatestArticles(for: feedID, urls: urls) }
