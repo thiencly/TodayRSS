@@ -11,6 +11,8 @@ struct NewsReelCardView: View {
     let article: Article
     let reelSummary: String?
     let isLoadingSummary: Bool
+    let isRetryingSummary: Bool  // Whether currently retrying after failure
+    let hasSummaryFailed: Bool  // Whether all retry attempts exhausted
     let isExpanded: Bool  // Whether showing expanded summary
     let expandedSummary: String  // The streaming/expanded summary text
     let isStreamingSummary: Bool  // Whether currently streaming
@@ -18,9 +20,25 @@ struct NewsReelCardView: View {
     var onTitleTap: () -> Void  // Opens reader mode
     var onSummaryTap: () -> Void  // Expands/generates summary
     var onCollapseTap: () -> Void  // Collapse back to reel summary
+    var onRetryTap: () -> Void  // Retry failed summary generation
 
     @State private var dominantColor: Color = Color.black
+    @State private var isDarkBackground: Bool = true  // Track if background is dark (for text color)
     @State private var sparkleColor: Color = AppleIntelligenceColors.colors.randomElement() ?? .purple
+
+    // Text colors based on background brightness
+    private var primaryTextColor: Color {
+        isDarkBackground ? .white : Color(white: 0.15)
+    }
+    private var secondaryTextColor: Color {
+        isDarkBackground ? .white.opacity(0.9) : Color(white: 0.2)
+    }
+    private var tertiaryTextColor: Color {
+        isDarkBackground ? .white.opacity(0.6) : Color(white: 0.35)
+    }
+    private var summaryTextColor: Color {
+        isDarkBackground ? .white.opacity(0.85) : Color(white: 0.2)
+    }
 
     // Format relative time
     private var relativeTime: String {
@@ -83,6 +101,7 @@ struct NewsReelCardView: View {
                         HighResThumbnailView(url: thumbnailURL, contentMode: .fill) { extractedColor in
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 dominantColor = extractedColor
+                                isDarkBackground = isColorDark(extractedColor)
                             }
                         }
                         .id(thumbnailURL) // Force new view instance for each URL to reset pan animation
@@ -123,7 +142,7 @@ struct NewsReelCardView: View {
                                 CachedAsyncImage(url: iconURL, contentMode: .fill, size: CGSize(width: 22, height: 22)) {
                                     Image(systemName: "dot.radiowaves.up.forward")
                                         .font(.system(size: 11))
-                                        .foregroundStyle(.white.opacity(0.7))
+                                        .foregroundStyle(tertiaryTextColor)
                                 }
                                 .frame(width: 22, height: 22)
                                 .clipShape(RoundedRectangle(cornerRadius: 5))
@@ -133,16 +152,16 @@ struct NewsReelCardView: View {
                                 Text(sourceName)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(.white.opacity(0.9))
+                                    .foregroundStyle(secondaryTextColor)
                             }
 
                             if !relativeTime.isEmpty {
                                 Text("·")
                                     .font(.subheadline)
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .foregroundStyle(tertiaryTextColor)
                                 Text(relativeTime)
                                     .font(.subheadline)
-                                    .foregroundStyle(.white.opacity(0.6))
+                                    .foregroundStyle(tertiaryTextColor)
                             }
 
                             Spacer()
@@ -152,7 +171,7 @@ struct NewsReelCardView: View {
                         Text(article.title)
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(primaryTextColor)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                             .contentShape(Rectangle())
@@ -168,6 +187,7 @@ struct NewsReelCardView: View {
                                 expandedSummary: expandedSummary,
                                 isStreamingSummary: isStreamingSummary,
                                 sparkleColor: sparkleColor,
+                                isDarkBackground: isDarkBackground,
                                 availableHeight: availableSummaryHeight,
                                 onTap: {
                                     HapticManager.shared.click()
@@ -179,7 +199,7 @@ struct NewsReelCardView: View {
                             if let summary = reelSummary, !summary.isEmpty {
                                 (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
                                     .font(.body)
-                                    .foregroundStyle(.white.opacity(0.85))
+                                    .foregroundStyle(summaryTextColor)
                                     .lineLimit(nil)
                                     .multilineTextAlignment(.leading)
                                     .contentShape(Rectangle())
@@ -187,19 +207,40 @@ struct NewsReelCardView: View {
                                         HapticManager.shared.click()
                                         onSummaryTap()
                                     }
-                            } else if isLoadingSummary {
+                            } else if isLoadingSummary || isRetryingSummary {
                                 HStack(spacing: 8) {
                                     ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
                                         .scaleEffect(0.8)
-                                    Text("Generating summary...")
+                                    Text(isRetryingSummary ? "Retrying..." : "Generating summary...")
                                         .font(.subheadline)
-                                        .foregroundStyle(.white.opacity(0.6))
+                                        .foregroundStyle(tertiaryTextColor)
                                 }
+                            } else if hasSummaryFailed {
+                                // Tap to retry button
+                                Button {
+                                    HapticManager.shared.click()
+                                    onRetryTap()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.subheadline)
+                                        Text("Tap to retry summary")
+                                            .font(.subheadline)
+                                    }
+                                    .foregroundStyle(sparkleColor)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule()
+                                            .fill(sparkleColor.opacity(0.15))
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             } else if !article.summary.isEmpty {
                                 Text(stripHTML(article.summary))
                                     .font(.body)
-                                    .foregroundStyle(.white.opacity(0.85))
+                                    .foregroundStyle(summaryTextColor)
                                     .lineLimit(nil)
                                     .multilineTextAlignment(.leading)
                                     .contentShape(Rectangle())
@@ -219,10 +260,28 @@ struct NewsReelCardView: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
         }
-        .ignoresSafeArea()
     }
 
     // MARK: - Helpers
+
+    /// Calculate if a color is dark based on luminance
+    private func isColorDark(_ color: Color) -> Bool {
+        // Convert Color to UIColor to get RGB components
+        let uiColor = UIColor(color)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        // Calculate luminance using standard formula
+        // Weights: R=0.299, G=0.587, B=0.114
+        let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+
+        // If luminance < 0.5, the color is dark
+        return luminance < 0.5
+    }
 
     private func stripHTML(_ html: String) -> String {
         var result = html
@@ -447,6 +506,7 @@ struct ExpandedSummaryContent: View {
     let expandedSummary: String
     let isStreamingSummary: Bool
     let sparkleColor: Color
+    let isDarkBackground: Bool
     let availableHeight: CGFloat
     let onTap: () -> Void
 
@@ -454,21 +514,32 @@ struct ExpandedSummaryContent: View {
     @State private var isScrollable: Bool = false
     @State private var isAtBottom: Bool = false
 
+    // Dynamic text colors based on background
+    private var primaryTextColor: Color {
+        isDarkBackground ? .white : Color(white: 0.15)
+    }
+    private var tertiaryTextColor: Color {
+        isDarkBackground ? .white.opacity(0.6) : Color(white: 0.35)
+    }
+    private var summaryTextColor: Color {
+        isDarkBackground ? .white.opacity(0.85) : Color(white: 0.2)
+    }
+
     private var summaryTextView: some View {
         VStack(alignment: .leading, spacing: 8) {
             if isStreamingSummary && expandedSummary.isEmpty {
                 HStack(spacing: 8) {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
                         .scaleEffect(0.8)
                     Text("Generating summary...")
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(tertiaryTextColor)
                 }
             } else {
                 (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(expandedSummary))
                     .font(.body)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(summaryTextColor)
                     .lineLimit(nil)
                     .multilineTextAlignment(.leading)
             }
@@ -509,7 +580,7 @@ struct ExpandedSummaryContent: View {
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(tertiaryTextColor)
                     Spacer()
                 }
                 .padding(.top, 4)
@@ -526,11 +597,20 @@ struct ExpandedSummaryContent: View {
                             .onAppear {
                                 contentHeight = geo.size.height
                                 isScrollable = contentHeight > availableHeight
+                                // Initially not at bottom if scrollable
+                                if isScrollable {
+                                    isAtBottom = false
+                                }
                             }
                             .onChange(of: expandedSummary) { _, _ in
                                 DispatchQueue.main.async {
-                                    contentHeight = geo.size.height
-                                    isScrollable = contentHeight > availableHeight
+                                    let newHeight = geo.size.height
+                                    contentHeight = newHeight
+                                    isScrollable = newHeight > availableHeight
+                                    // Reset to not at bottom when content changes and is scrollable
+                                    if isScrollable {
+                                        isAtBottom = false
+                                    }
                                 }
                             }
                     }

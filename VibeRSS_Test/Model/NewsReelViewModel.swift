@@ -58,6 +58,11 @@ final class NewsReelViewModel: ObservableObject {
     private var feeds: [Feed] = []
     private var prefetchTask: Task<Void, Never>?
 
+    /// Track failed summary attempts for retry logic
+    private var failedSummaryAttempts: [URL: (count: Int, lastAttempt: Date)] = [:]
+    private let maxRetryAttempts = 3
+    private let retryDelaySeconds: [Double] = [2, 5, 10] // Exponential backoff
+
     // MARK: - Computed Properties
 
     var currentSource: ReelSource? {
@@ -89,6 +94,36 @@ final class NewsReelViewModel: ObservableObject {
 
     var hasPreviousSource: Bool {
         currentSourceIndex > 0
+    }
+
+    /// Get articles for a specific source index (used for rendering adjacent sources during transitions)
+    func articles(forSourceAt index: Int) -> [Article] {
+        guard index >= 0 && index < sources.count else { return [] }
+        let source = sources[index]
+        return articlesBySource[source.id] ?? []
+    }
+
+    /// Preload articles for adjacent sources (for smooth transitions)
+    func preloadAdjacentSources() async {
+        // Preload previous source
+        if hasPreviousSource {
+            let prevSource = sources[currentSourceIndex - 1]
+            if articlesBySource[prevSource.id] == nil {
+                if let articles = try? await loadArticles(for: prevSource) {
+                    articlesBySource[prevSource.id] = articles
+                }
+            }
+        }
+
+        // Preload next source
+        if hasNextSource {
+            let nextSource = sources[currentSourceIndex + 1]
+            if articlesBySource[nextSource.id] == nil {
+                if let articles = try? await loadArticles(for: nextSource) {
+                    articlesBySource[nextSource.id] = articles
+                }
+            }
+        }
     }
 
     // MARK: - Initialization
@@ -239,7 +274,19 @@ final class NewsReelViewModel: ObservableObject {
         return loadingSummaryURLs.contains(article.link)
     }
 
-    /// Generate reel summary for article
+    /// Check if summary generation has failed (exhausted retries)
+    func hasSummaryFailed(for article: Article) -> Bool {
+        guard let failureInfo = failedSummaryAttempts[article.link] else { return false }
+        return failureInfo.count >= maxRetryAttempts
+    }
+
+    /// Check if summary is currently retrying
+    func isSummaryRetrying(for article: Article) -> Bool {
+        guard let failureInfo = failedSummaryAttempts[article.link] else { return false }
+        return failureInfo.count > 0 && failureInfo.count < maxRetryAttempts
+    }
+
+    /// Generate reel summary for article with automatic retry on failure
     func generateReelSummary(for article: Article) async {
         let url = article.link
 
@@ -248,6 +295,11 @@ final class NewsReelViewModel: ObservableObject {
 
         // Check if already loading
         guard !loadingSummaryURLs.contains(url) else { return }
+
+        // Check if we've exceeded max retries
+        if let failureInfo = failedSummaryAttempts[url], failureInfo.count >= maxRetryAttempts {
+            return
+        }
 
         loadingSummaryURLs.insert(url)
 
@@ -258,9 +310,34 @@ final class NewsReelViewModel: ObservableObject {
 
         if let summary = summary {
             reelSummaries[url] = summary
+            failedSummaryAttempts.removeValue(forKey: url) // Clear any failure tracking
+        } else {
+            // Track failure and schedule retry
+            let currentCount = failedSummaryAttempts[url]?.count ?? 0
+            failedSummaryAttempts[url] = (count: currentCount + 1, lastAttempt: Date())
+
+            // Schedule automatic retry if under max attempts
+            if currentCount + 1 < maxRetryAttempts {
+                let delay = retryDelaySeconds[min(currentCount, retryDelaySeconds.count - 1)]
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    // Only retry if still viewing this article and not already cached
+                    if reelSummaries[url] == nil && !loadingSummaryURLs.contains(url) {
+                        await self.generateReelSummary(for: article)
+                    }
+                }
+            }
         }
 
         loadingSummaryURLs.remove(url)
+    }
+
+    /// Force retry summary generation for an article (resets failure count)
+    func retryReelSummary(for article: Article) async {
+        let url = article.link
+        failedSummaryAttempts.removeValue(forKey: url)
+        reelSummaries.removeValue(forKey: url)
+        await generateReelSummary(for: article)
     }
 
     /// Cache an expanded summary for an article

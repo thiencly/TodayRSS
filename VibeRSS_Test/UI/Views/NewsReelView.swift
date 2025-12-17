@@ -15,6 +15,8 @@ struct NewsReelView: View {
 
     // Gesture and navigation state
     @State private var dragOffset: CGSize = .zero
+    @State private var lockedAxis: Axis? = nil  // Lock to vertical or horizontal once determined
+    @State private var dragStartOffset: CGSize = .zero  // Offset when axis was locked
     @State private var showingExpandedSummary: Bool = false
     @State private var expandedSummaryText: String = ""
     @State private var currentSummaryStream: AsyncStream<String>?
@@ -27,14 +29,14 @@ struct NewsReelView: View {
     @State private var webLink: WebLink?
 
     @State private var isGeneratingExpanded: Bool = false
+    @State private var isRefreshing: Bool = false
 
     // Gesture thresholds
     private let swipeThreshold: CGFloat = 50
     private let velocityThreshold: CGFloat = 300
 
     // Horizontal transition for topic changes
-    @State private var horizontalTransitionOffset: CGFloat = 0
-    @State private var isTransitioningSource: Bool = false
+    @State private var horizontalOffset: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -53,23 +55,8 @@ struct NewsReelView: View {
                     }
 
                 }
-                .overlay(alignment: .top) {
-                    // Folder indicator pills below toolbar
-                    if viewModel.sources.count > 1 {
-                        FolderIndicatorView(
-                            sources: viewModel.sources,
-                            selectedIndex: Binding(
-                                get: { viewModel.currentSourceIndex },
-                                set: { _ in } // Handled by onSelect
-                            ),
-                            onSelect: { newIndex in
-                                transitionToSource(at: newIndex, screenWidth: geometry.size.width)
-                            }
-                        )
-                        .padding(.top, 4)
-                    }
-                }
             }
+            .ignoresSafeArea()
             .toolbarBackground(.hidden, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -84,34 +71,86 @@ struct NewsReelView: View {
 
                 ToolbarItem(placement: .principal) {
                     if !viewModel.currentArticles.isEmpty {
-                        Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.currentArticles.count)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .glassEffect(.clear)
+                        Button {
+                            HapticManager.shared.click()
+                            jumpToFirstArticle()
+                        } label: {
+                            Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.currentArticles.count)")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .glassEffect(.regular.interactive())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if viewModel.currentArticle != nil {
-                        Button {
-                            HapticManager.shared.click()
-                            if let article = viewModel.currentArticle {
-                                shareArticle(article)
+                        HStack(spacing: 16) {
+                            Button {
+                                HapticManager.shared.click()
+                                refreshArticles()
+                            } label: {
+                                Group {
+                                    if isRefreshing {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                }
+                                .frame(width: 20, height: 20)
                             }
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
+                            .disabled(isRefreshing)
+
+                            Button {
+                                HapticManager.shared.click()
+                                if let article = viewModel.currentArticle {
+                                    shareArticle(article)
+                                }
+                            } label: {
+                                Image(systemName: "square.and.arrow.up")
+                            }
                         }
                     }
                 }
             }
         }
+        .overlay(alignment: .top) {
+            // Folder indicator pills below toolbar
+            if viewModel.sources.count > 1 {
+                FolderIndicatorView(
+                    sources: viewModel.sources,
+                    selectedIndex: Binding(
+                        get: { viewModel.currentSourceIndex },
+                        set: { _ in } // Handled by onSelect
+                    ),
+                    onSelect: { newIndex in
+                        transitionToSource(at: newIndex, screenWidth: UIScreen.main.bounds.width)
+                    }
+                )
+                .padding(.top, 52)
+            }
+        }
         .preferredColorScheme(.dark)
         .onAppear {
             viewModel.initialize(folders: store.folders, feeds: store.feeds)
+        }
+        .onChange(of: viewModel.currentSourceIndex) { _, _ in
+            // Preload adjacent sources when source changes
+            Task {
+                await viewModel.preloadAdjacentSources()
+            }
+        }
+        .task {
+            // Preload adjacent sources after initial load
+            try? await Task.sleep(nanoseconds: 500_000_000) // Wait 0.5s for initial load
+            await viewModel.preloadAdjacentSources()
         }
         .sheet(isPresented: $showingShareSheet) {
             if let url = shareItem {
@@ -125,36 +164,132 @@ struct NewsReelView: View {
 
     // MARK: - Article Cards
 
+    /// Indices of sources to render (current ± 1)
+    private var visibleSourceIndices: [Int] {
+        let current = viewModel.currentSourceIndex
+        var indices: [Int] = []
+        if current > 0 {
+            indices.append(current - 1)
+        }
+        indices.append(current)
+        if current < viewModel.sources.count - 1 {
+            indices.append(current + 1)
+        }
+        return indices
+    }
+
     @ViewBuilder
     private func articleCardsView(geometry: GeometryProxy) -> some View {
-        let articles = viewModel.currentArticles
-        let currentIndex = viewModel.currentArticleIndex
+        let screenWidth = geometry.size.width
+        let currentIdx = viewModel.currentSourceIndex
+
+        ZStack {
+            ForEach(visibleSourceIndices, id: \.self) { sourceIdx in
+                let relativePosition = sourceIdx - currentIdx
+                let xOffset = CGFloat(relativePosition) * screenWidth + horizontalOffset + dragOffset.width
+
+                sourceContentView(
+                    sourceIndex: sourceIdx,
+                    geometry: geometry
+                )
+                .offset(x: xOffset)
+            }
+        }
+        .ignoresSafeArea()
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let translation = value.translation
+
+                    // Use local variables since @State doesn't update until next render
+                    var effectiveAxis = lockedAxis
+                    var effectiveStartOffset = dragStartOffset
+
+                    // Lock to an axis once there's enough movement to determine direction
+                    if effectiveAxis == nil {
+                        // Reset dragOffset immediately to cancel any ongoing animation from previous gesture
+                        if dragOffset != .zero {
+                            dragOffset = .zero
+                        }
+
+                        let dominated = max(abs(translation.width), abs(translation.height))
+                        if dominated > 10 {
+                            effectiveAxis = abs(translation.width) > abs(translation.height) ? .horizontal : .vertical
+                            lockedAxis = effectiveAxis  // Update state for next frame
+                            // Capture the translation at the moment of axis lock
+                            // This prevents jumping to catch up to finger position
+                            dragStartOffset = translation
+                            effectiveStartOffset = translation
+                        }
+                    }
+
+                    // Apply offset only on locked axis, starting from where we locked
+                    if effectiveAxis == .horizontal {
+                        let adjustedWidth = translation.width - effectiveStartOffset.width
+                        dragOffset = CGSize(width: adjustedWidth, height: 0)
+                    } else if effectiveAxis == .vertical {
+                        var adjustedHeight = translation.height - effectiveStartOffset.height
+
+                        // Prevent swiping down when at first article
+                        if !viewModel.hasPreviousArticle && adjustedHeight > 0 {
+                            adjustedHeight = 0
+                        }
+                        // Prevent swiping up when at last article
+                        if !viewModel.hasNextArticle && adjustedHeight < 0 {
+                            adjustedHeight = 0
+                        }
+
+                        dragOffset = CGSize(width: 0, height: adjustedHeight)
+                    }
+                    // Before axis is locked, dragOffset stays at previous value (typically .zero after last gesture)
+                }
+                .onEnded { value in
+                    handleDragEnd(value: value, screenWidth: screenWidth)
+                    lockedAxis = nil  // Reset for next gesture
+                    dragStartOffset = .zero  // Reset start offset
+                }
+        )
+    }
+
+    @ViewBuilder
+    private func sourceContentView(sourceIndex: Int, geometry: GeometryProxy) -> some View {
+        let articles = viewModel.articles(forSourceAt: sourceIndex)
+        let currentArticleIndex = sourceIndex == viewModel.currentSourceIndex ? viewModel.currentArticleIndex : 0
+        let screenHeight = geometry.size.height
+        let verticalDrag = dragOffset.height
 
         ZStack {
             ForEach(Array(articles.enumerated()), id: \.element.id) { index, article in
-                if abs(index - currentIndex) <= 1 {
-                    let isCurrentArticle = index == currentIndex
+                if abs(index - currentArticleIndex) <= 1 {
+                    let isCurrentArticle = index == currentArticleIndex && sourceIndex == viewModel.currentSourceIndex
+                    // Calculate offset inline like horizontal does
+                    let baseOffset = CGFloat(index - currentArticleIndex) * screenHeight
+                    let yOffset = baseOffset + verticalDrag
+
                     NewsReelCardView(
                         article: article,
                         reelSummary: viewModel.reelSummary(for: article),
                         isLoadingSummary: viewModel.isSummaryLoading(for: article),
+                        isRetryingSummary: viewModel.isSummaryRetrying(for: article),
+                        hasSummaryFailed: viewModel.hasSummaryFailed(for: article),
                         isExpanded: isCurrentArticle && showingExpandedSummary,
                         expandedSummary: isCurrentArticle ? expandedSummaryText : "",
                         isStreamingSummary: isCurrentArticle && isGeneratingExpanded,
                         summaryLength: "long",
                         onTitleTap: { openInReader(article) },
                         onSummaryTap: { expandSummary(for: article) },
-                        onCollapseTap: { collapseSummary() }
+                        onCollapseTap: { collapseSummary() },
+                        onRetryTap: {
+                            Task {
+                                await viewModel.retryReelSummary(for: article)
+                            }
+                        }
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
-                    .offset(
-                        x: horizontalTransitionOffset + (isTransitioningSource ? 0 : dragOffset.width * 0.3),
-                        y: cardOffset(for: index, currentIndex: currentIndex, geometry: geometry)
-                    )
-                    .opacity(cardOpacity(for: index, currentIndex: currentIndex))
-                    .zIndex(index == currentIndex ? 1 : 0)
+                    .offset(y: yOffset)
+                    .opacity(index == currentArticleIndex ? 1.0 : 0.5)
+                    .zIndex(index == currentArticleIndex ? 1 : 0)
                     .onAppear {
-                        // Generate summary when card appears
                         Task {
                             await viewModel.generateReelSummary(for: article)
                         }
@@ -162,55 +297,19 @@ struct NewsReelView: View {
                 }
             }
         }
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onChanged { value in
-                    if !isTransitioningSource {
-                        dragOffset = value.translation
-                    }
-                }
-                .onEnded { value in
-                    handleDragEnd(value: value, screenWidth: geometry.size.width)
-                }
-        )
-    }
-
-    private func cardOffset(for index: Int, currentIndex: Int, geometry: GeometryProxy) -> CGFloat {
-        let baseOffset = CGFloat(index - currentIndex) * geometry.size.height
-
-        if index == currentIndex {
-            // Current card follows drag
-            return dragOffset.height
-        } else if index == currentIndex + 1 && dragOffset.height < 0 {
-            // Next card peeks up as we swipe up
-            return baseOffset + dragOffset.height * 0.3
-        } else if index == currentIndex - 1 && dragOffset.height > 0 {
-            // Previous card peeks down as we swipe down
-            return baseOffset + dragOffset.height * 0.3
-        }
-
-        return baseOffset
-    }
-
-    private func cardOpacity(for index: Int, currentIndex: Int) -> Double {
-        if index == currentIndex {
-            return 1.0
-        } else if abs(index - currentIndex) == 1 {
-            return 0.5
-        }
-        return 0
     }
 
     // MARK: - Gesture Handling
 
     private func handleDragEnd(value: DragGesture.Value, screenWidth: CGFloat) {
-        let verticalTranslation = value.translation.height
-        let horizontalTranslation = value.translation.width
+        // Use adjusted offset values (already accounting for dragStartOffset)
+        let verticalTranslation = dragOffset.height
+        let horizontalTranslation = dragOffset.width
         let verticalVelocity = value.predictedEndTranslation.height - value.translation.height
         let horizontalVelocity = value.predictedEndTranslation.width - value.translation.width
 
-        // Determine dominant axis
-        let isVertical = abs(verticalTranslation) > abs(horizontalTranslation)
+        // Use locked axis instead of comparing magnitudes (axis was already determined)
+        let isVertical = lockedAxis == .vertical
 
         if isVertical {
             // Vertical navigation (articles)
@@ -269,54 +368,44 @@ struct NewsReelView: View {
 
     private func transitionToNextSource(screenWidth: CGFloat) {
         HapticManager.shared.click()
-        isTransitioningSource = true
         showingExpandedSummary = false
         expandedSummaryText = ""
 
-        // Animate current content off to the left
-        withAnimation(.easeIn(duration: 0.15)) {
-            horizontalTransitionOffset = -screenWidth
+        // Animate sliding left by one screen width
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            horizontalOffset = -screenWidth
             dragOffset = .zero
         }
 
-        // After animation completes, change source and animate new content in from right
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            viewModel.nextSource()
-            horizontalTransitionOffset = screenWidth
-
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                horizontalTransitionOffset = 0
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTransitioningSource = false
+        // After animation completes, change source and reset offset atomically without animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                viewModel.nextSource()
+                horizontalOffset = 0
             }
         }
     }
 
     private func transitionToPreviousSource(screenWidth: CGFloat) {
         HapticManager.shared.click()
-        isTransitioningSource = true
         showingExpandedSummary = false
         expandedSummaryText = ""
 
-        // Animate current content off to the right
-        withAnimation(.easeIn(duration: 0.15)) {
-            horizontalTransitionOffset = screenWidth
+        // Animate sliding right by one screen width
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            horizontalOffset = screenWidth
             dragOffset = .zero
         }
 
-        // After animation completes, change source and animate new content in from left
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            viewModel.previousSource()
-            horizontalTransitionOffset = -screenWidth
-
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                horizontalTransitionOffset = 0
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTransitioningSource = false
+        // After animation completes, change source and reset offset atomically without animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                viewModel.previousSource()
+                horizontalOffset = 0
             }
         }
     }
@@ -324,33 +413,37 @@ struct NewsReelView: View {
     private func transitionToSource(at index: Int, screenWidth: CGFloat) {
         let currentIndex = viewModel.currentSourceIndex
         guard index != currentIndex else { return }
-        guard !isTransitioningSource else { return }
 
         HapticManager.shared.click()
-        isTransitioningSource = true
         showingExpandedSummary = false
         expandedSummaryText = ""
 
-        // Determine direction: going to higher index = slide left, lower index = slide right
-        let goingForward = index > currentIndex
+        let steps = abs(index - currentIndex)
 
-        // Animate current content off screen
-        withAnimation(.easeIn(duration: 0.15)) {
-            horizontalTransitionOffset = goingForward ? -screenWidth : screenWidth
-            dragOffset = .zero
-        }
+        if steps == 1 {
+            // Adjacent source - smooth slide animation
+            let targetOffset = index > currentIndex ? -screenWidth : screenWidth
 
-        // After animation completes, change source and animate new content in
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            viewModel.selectSource(at: index)
-            horizontalTransitionOffset = goingForward ? screenWidth : -screenWidth
-
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                horizontalTransitionOffset = 0
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                horizontalOffset = targetOffset
+                dragOffset = .zero
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTransitioningSource = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    viewModel.selectSource(at: index)
+                    horizontalOffset = 0
+                }
+            }
+        } else {
+            // Multi-step jump - just change source directly
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                dragOffset = .zero
+                viewModel.selectSource(at: index)
             }
         }
     }
@@ -370,6 +463,27 @@ struct NewsReelView: View {
     private func shareArticle(_ article: Article) {
         shareItem = article.link
         showingShareSheet = true
+    }
+
+    private func jumpToFirstArticle() {
+        guard viewModel.currentArticleIndex > 0 else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            showingExpandedSummary = false
+            expandedSummaryText = ""
+            viewModel.currentArticleIndex = 0
+            dragOffset = .zero
+        }
+    }
+
+    private func refreshArticles() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        Task {
+            await viewModel.refresh()
+            await MainActor.run {
+                isRefreshing = false
+            }
+        }
     }
 
     private func expandSummary(for article: Article) {
