@@ -6,6 +6,22 @@
 //
 
 import SwiftUI
+import QuartzCore
+
+// MARK: - CADisplayLink Helper
+
+/// Helper class to use CADisplayLink with a closure (since CADisplayLink requires @objc selector)
+final class DisplayLinkTarget: NSObject {
+    private let handler: () -> Void
+
+    init(handler: @escaping () -> Void) {
+        self.handler = handler
+    }
+
+    @objc func handleDisplayLink(_ displayLink: CADisplayLink) {
+        handler()
+    }
+}
 
 struct NewsReelView: View {
     @Environment(\.dismiss) private var dismiss
@@ -15,11 +31,8 @@ struct NewsReelView: View {
 
     // Gesture and navigation state
     @State private var dragOffset: CGSize = .zero
-    @State private var lockedAxis: Axis? = nil  // Lock to vertical or horizontal once determined
-    @State private var dragStartOffset: CGSize = .zero  // Offset when axis was locked
-    @State private var showingExpandedSummary: Bool = false
-    @State private var expandedSummaryText: String = ""
-    @State private var currentSummaryStream: AsyncStream<String>?
+    @State private var lockedAxis: Axis? = nil
+    @State private var lockPointTranslation: CGSize = .zero
 
     // Sharing
     @State private var shareItem: URL?
@@ -28,12 +41,22 @@ struct NewsReelView: View {
     // Reader mode
     @State private var webLink: WebLink?
 
-    @State private var isGeneratingExpanded: Bool = false
     @State private var isRefreshing: Bool = false
+    @State private var isAnimating: Bool = false  // Track if manual animation is running
+    @State private var displayLink: CADisplayLink?
+    @State private var displayLinkTarget: DisplayLinkTarget?
+    @State private var animationStartTime: CFTimeInterval = 0
+    @State private var animationStartOffset: CGSize = .zero
+    @State private var animationTargetOffset: CGSize = .zero
+    @State private var animationStartHorizontal: CGFloat = 0
+    @State private var animationTargetHorizontal: CGFloat = 0
+    @State private var animationIsHorizontal: Bool = false
+    @State private var animationCompletion: (() -> Void)?
 
     // Gesture thresholds
     private let swipeThreshold: CGFloat = 50
     private let velocityThreshold: CGFloat = 300
+    private let animationDuration: CFTimeInterval = 0.25  // Manual animation duration
 
     // Horizontal transition for topic changes
     @State private var horizontalOffset: CGFloat = 0
@@ -141,6 +164,10 @@ struct NewsReelView: View {
         .onAppear {
             viewModel.initialize(folders: store.folders, feeds: store.feeds)
         }
+        .onDisappear {
+            // Clean up CADisplayLink
+            stopDisplayLink()
+        }
         .onChange(of: viewModel.currentSourceIndex) { _, _ in
             // Preload adjacent sources when source changes
             Task {
@@ -196,57 +223,49 @@ struct NewsReelView: View {
             }
         }
         .ignoresSafeArea()
-        .gesture(
-            DragGesture(minimumDistance: 0)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 15)
                 .onChanged { value in
+                    guard !isAnimating else { return }
+
                     let translation = value.translation
 
-                    // Use local variables since @State doesn't update until next render
-                    var effectiveAxis = lockedAxis
-                    var effectiveStartOffset = dragStartOffset
-
-                    // Lock to an axis once there's enough movement to determine direction
-                    if effectiveAxis == nil {
-                        // Reset dragOffset immediately to cancel any ongoing animation from previous gesture
-                        if dragOffset != .zero {
-                            dragOffset = .zero
+                    // If axis not locked yet, check if we should lock
+                    if lockedAxis == nil {
+                        let threshold: CGFloat = 10
+                        if abs(translation.width) > threshold || abs(translation.height) > threshold {
+                            // Lock to the dominant axis
+                            if abs(translation.height) > abs(translation.width) {
+                                lockedAxis = .vertical
+                            } else {
+                                lockedAxis = .horizontal
+                            }
+                            // Remember where we locked - movement starts from here
+                            lockPointTranslation = translation
                         }
-
-                        let dominated = max(abs(translation.width), abs(translation.height))
-                        if dominated > 10 {
-                            effectiveAxis = abs(translation.width) > abs(translation.height) ? .horizontal : .vertical
-                            lockedAxis = effectiveAxis  // Update state for next frame
-                            // Capture the translation at the moment of axis lock
-                            // This prevents jumping to catch up to finger position
-                            dragStartOffset = translation
-                            effectiveStartOffset = translation
-                        }
+                        // Don't move UI until axis is locked
+                        return
                     }
 
-                    // Apply offset only on locked axis, starting from where we locked
-                    if effectiveAxis == .horizontal {
-                        let adjustedWidth = translation.width - effectiveStartOffset.width
-                        dragOffset = CGSize(width: adjustedWidth, height: 0)
-                    } else if effectiveAxis == .vertical {
-                        var adjustedHeight = translation.height - effectiveStartOffset.height
-
-                        // Prevent swiping down when at first article
-                        if !viewModel.hasPreviousArticle && adjustedHeight > 0 {
-                            adjustedHeight = 0
-                        }
-                        // Prevent swiping up when at last article
-                        if !viewModel.hasNextArticle && adjustedHeight < 0 {
-                            adjustedHeight = 0
-                        }
-
-                        dragOffset = CGSize(width: 0, height: adjustedHeight)
+                    // Apply movement only in locked axis, relative to lock point
+                    if lockedAxis == .vertical {
+                        dragOffset = CGSize(width: 0, height: translation.height - lockPointTranslation.height)
+                    } else {
+                        dragOffset = CGSize(width: translation.width - lockPointTranslation.width, height: 0)
                     }
-                    // Before axis is locked, dragOffset stays at previous value (typically .zero after last gesture)
                 }
                 .onEnded { value in
-                    handleDragEnd(value: value, screenWidth: screenWidth)
-                    lockedAxis = nil  // Reset for next gesture
-                    dragStartOffset = .zero  // Reset start offset
+                    let axis = lockedAxis
+                    lockedAxis = nil
+                    lockPointTranslation = .zero
+
+                    guard axis != nil else {
+                        // No axis was locked (tiny gesture), just reset
+                        dragOffset = .zero
+                        return
+                    }
+
+                    handleDragEnd(translation: dragOffset, predictedEnd: value.predictedEndTranslation, screenWidth: screenWidth, screenHeight: geometry.size.height, axis: axis!)
                 }
         )
     }
@@ -256,15 +275,33 @@ struct NewsReelView: View {
         let articles = viewModel.articles(forSourceAt: sourceIndex)
         let currentArticleIndex = sourceIndex == viewModel.currentSourceIndex ? viewModel.currentArticleIndex : 0
         let screenHeight = geometry.size.height
-        let verticalDrag = dragOffset.height
+
+        // Calculate opacity based on drag progress - fade in the next card as we swipe
+        let dragProgress = abs(dragOffset.height) / screenHeight  // 0 to 1
+        let isSwipingUp = dragOffset.height < 0
+        let isSwipingDown = dragOffset.height > 0
 
         ZStack {
             ForEach(Array(articles.enumerated()), id: \.element.id) { index, article in
                 if abs(index - currentArticleIndex) <= 1 {
                     let isCurrentArticle = index == currentArticleIndex && sourceIndex == viewModel.currentSourceIndex
-                    // Calculate offset inline like horizontal does
                     let baseOffset = CGFloat(index - currentArticleIndex) * screenHeight
-                    let yOffset = baseOffset + verticalDrag
+
+                    // Calculate dynamic opacity based on swipe progress
+                    let cardOpacity: Double = {
+                        if index == currentArticleIndex {
+                            // Current card fades out as we drag
+                            return 1.0 - (dragProgress * 0.5)
+                        } else if index == currentArticleIndex + 1 && isSwipingUp {
+                            // Next card fades in as we swipe up
+                            return 0.5 + (dragProgress * 0.5)
+                        } else if index == currentArticleIndex - 1 && isSwipingDown {
+                            // Previous card fades in as we swipe down
+                            return 0.5 + (dragProgress * 0.5)
+                        } else {
+                            return 0.5
+                        }
+                    }()
 
                     NewsReelCardView(
                         article: article,
@@ -272,13 +309,7 @@ struct NewsReelView: View {
                         isLoadingSummary: viewModel.isSummaryLoading(for: article),
                         isRetryingSummary: viewModel.isSummaryRetrying(for: article),
                         hasSummaryFailed: viewModel.hasSummaryFailed(for: article),
-                        isExpanded: isCurrentArticle && showingExpandedSummary,
-                        expandedSummary: isCurrentArticle ? expandedSummaryText : "",
-                        isStreamingSummary: isCurrentArticle && isGeneratingExpanded,
-                        summaryLength: "long",
                         onTitleTap: { openInReader(article) },
-                        onSummaryTap: { expandSummary(for: article) },
-                        onCollapseTap: { collapseSummary() },
                         onRetryTap: {
                             Task {
                                 await viewModel.retryReelSummary(for: article)
@@ -286,8 +317,13 @@ struct NewsReelView: View {
                         }
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
-                    .offset(y: yOffset)
-                    .opacity(index == currentArticleIndex ? 1.0 : 0.5)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        HapticManager.shared.click()
+                        openInReader(article)
+                    }
+                    .offset(y: baseOffset)
+                    .opacity(cardOpacity)
                     .zIndex(index == currentArticleIndex ? 1 : 0)
                     .onAppear {
                         Task {
@@ -297,19 +333,21 @@ struct NewsReelView: View {
                 }
             }
         }
+        .offset(y: dragOffset.height)
     }
 
     // MARK: - Gesture Handling
 
-    private func handleDragEnd(value: DragGesture.Value, screenWidth: CGFloat) {
-        // Use adjusted offset values (already accounting for dragStartOffset)
-        let verticalTranslation = dragOffset.height
-        let horizontalTranslation = dragOffset.width
-        let verticalVelocity = value.predictedEndTranslation.height - value.translation.height
-        let horizontalVelocity = value.predictedEndTranslation.width - value.translation.width
+    private func handleDragEnd(translation: CGSize, predictedEnd: CGSize, screenWidth: CGFloat, screenHeight: CGFloat, axis: Axis) {
+        // Don't process if already animating
+        guard !isAnimating else { return }
 
-        // Use locked axis instead of comparing magnitudes (axis was already determined)
-        let isVertical = lockedAxis == .vertical
+        let verticalTranslation = translation.height
+        let horizontalTranslation = translation.width
+        let verticalVelocity = predictedEnd.height - translation.height
+        let horizontalVelocity = predictedEnd.width - translation.width
+
+        let isVertical = axis == .vertical
 
         if isVertical {
             // Vertical navigation (articles)
@@ -317,32 +355,26 @@ struct NewsReelView: View {
                 // Swipe up - next article
                 if viewModel.hasNextArticle {
                     HapticManager.shared.click()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        // Collapse expanded summary when navigating
-                        showingExpandedSummary = false
-                        expandedSummaryText = ""
-                        viewModel.nextArticle()
+                    animateOffset(to: CGSize(width: 0, height: -screenHeight)) {
                         dragOffset = .zero
+                        viewModel.nextArticle()
                     }
                 } else {
-                    bounceBack()
+                    animateBounceBack()
                 }
             } else if verticalTranslation > swipeThreshold || verticalVelocity > velocityThreshold {
                 // Swipe down - previous article
                 if viewModel.hasPreviousArticle {
                     HapticManager.shared.click()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        // Collapse expanded summary when navigating
-                        showingExpandedSummary = false
-                        expandedSummaryText = ""
-                        viewModel.previousArticle()
+                    animateOffset(to: CGSize(width: 0, height: screenHeight)) {
                         dragOffset = .zero
+                        viewModel.previousArticle()
                     }
                 } else {
-                    bounceBack()
+                    animateBounceBack()
                 }
             } else {
-                bounceBack()
+                animateBounceBack()
             }
         } else {
             // Horizontal navigation (folders)
@@ -351,62 +383,34 @@ struct NewsReelView: View {
                 if viewModel.hasNextSource {
                     transitionToNextSource(screenWidth: screenWidth)
                 } else {
-                    bounceBack()
+                    animateBounceBack()
                 }
             } else if horizontalTranslation > swipeThreshold || horizontalVelocity > velocityThreshold {
                 // Swipe right - previous folder
                 if viewModel.hasPreviousSource {
                     transitionToPreviousSource(screenWidth: screenWidth)
                 } else {
-                    bounceBack()
+                    animateBounceBack()
                 }
             } else {
-                bounceBack()
+                animateBounceBack()
             }
         }
     }
 
     private func transitionToNextSource(screenWidth: CGFloat) {
         HapticManager.shared.click()
-        showingExpandedSummary = false
-        expandedSummaryText = ""
-
-        // Animate sliding left by one screen width
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            horizontalOffset = -screenWidth
-            dragOffset = .zero
-        }
-
-        // After animation completes, change source and reset offset atomically without animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                viewModel.nextSource()
-                horizontalOffset = 0
-            }
+        animateHorizontalOffset(to: -screenWidth) {
+            viewModel.nextSource()
+            horizontalOffset = 0
         }
     }
 
     private func transitionToPreviousSource(screenWidth: CGFloat) {
         HapticManager.shared.click()
-        showingExpandedSummary = false
-        expandedSummaryText = ""
-
-        // Animate sliding right by one screen width
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            horizontalOffset = screenWidth
-            dragOffset = .zero
-        }
-
-        // After animation completes, change source and reset offset atomically without animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                viewModel.previousSource()
-                horizontalOffset = 0
-            }
+        animateHorizontalOffset(to: screenWidth) {
+            viewModel.previousSource()
+            horizontalOffset = 0
         }
     }
 
@@ -415,42 +419,19 @@ struct NewsReelView: View {
         guard index != currentIndex else { return }
 
         HapticManager.shared.click()
-        showingExpandedSummary = false
-        expandedSummaryText = ""
 
-        let steps = abs(index - currentIndex)
+        // Only animate for adjacent sources, otherwise switch directly
+        let isAdjacent = abs(index - currentIndex) == 1
 
-        if steps == 1 {
-            // Adjacent source - smooth slide animation
+        if isAdjacent {
             let targetOffset = index > currentIndex ? -screenWidth : screenWidth
-
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                horizontalOffset = targetOffset
-                dragOffset = .zero
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    viewModel.selectSource(at: index)
-                    horizontalOffset = 0
-                }
+            animateHorizontalOffset(to: targetOffset) {
+                viewModel.selectSource(at: index)
+                horizontalOffset = 0
             }
         } else {
-            // Multi-step jump - just change source directly
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                dragOffset = .zero
-                viewModel.selectSource(at: index)
-            }
-        }
-    }
-
-    private func bounceBack() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            dragOffset = .zero
+            // Direct switch for non-adjacent sources
+            viewModel.selectSource(at: index)
         }
     }
 
@@ -468,8 +449,6 @@ struct NewsReelView: View {
     private func jumpToFirstArticle() {
         guard viewModel.currentArticleIndex > 0 else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showingExpandedSummary = false
-            expandedSummaryText = ""
             viewModel.currentArticleIndex = 0
             dragOffset = .zero
         }
@@ -486,63 +465,103 @@ struct NewsReelView: View {
         }
     }
 
-    private func expandSummary(for article: Article) {
-        // Check if we already have an expanded summary cached
-        if let cached = viewModel.expandedSummary(for: article) {
-            expandedSummaryText = cached
-            currentSummaryStream = nil
-            isGeneratingExpanded = false
-        } else if !isGeneratingExpanded {
-            // Only start if not already generating (prevents spam)
-            expandedSummaryText = ""
-            isGeneratingExpanded = true
+    // MARK: - Manual Animation (CADisplayLink - syncs with display refresh)
 
-            Task {
-                await generateExpandedSummary(for: article)
-            }
-        }
-        // If already generating, do nothing (like short summary approach)
+    /// Animates dragOffset from current value to target using CADisplayLink
+    /// This bypasses SwiftUI's withAnimation and syncs perfectly with the display refresh rate
+    private func animateOffset(to target: CGSize, completion: @escaping () -> Void) {
+        stopDisplayLink()
 
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            showingExpandedSummary = true
-        }
+        isAnimating = true
+        animationIsHorizontal = false
+        animationStartTime = CACurrentMediaTime()
+        animationStartOffset = dragOffset
+        animationTargetOffset = target
+        animationCompletion = completion
+
+        startDisplayLink()
     }
 
-    @MainActor
-    private func generateExpandedSummary(for article: Article) async {
-        var sawAny = false
+    /// Animates horizontalOffset using CADisplayLink
+    private func animateHorizontalOffset(to target: CGFloat, completion: @escaping () -> Void) {
+        stopDisplayLink()
 
-        let stream = await ArticleSummarizer.shared.streamSummary(
-            url: article.link,
-            length: .reelExpanded,
-            seedText: article.summary.isEmpty ? nil : article.summary
-        )
+        isAnimating = true
+        animationIsHorizontal = true
+        animationStartTime = CACurrentMediaTime()
+        animationStartHorizontal = horizontalOffset
+        animationTargetHorizontal = target
+        animationStartOffset = dragOffset  // Also animate dragOffset to zero
+        animationTargetOffset = .zero
+        animationCompletion = completion
 
-        var lastUpdate = Date.distantPast
-        for await text in stream {
-            sawAny = true
-            let now = Date()
-            if now.timeIntervalSince(lastUpdate) >= 0.05 { // 20hz max throttle
-                lastUpdate = now
-                expandedSummaryText = text
-            }
-        }
-
-        // Final update
-        if sawAny {
-            // Get final cached value
-            if let final = await ArticleSummarizer.shared.cachedSummary(for: article.link, length: .reelExpanded) {
-                expandedSummaryText = final
-                viewModel.cacheExpandedSummary(final, for: article)
-            }
-        }
-
-        isGeneratingExpanded = false
+        startDisplayLink()
     }
 
-    private func collapseSummary() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            showingExpandedSummary = false
+    /// Simple bounce back animation
+    private func animateBounceBack() {
+        animateOffset(to: .zero) { }
+    }
+
+    /// Creates and starts the CADisplayLink
+    private func startDisplayLink() {
+        let target = DisplayLinkTarget { [self] in
+            handleDisplayLinkFrame()
+        }
+        displayLinkTarget = target
+
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.handleDisplayLink(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    /// Stops and cleans up the CADisplayLink
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+        displayLinkTarget = nil
+    }
+
+    /// Called each frame by CADisplayLink
+    private func handleDisplayLinkFrame() {
+        let elapsed = CACurrentMediaTime() - animationStartTime
+        let progress = min(elapsed / animationDuration, 1.0)
+
+        // Ease-out cubic function: 1 - (1 - t)^3
+        let easedProgress = 1 - pow(1 - progress, 3)
+
+        if animationIsHorizontal {
+            // Horizontal animation
+            let newHorizontal = animationStartHorizontal + (animationTargetHorizontal - animationStartHorizontal) * easedProgress
+            let newDragWidth = animationStartOffset.width * (1 - easedProgress)
+            let newDragHeight = animationStartOffset.height * (1 - easedProgress)
+
+            horizontalOffset = newHorizontal
+            dragOffset = CGSize(width: newDragWidth, height: newDragHeight)
+
+            if progress >= 1.0 {
+                stopDisplayLink()
+                horizontalOffset = animationTargetHorizontal
+                dragOffset = .zero
+                isAnimating = false
+                animationCompletion?()
+                animationCompletion = nil
+            }
+        } else {
+            // Vertical animation
+            let newWidth = animationStartOffset.width + (animationTargetOffset.width - animationStartOffset.width) * easedProgress
+            let newHeight = animationStartOffset.height + (animationTargetOffset.height - animationStartOffset.height) * easedProgress
+
+            dragOffset = CGSize(width: newWidth, height: newHeight)
+
+            if progress >= 1.0 {
+                stopDisplayLink()
+                dragOffset = animationTargetOffset
+                isAnimating = false
+                animationCompletion?()
+                animationCompletion = nil
+            }
         }
     }
 

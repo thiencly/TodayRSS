@@ -159,7 +159,7 @@ actor ArticleSummarizer {
                 let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
                 await self.setHeroSession(session)
             case .reel:
-                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis.")
+                let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
                 await self.setReelSession(session)
             case .reelExpanded:
                 let session = LanguageModelSession(instructions: "Summarize in 4-5 sentences (100-120 words). Cover the main point, key facts, and important context. Make it informative and complete. No lists, no emojis.")
@@ -292,7 +292,7 @@ actor ArticleSummarizer {
         return nil
     }
 
-    /// Reel summary for news reel cards - ~50 words, 2-3 sentences
+    /// Reel summary for news reel cards - ~50-60 words, 2-3 sentences
     /// Optimized for speed like fastHeroSummary but with slightly more detail
     func fastReelSummary(url: URL, articleText fallbackText: String?) async -> String? {
         let key = makeCacheKey(url: url, length: .reel)
@@ -329,11 +329,11 @@ actor ArticleSummarizer {
         }
 
         // Use structure-aware slice for better content coverage
-        let primer = selectStructureAwareSlice(from: baseText, targetChars: 1500)
+        let primer = selectStructureAwareSlice(from: baseText, targetChars: 2500)
         if primer.isEmpty { return nil }
 
         do {
-            let session = reelSession ?? LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis.")
+            let session = reelSession ?? LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
             if reelSession == nil { reelSession = session }
 
             let result = try await session.respond(to: primer, generating: InlineSummary.self)

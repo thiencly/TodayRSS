@@ -46,9 +46,6 @@ final class NewsReelViewModel: ObservableObject {
     /// Reel summaries cache, keyed by article URL
     @Published private(set) var reelSummaries: [URL: String] = [:]
 
-    /// Expanded (short) summaries cache, keyed by article URL
-    @Published private(set) var expandedSummaries: [URL: String] = [:]
-
     /// Loading state for summaries
     @Published private(set) var loadingSummaryURLs: Set<URL> = []
 
@@ -251,8 +248,16 @@ final class NewsReelViewModel: ObservableObject {
             }
         }
 
+        // Filter to only show articles from today
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let todayArticles = allArticles.filter { article in
+            guard let pubDate = article.pubDate else { return false }
+            return pubDate >= startOfToday
+        }
+
         // Sort by date (newest first)
-        let sorted = allArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let sorted = todayArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
 
         return sorted
     }
@@ -262,11 +267,6 @@ final class NewsReelViewModel: ObservableObject {
     /// Get reel summary for an article, generating if needed
     func reelSummary(for article: Article) -> String? {
         return reelSummaries[article.link]
-    }
-
-    /// Get expanded (short) summary for an article
-    func expandedSummary(for article: Article) -> String? {
-        return expandedSummaries[article.link]
     }
 
     /// Check if summary is currently loading
@@ -338,16 +338,6 @@ final class NewsReelViewModel: ObservableObject {
         failedSummaryAttempts.removeValue(forKey: url)
         reelSummaries.removeValue(forKey: url)
         await generateReelSummary(for: article)
-    }
-
-    /// Cache an expanded summary for an article
-    func cacheExpandedSummary(_ summary: String, for article: Article) {
-        expandedSummaries[article.link] = summary
-    }
-
-    /// Clear cached expanded summary for an article (used when length changes)
-    func clearExpandedSummary(for article: Article) {
-        expandedSummaries[article.link] = nil
     }
 
     // MARK: - Prefetching

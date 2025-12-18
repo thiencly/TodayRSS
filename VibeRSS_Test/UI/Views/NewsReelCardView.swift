@@ -11,19 +11,13 @@ struct NewsReelCardView: View {
     let article: Article
     let reelSummary: String?
     let isLoadingSummary: Bool
-    let isRetryingSummary: Bool  // Whether currently retrying after failure
-    let hasSummaryFailed: Bool  // Whether all retry attempts exhausted
-    let isExpanded: Bool  // Whether showing expanded summary
-    let expandedSummary: String  // The streaming/expanded summary text
-    let isStreamingSummary: Bool  // Whether currently streaming
-    let summaryLength: String  // "short" or "long"
-    var onTitleTap: () -> Void  // Opens reader mode
-    var onSummaryTap: () -> Void  // Expands/generates summary
-    var onCollapseTap: () -> Void  // Collapse back to reel summary
-    var onRetryTap: () -> Void  // Retry failed summary generation
+    let isRetryingSummary: Bool
+    let hasSummaryFailed: Bool
+    var onTitleTap: () -> Void
+    var onRetryTap: () -> Void
 
     @State private var dominantColor: Color = Color.black
-    @State private var isDarkBackground: Bool = true  // Track if background is dark (for text color)
+    @State private var isDarkBackground: Bool = true
     @State private var sparkleColor: Color = AppleIntelligenceColors.colors.randomElement() ?? .purple
 
     // Text colors based on background brightness
@@ -50,23 +44,14 @@ struct NewsReelCardView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // Slide offset when expanded (for long summaries)
-            let slideOffset: CGFloat = isExpanded ? 240 : 0
-
             let imageHeight = geometry.size.height * 0.8
-            let gradientHeight = imageHeight / 3  // 1/3 of image height
-
-            // Calculate available space for expanded summary
-            // Base content area (20%) + slide offset - space for source/title and padding
-            let availableSummaryHeight: CGFloat = geometry.size.height * 0.20 + slideOffset - 100
+            let gradientHeight = imageHeight / 3
 
             ZStack(alignment: .top) {
                 // Background
                 if article.thumbnailURL != nil {
-                    // Use extracted dominant color for articles with images
                     dominantColor.ignoresSafeArea()
                 } else {
-                    // Full-screen animated glow for articles without images
                     Color.black.ignoresSafeArea()
                     NewsReelGlow()
                         .ignoresSafeArea()
@@ -94,8 +79,7 @@ struct NewsReelCardView: View {
                     }
                 }
 
-                // Thumbnail takes up 80% of screen from the top, fills and crops
-                // Only show image area if there's a thumbnail
+                // Thumbnail image
                 if let thumbnailURL = article.thumbnailURL {
                     VStack(spacing: 0) {
                         HighResThumbnailView(url: thumbnailURL, contentMode: .fill) { extractedColor in
@@ -104,37 +88,40 @@ struct NewsReelCardView: View {
                                 isDarkBackground = isColorDark(extractedColor)
                             }
                         }
-                        .id(thumbnailURL) // Force new view instance for each URL to reset pan animation
+                        .id(thumbnailURL)
                         .frame(width: geometry.size.width, height: imageHeight)
                         .clipped()
 
                         Spacer()
                     }
-                    .offset(y: -slideOffset)
 
-                    // Gradient overlay - only needed for images
+                    // Gradient overlay
                     LinearGradient(
                         stops: [
-                            .init(color: .clear, location: 0),
+                            .init(color: dominantColor.opacity(0.01), location: 0),
                             .init(color: dominantColor, location: 1.0)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(width: geometry.size.width, height: gradientHeight)
-                    .position(x: geometry.size.width / 2, y: imageHeight - gradientHeight / 2 - slideOffset)
+                    .position(x: geometry.size.width / 2, y: imageHeight - gradientHeight / 2)
+                    .allowsHitTesting(false)
 
-                    // Solid color fill below the image - only needed for images
+                    // Solid color fill below the image (fills remaining 20%)
+                    let bottomHeight = geometry.size.height - imageHeight
                     dominantColor
-                        .frame(width: geometry.size.width, height: geometry.size.height * 0.3 + slideOffset)
-                        .position(x: geometry.size.width / 2, y: imageHeight + (geometry.size.height * 0.3 + slideOffset) / 2 - slideOffset)
+                        .frame(width: geometry.size.width, height: bottomHeight)
+                        .position(x: geometry.size.width / 2, y: imageHeight + bottomHeight / 2)
+                        .allowsHitTesting(false)
                 }
 
-                // Content overlay - text overlaps 20% of image height
+                // Content overlay - text overlaps 10% of image from bottom
                 VStack(spacing: 0) {
-                    Spacer()
+                    Spacer(minLength: 0)
+                        .frame(maxHeight: imageHeight * 0.90)
 
-                    // Article info - raised to overlap into image
+                    // Article info
                     VStack(alignment: .leading, spacing: 14) {
                         // Source badge with time
                         HStack(spacing: 6) {
@@ -167,106 +154,70 @@ struct NewsReelCardView: View {
                             Spacer()
                         }
 
-                        // Article title - tappable to open reader
+                        // Article title
                         Text(article.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundStyle(primaryTextColor)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                HapticManager.shared.click()
-                                onTitleTap()
-                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        // Summary section
-                        if isExpanded {
-                            // Expanded summary view - only scrollable if content doesn't fit
-                            ExpandedSummaryContent(
-                                expandedSummary: expandedSummary,
-                                isStreamingSummary: isStreamingSummary,
-                                sparkleColor: sparkleColor,
-                                isDarkBackground: isDarkBackground,
-                                availableHeight: availableSummaryHeight,
-                                onTap: {
-                                    HapticManager.shared.click()
-                                    onCollapseTap()
-                                }
-                            )
-                        } else {
-                            // Reel summary - tappable to expand
-                            if let summary = reelSummary, !summary.isEmpty {
-                                (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
-                                    .font(.body)
-                                    .foregroundStyle(summaryTextColor)
-                                    .lineLimit(nil)
-                                    .multilineTextAlignment(.leading)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        HapticManager.shared.click()
-                                        onSummaryTap()
-                                    }
-                            } else if isLoadingSummary || isRetryingSummary {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
-                                        .scaleEffect(0.8)
-                                    Text(isRetryingSummary ? "Retrying..." : "Generating summary...")
-                                        .font(.subheadline)
-                                        .foregroundStyle(tertiaryTextColor)
-                                }
-                            } else if hasSummaryFailed {
-                                // Tap to retry button
-                                Button {
-                                    HapticManager.shared.click()
-                                    onRetryTap()
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.subheadline)
-                                        Text("Tap to retry summary")
-                                            .font(.subheadline)
-                                    }
-                                    .foregroundStyle(sparkleColor)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule()
-                                            .fill(sparkleColor.opacity(0.15))
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            } else if !article.summary.isEmpty {
-                                Text(stripHTML(article.summary))
-                                    .font(.body)
-                                    .foregroundStyle(summaryTextColor)
-                                    .lineLimit(nil)
-                                    .multilineTextAlignment(.leading)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        HapticManager.shared.click()
-                                        onSummaryTap()
-                                    }
+                        // Reel summary (display only)
+                        if let summary = reelSummary, !summary.isEmpty {
+                            (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
+                                .font(.body)
+                                .foregroundStyle(summaryTextColor)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else if isLoadingSummary || isRetryingSummary {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
+                                    .scaleEffect(0.8)
+                                Text(isRetryingSummary ? "Retrying..." : "Generating summary...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(tertiaryTextColor)
                             }
+                        } else if hasSummaryFailed {
+                            Button {
+                                HapticManager.shared.click()
+                                onRetryTap()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.subheadline)
+                                    Text("Tap to retry summary")
+                                        .font(.subheadline)
+                                }
+                                .foregroundStyle(sparkleColor)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(sparkleColor.opacity(0.15))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else if !article.summary.isEmpty {
+                            Text(stripHTML(article.summary))
+                                .font(.body)
+                                .foregroundStyle(summaryTextColor)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 25)
-                    // Raise text to overlap 10% of image
-                    .offset(y: -(imageHeight * 0.10))
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+                    .padding(.bottom, 45)
                 }
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+            .clipped()
         }
     }
 
     // MARK: - Helpers
 
-    /// Calculate if a color is dark based on luminance
     private func isColorDark(_ color: Color) -> Bool {
-        // Convert Color to UIColor to get RGB components
         let uiColor = UIColor(color)
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -275,11 +226,7 @@ struct NewsReelCardView: View {
 
         uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
-        // Calculate luminance using standard formula
-        // Weights: R=0.299, G=0.587, B=0.114
         let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
-
-        // If luminance < 0.5, the color is dark
         return luminance < 0.5
     }
 
@@ -312,24 +259,31 @@ struct HighResThumbnailView: View {
     @State private var isLoading: Bool = false
     @State private var startTime: Date = Date()
 
-    // Pan animation settings
-    private let panAmount: CGFloat = 30  // How far to pan (points)
-    private let panDuration: Double = 12  // Full cycle duration (seconds)
+    private let panDuration: Double = 40
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 if let image = image {
-                    // Use TimelineView for reliable continuous animation
+                    // Calculate how much the image overflows when filling the container
+                    let imageAspect = image.size.width / image.size.height
+                    let containerAspect = geometry.size.width / geometry.size.height
+
+                    // When filling, if image is wider than container (relative to height), it overflows horizontally
+                    let scaledWidth = imageAspect > containerAspect
+                        ? geometry.size.height * imageAspect
+                        : geometry.size.width
+                    let overflow = max(0, scaledWidth - geometry.size.width)
+                    let panAmount = overflow / 2
+
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                         let elapsed = context.date.timeIntervalSince(startTime)
-                        // Sine wave oscillation between -panAmount and +panAmount
                         let offset = sin(elapsed * .pi / (panDuration / 2)) * panAmount
 
                         Image(uiImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: contentMode)
-                            .frame(width: geometry.size.width + panAmount * 2, height: geometry.size.height)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
                             .offset(x: offset)
                     }
                 } else if isLoading {
@@ -346,17 +300,14 @@ struct HighResThumbnailView: View {
     }
 
     private func loadImage() async {
-        // Reset start time for this image
         startTime = Date()
 
-        // Check for cached color first
         if let cachedColor = ImageDiskCache.cachedColor(for: url) {
             onColorExtracted?(Color(cachedColor))
         }
 
         isLoading = true
 
-        // Load high-resolution image for full-screen display
         let result = await ImageDiskCache.shared.highResImageWithColor(for: url)
 
         guard !Task.isCancelled else { return }
@@ -369,275 +320,9 @@ struct HighResThumbnailView: View {
     }
 }
 
-// MARK: - Expanded Summary Overlay
-
-struct ExpandedSummaryOverlay: View {
-    let article: Article
-    @Binding var expandedSummary: String
-    @Binding var isVisible: Bool
-    var summaryStream: AsyncStream<String>?
-    var isStreaming: Bool
-
-    @State private var streamTask: Task<Void, Never>?
-
-    var body: some View {
-        ZStack {
-            // Dimmed background
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
-
-            // Summary panel slides up from bottom
-            VStack(spacing: 0) {
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 16) {
-                    // Drag handle
-                    HStack {
-                        Spacer()
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.white.opacity(0.3))
-                            .frame(width: 40, height: 5)
-                        Spacer()
-                    }
-                    .padding(.top, 8)
-
-                    // Header
-                    HStack {
-                        Image(systemName: "sparkles")
-                            .font(.headline)
-                            .foregroundStyle(AppleIntelligenceColors.colors.randomElement() ?? .purple)
-                        Text("Summary")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        Spacer()
-
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    // Article title
-                    Text(article.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    Divider()
-
-                    // Summary content (scrollable)
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !expandedSummary.isEmpty {
-                                Text(expandedSummary)
-                                    .font(.body)
-                                    .foregroundStyle(.primary)
-                                    .lineSpacing(4)
-                            } else if isStreaming {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle())
-                                        .scaleEffect(0.8)
-                                    Text("Generating summary...")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 350)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
-                .padding(.horizontal, 8)
-            }
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-        .onAppear {
-            startStreaming()
-        }
-        .onDisappear {
-            streamTask?.cancel()
-        }
-        .gesture(
-            DragGesture(minimumDistance: 30)
-                .onEnded { value in
-                    if value.translation.height > 80 {
-                        dismiss()
-                    }
-                }
-        )
-    }
-
-    private func startStreaming() {
-        guard let stream = summaryStream, expandedSummary.isEmpty else { return }
-
-        streamTask = Task {
-            for await text in stream {
-                await MainActor.run {
-                    expandedSummary = text
-                }
-            }
-        }
-    }
-
-    private func dismiss() {
-        HapticManager.shared.click()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            isVisible = false
-        }
-    }
-}
-
-// MARK: - Expanded Summary Content with Conditional Scroll
-
-struct ExpandedSummaryContent: View {
-    let expandedSummary: String
-    let isStreamingSummary: Bool
-    let sparkleColor: Color
-    let isDarkBackground: Bool
-    let availableHeight: CGFloat
-    let onTap: () -> Void
-
-    @State private var contentHeight: CGFloat = 0
-    @State private var isScrollable: Bool = false
-    @State private var isAtBottom: Bool = false
-
-    // Dynamic text colors based on background
-    private var primaryTextColor: Color {
-        isDarkBackground ? .white : Color(white: 0.15)
-    }
-    private var tertiaryTextColor: Color {
-        isDarkBackground ? .white.opacity(0.6) : Color(white: 0.35)
-    }
-    private var summaryTextColor: Color {
-        isDarkBackground ? .white.opacity(0.85) : Color(white: 0.2)
-    }
-
-    private var summaryTextView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if isStreamingSummary && expandedSummary.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
-                        .scaleEffect(0.8)
-                    Text("Generating summary...")
-                        .font(.subheadline)
-                        .foregroundStyle(tertiaryTextColor)
-                }
-            } else {
-                (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(expandedSummary))
-                    .font(.body)
-                    .foregroundStyle(summaryTextColor)
-                    .lineLimit(nil)
-                    .multilineTextAlignment(.leading)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Actual content display
-            if isScrollable {
-                ScrollView {
-                    summaryTextView
-                        .background(
-                            GeometryReader { innerGeo in
-                                Color.clear
-                                    .preference(
-                                        key: ScrollOffsetPreferenceKey.self,
-                                        value: innerGeo.frame(in: .named("expandedScroll")).maxY
-                                    )
-                            }
-                        )
-                }
-                .coordinateSpace(name: "expandedScroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { maxY in
-                    // Check if scrolled to bottom (with small tolerance)
-                    isAtBottom = maxY <= availableHeight + 10
-                }
-                .frame(maxHeight: availableHeight, alignment: .top)
-            } else {
-                summaryTextView
-                    .frame(maxHeight: availableHeight, alignment: .top)
-            }
-
-            // Chevron indicator - only show if scrollable and not at bottom
-            if isScrollable && !isAtBottom {
-                HStack {
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(tertiaryTextColor)
-                    Spacer()
-                }
-                .padding(.top, 4)
-                .transition(.opacity)
-            }
-        }
-        .background(
-            // Hidden view to measure content height
-            summaryTextView
-                .fixedSize(horizontal: false, vertical: true)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear {
-                                contentHeight = geo.size.height
-                                isScrollable = contentHeight > availableHeight
-                                // Initially not at bottom if scrollable
-                                if isScrollable {
-                                    isAtBottom = false
-                                }
-                            }
-                            .onChange(of: expandedSummary) { _, _ in
-                                DispatchQueue.main.async {
-                                    let newHeight = geo.size.height
-                                    contentHeight = newHeight
-                                    isScrollable = newHeight > availableHeight
-                                    // Reset to not at bottom when content changes and is scrollable
-                                    if isScrollable {
-                                        isAtBottom = false
-                                    }
-                                }
-                            }
-                    }
-                )
-                .hidden()
-        )
-        .animation(.easeInOut(duration: 0.2), value: isScrollable)
-        .animation(.easeInOut(duration: 0.2), value: isAtBottom)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-    }
-}
-
-// Preference key for tracking scroll position
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-// MARK: - News Reel Glow (same colors as Today Highlights / PriorityNotificationGlow)
+// MARK: - News Reel Glow
 
 struct NewsReelGlow: View {
-    // Static cache - randomized once, same as PriorityNotificationGlow
     private static let cachedConfig: GlowConfig = {
         let shuffled = AppleIntelligenceColors.colors.shuffled()
         let offset = Double.random(in: 0..<100)
@@ -652,11 +337,8 @@ struct NewsReelGlow: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate + Self.cachedConfig.phaseOffset
-
-            // Use sine wave for smooth back-and-forth motion (no jump at loop)
             let wave = sin(seconds * 0.3) * 0.5
 
-            // Gradient moves smoothly back and forth
             LinearGradient(
                 colors: Self.cachedConfig.colors,
                 startPoint: UnitPoint(x: wave - 0.3, y: 0.2),
@@ -671,3 +353,73 @@ struct NewsReelGlow: View {
     }
 }
 
+// MARK: - UIKit Tap Gesture Wrapper
+
+/// A UIKit-based tap gesture that bypasses SwiftUI's gesture system
+struct TappableView<Content: View>: UIViewRepresentable {
+    let content: Content
+    let onTap: () -> Void
+
+    init(onTap: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.content = content()
+        self.onTap = onTap
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let hostingController = UIHostingController(rootView: content)
+        hostingController.view.backgroundColor = .clear
+
+        let containerView = TapContainerView()
+        containerView.onTap = onTap
+        containerView.backgroundColor = .clear
+
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingController.view)
+
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: containerView.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+        ])
+
+        context.coordinator.hostingController = hostingController
+
+        return containerView
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.hostingController?.rootView = content
+        if let containerView = uiView as? TapContainerView {
+            containerView.onTap = onTap
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var hostingController: UIHostingController<Content>?
+    }
+}
+
+/// Container view with UITapGestureRecognizer
+private class TapContainerView: UIView {
+    var onTap: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tapGesture.cancelsTouchesInView = false
+        addGestureRecognizer(tapGesture)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func handleTap() {
+        onTap?()
+    }
+}
