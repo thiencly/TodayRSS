@@ -51,7 +51,10 @@ struct ReelsVerticalPager<Content: View>: UIViewControllerRepresentable {
 
         // Sync current index (only if not user-initiated scroll)
         if !coordinator.isUserScrolling && coordinator.lastReportedIndex != currentIndex {
-            controller.scrollToPage(currentIndex, animated: false)
+            // Animate when scrolling programmatically (e.g., counter tap to top)
+            let shouldAnimate = abs(coordinator.lastReportedIndex - currentIndex) > 0
+            coordinator.lastReportedIndex = currentIndex
+            controller.scrollToPage(currentIndex, animated: shouldAnimate)
         }
     }
 
@@ -148,6 +151,7 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
     }
 
     func reloadData() {
+        updateContentSize()
         layoutVisiblePages()
     }
 
@@ -164,6 +168,10 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
         // Remove pages outside visible range
         for (index, pageView) in pageViews where !visibleRange.contains(index) {
             pageView.removeFromSuperview()
+            if let hostingController = hostingControllers[index] {
+                hostingController.willMove(toParent: nil)
+                hostingController.removeFromParent()
+            }
             pageViews.removeValue(forKey: index)
             hostingControllers.removeValue(forKey: index)
         }
@@ -172,6 +180,11 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
         for index in visibleRange {
             if pageViews[index] == nil {
                 addPage(at: index, contentBuilder: contentBuilder)
+            } else {
+                // Update existing page content
+                if let hostingController = hostingControllers[index] {
+                    hostingController.rootView = contentBuilder(index)
+                }
             }
             updatePageFrame(at: index)
         }
@@ -370,21 +383,36 @@ struct NewsReelView: View {
             } else if viewModel.sources.isEmpty {
                 emptyView
             } else {
-                // Horizontal TabView for source switching
-                TabView(selection: $selectedSourceIndex) {
-                    ForEach(Array(viewModel.sources.enumerated()), id: \.element.id) { index, source in
-                        SourcePageView(
-                            viewModel: viewModel,
-                            sourceIndex: index,
-                            onArticleTap: { article in openInReader(article) },
-                            onSummaryRetry: { article in
-                                Task { await viewModel.retryReelSummary(for: article) }
+                // Horizontal ScrollView for source switching
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 0) {
+                            ForEach(Array(viewModel.sources.enumerated()), id: \.element.id) { index, source in
+                                SourcePageView(
+                                    viewModel: viewModel,
+                                    sourceIndex: index,
+                                    onArticleTap: { article in openInReader(article) },
+                                    onSummaryRetry: { article in
+                                        Task { await viewModel.retryReelSummary(for: article) }
+                                    }
+                                )
+                                .containerRelativeFrame(.horizontal)
+                                .id(index)
                             }
-                        )
-                        .tag(index)
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: Binding(
+                        get: { selectedSourceIndex },
+                        set: { if let newValue = $0 { selectedSourceIndex = newValue } }
+                    ))
+                    .onChange(of: selectedSourceIndex) { _, newIndex in
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo(newIndex, anchor: .center)
+                        }
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
                 .ignoresSafeArea()
             }
         }
@@ -456,20 +484,23 @@ struct NewsReelView: View {
         .overlay(alignment: .top) {
             // Article counter
             if !viewModel.articles(forSourceAt: selectedSourceIndex).isEmpty {
-                GlassEffectContainer {
-                    Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.articles(forSourceAt: selectedSourceIndex).count)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .glassEffect(.regular.interactive(), in: .capsule)
-                }
-                .padding(.top, 12)
-                .onTapGesture {
+                Button {
                     HapticManager.shared.click()
                     viewModel.currentArticleIndex = 0
+                } label: {
+                    GlassEffectContainer {
+                        Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.articles(forSourceAt: selectedSourceIndex).count)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                    }
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.borderless)
+                .padding(.top, 12)
             }
         }
         .overlay(alignment: .top) {
@@ -480,9 +511,7 @@ struct NewsReelView: View {
                     selectedIndex: $selectedSourceIndex,
                     onSelect: { newIndex in
                         HapticManager.shared.click()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedSourceIndex = newIndex
-                        }
+                        selectedSourceIndex = newIndex
                     }
                 )
                 .padding(.top, 60)
@@ -614,6 +643,12 @@ struct SourcePageView: View {
                 }
             }
         }
+        .onChange(of: viewModel.currentArticleIndex) { _, newIndex in
+            // Sync from viewModel when changed externally (e.g., counter tap)
+            if sourceIndex == viewModel.currentSourceIndex && currentArticleIndex != newIndex {
+                currentArticleIndex = newIndex
+            }
+        }
         .onAppear {
             // Generate summary for first article
             if let firstArticle = articles.first {
@@ -637,10 +672,6 @@ struct SourcePageView: View {
                 onTitleTap: { onArticleTap(article) },
                 onRetryTap: { onSummaryRetry(article) }
             )
-            .onTapGesture {
-                HapticManager.shared.click()
-                onArticleTap(article)
-            }
         } else {
             Color.black
         }

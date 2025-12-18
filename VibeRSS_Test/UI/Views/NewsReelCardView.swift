@@ -154,21 +154,31 @@ struct NewsReelCardView: View {
                             Spacer()
                         }
 
-                        // Article title
+                        // Article title - tappable to open reader
                         Text(article.title)
                             .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(primaryTextColor)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                HapticManager.shared.click()
+                                onTitleTap()
+                            }
 
-                        // Reel summary (display only)
+                        // Reel summary - also tappable to open reader
                         if let summary = reelSummary, !summary.isEmpty {
                             (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
                                 .font(.body)
                                 .foregroundStyle(summaryTextColor)
                                 .multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    HapticManager.shared.click()
+                                    onTitleTap()
+                                }
                         } else if isLoadingSummary || isRetryingSummary {
                             HStack(spacing: 8) {
                                 ProgressView()
