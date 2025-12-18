@@ -81,9 +81,67 @@ struct ReelsVerticalPager<Content: View>: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - UIKit Pager View Controller
+// MARK: - Horizontal Pager (UIKit Implementation)
 
-class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
+struct ReelsHorizontalPager<Content: View>: UIViewControllerRepresentable {
+    let items: [AnyHashable]
+    @Binding var currentIndex: Int
+    let content: (Int) -> Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIViewController(context: Context) -> HorizontalPagerViewController {
+        let controller = HorizontalPagerViewController()
+        controller.coordinator = context.coordinator
+        context.coordinator.pagerController = controller
+        return controller
+    }
+
+    func updateUIViewController(_ controller: HorizontalPagerViewController, context: Context) {
+        let coordinator = context.coordinator
+
+        coordinator.itemCount = items.count
+        coordinator.contentBuilder = { [content] index in
+            AnyView(content(index))
+        }
+
+        controller.reloadData()
+
+        if !coordinator.isUserScrolling && coordinator.lastReportedIndex != currentIndex {
+            let shouldAnimate = abs(coordinator.lastReportedIndex - currentIndex) > 0
+            coordinator.lastReportedIndex = currentIndex
+            controller.scrollToPage(currentIndex, animated: shouldAnimate)
+        }
+    }
+
+    class Coordinator: NSObject, ReelsPagerCoordinator {
+        var parent: ReelsHorizontalPager
+        weak var pagerController: HorizontalPagerViewController?
+        var itemCount: Int = 0
+        var contentBuilder: ((Int) -> AnyView)?
+        var isUserScrolling = false
+        var lastReportedIndex: Int = 0
+
+        init(_ parent: ReelsHorizontalPager) {
+            self.parent = parent
+            self.lastReportedIndex = parent.currentIndex
+        }
+
+        func reportPageChange(_ index: Int) {
+            guard index != lastReportedIndex else { return }
+            lastReportedIndex = index
+            DispatchQueue.main.async { [weak self] in
+                self?.parent.currentIndex = index
+            }
+        }
+    }
+}
+
+// MARK: - Horizontal UIKit Pager View Controller
+
+class HorizontalPagerViewController: UIViewController, UIScrollViewDelegate {
     weak var coordinator: (any ReelsPagerCoordinator)?
 
     private var scrollView: UIScrollView!
@@ -91,7 +149,7 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
     private var pageViews: [Int: UIView] = [:]
     private var hostingControllers: [Int: UIHostingController<AnyView>] = [:]
 
-    private var pageHeight: CGFloat { view.bounds.height }
+    private var pageWidth: CGFloat { view.bounds.width }
     private var currentPage: Int = 0
     private var isAnimating = false
 
@@ -104,6 +162,286 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
         super.viewDidLayoutSubviews()
         updateContentSize()
         layoutVisiblePages()
+    }
+
+    private func setupScrollView() {
+        scrollView = UIScrollView()
+        scrollView.delegate = self
+        scrollView.isPagingEnabled = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.bounces = true
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.decelerationRate = .fast
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        contentView = UIView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
+
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+        ])
+    }
+
+    private func updateContentSize() {
+        guard let coordinator = coordinator, pageWidth > 0 else { return }
+        let totalWidth = pageWidth * CGFloat(max(1, coordinator.itemCount))
+
+        for constraint in contentView.constraints where constraint.firstAttribute == .width {
+            constraint.isActive = false
+        }
+        contentView.widthAnchor.constraint(equalToConstant: totalWidth).isActive = true
+    }
+
+    func reloadData() {
+        updateContentSize()
+        layoutVisiblePages()
+    }
+
+    private func layoutVisiblePages() {
+        guard let coordinator = coordinator,
+              coordinator.itemCount > 0,
+              pageWidth > 0,
+              let contentBuilder = coordinator.contentBuilder else {
+            return
+        }
+
+        let visibleRange = calculateVisibleRange()
+
+        for (index, pageView) in pageViews where !visibleRange.contains(index) {
+            pageView.removeFromSuperview()
+            if let hostingController = hostingControllers[index] {
+                hostingController.willMove(toParent: nil)
+                hostingController.removeFromParent()
+            }
+            pageViews.removeValue(forKey: index)
+            hostingControllers.removeValue(forKey: index)
+        }
+
+        for index in visibleRange {
+            if pageViews[index] == nil {
+                addPage(at: index, contentBuilder: contentBuilder)
+            } else {
+                if let hostingController = hostingControllers[index] {
+                    hostingController.rootView = contentBuilder(index)
+                }
+            }
+            updatePageFrame(at: index)
+        }
+    }
+
+    private func calculateVisibleRange() -> ClosedRange<Int> {
+        guard let coordinator = coordinator, coordinator.itemCount > 0, pageWidth > 0 else {
+            return 0...0
+        }
+
+        let offsetX = scrollView.contentOffset.x
+        let visibleStart = max(0, Int(floor(offsetX / pageWidth)) - 1)
+        let visibleEnd = min(coordinator.itemCount - 1, Int(ceil((offsetX + view.bounds.width) / pageWidth)) + 1)
+
+        return visibleStart...max(visibleStart, visibleEnd)
+    }
+
+    private func addPage(at index: Int, contentBuilder: (Int) -> AnyView) {
+        let content = contentBuilder(index)
+        let hostingController = UIHostingController(rootView: content)
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        hostingController.safeAreaRegions = []
+
+        addChild(hostingController)
+        contentView.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+
+        pageViews[index] = hostingController.view
+        hostingControllers[index] = hostingController
+    }
+
+    private func updatePageFrame(at index: Int) {
+        guard let pageView = pageViews[index] else { return }
+
+        let frame = CGRect(
+            x: CGFloat(index) * pageWidth,
+            y: 0,
+            width: pageWidth,
+            height: view.bounds.height
+        )
+
+        pageView.translatesAutoresizingMaskIntoConstraints = true
+        pageView.frame = frame
+    }
+
+    func scrollToPage(_ page: Int, animated: Bool) {
+        guard let coordinator = coordinator,
+              page >= 0 && page < coordinator.itemCount,
+              pageWidth > 0 else { return }
+
+        let targetOffset = CGFloat(page) * pageWidth
+
+        if animated {
+            animateToOffset(targetOffset, velocity: 0)
+        } else {
+            scrollView.contentOffset.x = targetOffset
+            currentPage = page
+        }
+    }
+
+    // MARK: - UIScrollViewDelegate
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        coordinator?.isUserScrolling = true
+        isAnimating = false
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        layoutVisiblePages()
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard let coordinator = coordinator, pageWidth > 0 else { return }
+
+        targetContentOffset.pointee = scrollView.contentOffset
+
+        let currentOffset = scrollView.contentOffset.x
+        let currentPageFloat = currentOffset / pageWidth
+        var targetPage = Int(round(currentPageFloat))
+
+        let velocityThreshold: CGFloat = 0.3
+        if velocity.x > velocityThreshold {
+            targetPage = Int(floor(currentPageFloat)) + 1
+        } else if velocity.x < -velocityThreshold {
+            targetPage = Int(ceil(currentPageFloat)) - 1
+        }
+
+        targetPage = max(0, min(targetPage, coordinator.itemCount - 1))
+
+        let targetOffset = CGFloat(targetPage) * pageWidth
+        animateToOffset(targetOffset, velocity: velocity.x)
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate && !isAnimating {
+            snapToNearestPage()
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        coordinator?.isUserScrolling = false
+        snapToNearestPage()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        coordinator?.isUserScrolling = false
+        updateCurrentPage()
+    }
+
+    // MARK: - Custom Animation
+
+    private func animateToOffset(_ targetOffset: CGFloat, velocity: CGFloat) {
+        isAnimating = true
+
+        let targetPage = Int(round(targetOffset / pageWidth))
+
+        // Haptic feedback when animation starts (article appears)
+        if targetPage != currentPage {
+            HapticManager.shared.click()
+        }
+
+        UIView.animate(
+            withDuration: 0.35,
+            delay: 0,
+            usingSpringWithDamping: 0.88,
+            initialSpringVelocity: min(abs(velocity) * 0.5, 2.0),
+            options: [.allowUserInteraction, .curveEaseOut]
+        ) { [weak self] in
+            self?.scrollView.contentOffset.x = targetOffset
+        } completion: { [weak self] finished in
+            guard let self = self else { return }
+            self.isAnimating = false
+            self.coordinator?.isUserScrolling = false
+            if finished {
+                self.currentPage = targetPage
+                self.coordinator?.reportPageChange(targetPage)
+            }
+        }
+    }
+
+    private func snapToNearestPage() {
+        guard let coordinator = coordinator, pageWidth > 0 else { return }
+
+        let currentOffset = scrollView.contentOffset.x
+        let targetPage = max(0, min(Int(round(currentOffset / pageWidth)), coordinator.itemCount - 1))
+        let targetOffset = CGFloat(targetPage) * pageWidth
+
+        if abs(currentOffset - targetOffset) > 1 {
+            animateToOffset(targetOffset, velocity: 0)
+        } else {
+            currentPage = targetPage
+            coordinator.reportPageChange(targetPage)
+        }
+    }
+
+    private func updateCurrentPage() {
+        guard pageWidth > 0 else { return }
+        let page = Int(round(scrollView.contentOffset.x / pageWidth))
+        if page != currentPage {
+            currentPage = page
+            coordinator?.reportPageChange(page)
+        }
+    }
+}
+
+// MARK: - Vertical UIKit Pager View Controller
+
+class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
+    weak var coordinator: (any ReelsPagerCoordinator)?
+
+    private var scrollView: UIScrollView!
+    private var contentView: UIView!
+    private var pageViews: [Int: UIView] = [:]
+    private var hostingControllers: [Int: UIHostingController<AnyView>] = [:]
+
+    private var pageHeight: CGFloat { view.bounds.height }
+    private var currentPage: Int = 0
+    private var isAnimating = false
+    private var hasPerformedInitialScroll = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupScrollView()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateContentSize()
+        layoutVisiblePages()
+
+        // Scroll to initial position on first layout
+        if !hasPerformedInitialScroll, let coordinator = coordinator, pageHeight > 0 {
+            let initialPage = coordinator.lastReportedIndex
+            if initialPage > 0 && initialPage < coordinator.itemCount {
+                scrollView.contentOffset.y = CGFloat(initialPage) * pageHeight
+                currentPage = initialPage
+                hasPerformedInitialScroll = true
+                layoutVisiblePages()
+            } else {
+                hasPerformedInitialScroll = true
+            }
+        }
     }
 
     private func setupScrollView() {
@@ -308,6 +646,11 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
 
         let targetPage = Int(round(targetOffset / pageHeight))
 
+        // Haptic feedback when animation starts (article appears)
+        if targetPage != currentPage {
+            HapticManager.shared.click()
+        }
+
         // Instagram Reels-like spring animation
         UIView.animate(
             withDuration: 0.45,
@@ -324,7 +667,6 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
             if finished {
                 self.currentPage = targetPage
                 self.coordinator?.reportPageChange(targetPage)
-                HapticManager.shared.click()
             }
         }
     }
@@ -383,35 +725,19 @@ struct NewsReelView: View {
             } else if viewModel.sources.isEmpty {
                 emptyView
             } else {
-                // Horizontal ScrollView for source switching
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 0) {
-                            ForEach(Array(viewModel.sources.enumerated()), id: \.element.id) { index, source in
-                                SourcePageView(
-                                    viewModel: viewModel,
-                                    sourceIndex: index,
-                                    onArticleTap: { article in openInReader(article) },
-                                    onSummaryRetry: { article in
-                                        Task { await viewModel.retryReelSummary(for: article) }
-                                    }
-                                )
-                                .containerRelativeFrame(.horizontal)
-                                .id(index)
-                            }
+                // Horizontal pager for source switching
+                ReelsHorizontalPager(
+                    items: viewModel.sources.map { $0.id as AnyHashable },
+                    currentIndex: $selectedSourceIndex
+                ) { index in
+                    SourcePageView(
+                        viewModel: viewModel,
+                        sourceIndex: index,
+                        onArticleTap: { article in openInReader(article) },
+                        onSummaryRetry: { article in
+                            Task { await viewModel.retryReelSummary(for: article) }
                         }
-                        .scrollTargetLayout()
-                    }
-                    .scrollTargetBehavior(.paging)
-                    .scrollPosition(id: Binding(
-                        get: { selectedSourceIndex },
-                        set: { if let newValue = $0 { selectedSourceIndex = newValue } }
-                    ))
-                    .onChange(of: selectedSourceIndex) { _, newIndex in
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo(newIndex, anchor: .center)
-                        }
-                    }
+                    )
                 }
                 .ignoresSafeArea()
             }
@@ -617,7 +943,18 @@ struct SourcePageView: View {
     let onArticleTap: (Article) -> Void
     let onSummaryRetry: (Article) -> Void
 
-    @State private var currentArticleIndex: Int = 0
+    @State private var currentArticleIndex: Int
+
+    init(viewModel: NewsReelViewModel, sourceIndex: Int, onArticleTap: @escaping (Article) -> Void, onSummaryRetry: @escaping (Article) -> Void) {
+        self.viewModel = viewModel
+        self.sourceIndex = sourceIndex
+        self.onArticleTap = onArticleTap
+        self.onSummaryRetry = onSummaryRetry
+
+        // Initialize with saved position so pager starts at correct article
+        let savedPosition = viewModel.savedArticlePosition(forSourceAt: sourceIndex)
+        _currentArticleIndex = State(initialValue: savedPosition)
+    }
 
     private var articles: [Article] {
         viewModel.articles(forSourceAt: sourceIndex)
@@ -635,6 +972,9 @@ struct SourcePageView: View {
             if sourceIndex == viewModel.currentSourceIndex {
                 viewModel.currentArticleIndex = newIndex
             }
+            // Save position for this source
+            viewModel.saveArticlePosition(newIndex, forSourceAt: sourceIndex)
+
             // Generate summary for newly visible article
             if newIndex >= 0 && newIndex < articles.count {
                 let article = articles[newIndex]
@@ -650,10 +990,12 @@ struct SourcePageView: View {
             }
         }
         .onAppear {
-            // Generate summary for first article
-            if let firstArticle = articles.first {
+            // Generate summary for current article
+            let articleIndex = currentArticleIndex
+            if articleIndex >= 0 && articleIndex < articles.count {
+                let article = articles[articleIndex]
                 Task {
-                    await viewModel.generateReelSummary(for: firstArticle)
+                    await viewModel.generateReelSummary(for: article)
                 }
             }
         }

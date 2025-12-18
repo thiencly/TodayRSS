@@ -49,6 +49,9 @@ final class NewsReelViewModel: ObservableObject {
     /// Loading state for summaries
     @Published private(set) var loadingSummaryURLs: Set<URL> = []
 
+    /// Saved article positions for each source (to restore when switching back)
+    private var savedArticlePositions: [Int: Int] = [:]
+
     // MARK: - Private Properties
 
     private let feedService = FeedService()
@@ -98,6 +101,16 @@ final class NewsReelViewModel: ObservableObject {
         guard index >= 0 && index < sources.count else { return [] }
         let source = sources[index]
         return articlesBySource[source.id] ?? []
+    }
+
+    /// Get saved article position for a source
+    func savedArticlePosition(forSourceAt index: Int) -> Int {
+        return savedArticlePositions[index] ?? 0
+    }
+
+    /// Save article position for a source
+    func saveArticlePosition(_ position: Int, forSourceAt index: Int) {
+        savedArticlePositions[index] = position
     }
 
     /// Preload articles for adjacent sources (for smooth transitions)
@@ -156,7 +169,8 @@ final class NewsReelViewModel: ObservableObject {
     func nextSource() {
         guard hasNextSource else { return }
         currentSourceIndex += 1
-        currentArticleIndex = 0
+        // Restore saved position for this source
+        currentArticleIndex = savedArticlePositions[currentSourceIndex] ?? 0
 
         Task {
             await loadArticlesForCurrentSource()
@@ -166,7 +180,8 @@ final class NewsReelViewModel: ObservableObject {
     func previousSource() {
         guard hasPreviousSource else { return }
         currentSourceIndex -= 1
-        currentArticleIndex = 0
+        // Restore saved position for this source
+        currentArticleIndex = savedArticlePositions[currentSourceIndex] ?? 0
 
         Task {
             await loadArticlesForCurrentSource()
@@ -178,7 +193,8 @@ final class NewsReelViewModel: ObservableObject {
         guard index != currentSourceIndex else { return }
 
         currentSourceIndex = index
-        currentArticleIndex = 0
+        // Restore saved position for this source
+        currentArticleIndex = savedArticlePositions[index] ?? 0
 
         Task {
             await loadArticlesForCurrentSource()
