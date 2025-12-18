@@ -334,6 +334,7 @@ struct ContentView: View {
     @AppStorage("areFoldersCollapsed") private var areFoldersCollapsed: Bool = false
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
+    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
     @State private var showingSettings: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
@@ -1225,7 +1226,17 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
+                        Button { showingAdd = true } label: {
+                            Image(systemName: "plus")
+                        }
+
                         Menu {
                             Button { showingAddFolder = true } label: {
                                 Label("New Folder", systemImage: "folder.badge.plus")
@@ -1257,12 +1268,6 @@ struct ContentView: View {
                             } label: {
                                 Label("Clear All Summaries", systemImage: "trash")
                             }
-
-                            Divider()
-
-                            Button { showingSettings = true } label: {
-                                Label("Settings", systemImage: "gearshape")
-                            }
                         } label: {
                             if isRefreshingAll {
                                 ProgressView()
@@ -1272,21 +1277,26 @@ struct ContentView: View {
                                 Image(systemName: "ellipsis.circle")
                             }
                         }
-
-                        Button { showingAdd = true } label: {
-                            Image(systemName: "plus")
-                        }
                     }
                 }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                let tintColor = AppTint(rawValue: appTint)?.color ?? .blue
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        HapticManager.shared.click()
-                        showingNewsReel = true
-                    } label: {
-                        Image(systemName: "bolt.fill")
-                    }
+                Button {
+                    HapticManager.shared.click()
+                    showingNewsReel = true
+                } label: {
+                    Image(systemName: "bolt.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(tintColor)
+                        .clipShape(Circle())
                 }
+                .glassEffect(.regular.interactive(), in: .circle)
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
             }
             .sheet(isPresented: $showingAdd) {
                 AddFeedView { newSource in
