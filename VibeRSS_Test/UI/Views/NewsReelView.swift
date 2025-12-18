@@ -195,6 +195,9 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
         hostingController.view.backgroundColor = .clear
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
+        // Disable safe area insets so content fills the entire page
+        hostingController.safeAreaRegions = []
+
         addChild(hostingController)
         contentView.addSubview(hostingController.view)
         hostingController.didMove(toParent: self)
@@ -357,67 +360,32 @@ struct NewsReelView: View {
     @State private var selectedSourceIndex: Int = 0
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { geometry in
-                ZStack {
-                    // Background
-                    Color.black.ignoresSafeArea()
+        ZStack {
+            // Background
+            Color.black.ignoresSafeArea()
 
-                    // Main content
-                    if viewModel.isLoading && viewModel.sources.isEmpty {
-                        loadingView
-                    } else if viewModel.sources.isEmpty {
-                        emptyView
-                    } else {
-                        // Horizontal TabView for source switching
-                        TabView(selection: $selectedSourceIndex) {
-                            ForEach(Array(viewModel.sources.enumerated()), id: \.element.id) { index, source in
-                                SourcePageView(
-                                    viewModel: viewModel,
-                                    sourceIndex: index,
-                                    onArticleTap: { article in openInReader(article) },
-                                    onSummaryRetry: { article in
-                                        Task { await viewModel.retryReelSummary(for: article) }
-                                    }
-                                )
-                                .tag(index)
+            // Main content
+            if viewModel.isLoading && viewModel.sources.isEmpty {
+                loadingView
+            } else if viewModel.sources.isEmpty {
+                emptyView
+            } else {
+                // Horizontal TabView for source switching
+                TabView(selection: $selectedSourceIndex) {
+                    ForEach(Array(viewModel.sources.enumerated()), id: \.element.id) { index, source in
+                        SourcePageView(
+                            viewModel: viewModel,
+                            sourceIndex: index,
+                            onArticleTap: { article in openInReader(article) },
+                            onSummaryRetry: { article in
+                                Task { await viewModel.retryReelSummary(for: article) }
                             }
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .ignoresSafeArea()
+                        )
+                        .tag(index)
                     }
                 }
-            }
-            .ignoresSafeArea()
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        HapticManager.shared.click()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-
-                ToolbarItem(placement: .principal) {
-                    if !viewModel.articles(forSourceAt: selectedSourceIndex).isEmpty {
-                        GlassEffectContainer {
-                            Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.articles(forSourceAt: selectedSourceIndex).count)")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .glassEffect(.regular.interactive(), in: .capsule)
-                        }
-                        .onTapGesture {
-                            HapticManager.shared.click()
-                            viewModel.currentArticleIndex = 0
-                        }
-                    }
-                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
             }
         }
         .overlay(alignment: .trailing) {
@@ -468,8 +436,44 @@ struct NewsReelView: View {
                 .padding(.trailing, 16)
             }
         }
+        .overlay(alignment: .topLeading) {
+            // Close button - 44x44pt per Apple HIG
+            Button {
+                HapticManager.shared.click()
+                dismiss()
+            } label: {
+                GlassEffectContainer {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                }
+            }
+            .padding(.leading, 16)
+            .padding(.top, 8)
+        }
         .overlay(alignment: .top) {
-            // Folder indicator pills below toolbar
+            // Article counter
+            if !viewModel.articles(forSourceAt: selectedSourceIndex).isEmpty {
+                GlassEffectContainer {
+                    Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.articles(forSourceAt: selectedSourceIndex).count)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                .padding(.top, 12)
+                .onTapGesture {
+                    HapticManager.shared.click()
+                    viewModel.currentArticleIndex = 0
+                }
+            }
+        }
+        .overlay(alignment: .top) {
+            // Folder indicator pills
             if viewModel.sources.count > 1 {
                 FolderIndicatorView(
                     sources: viewModel.sources,
@@ -481,7 +485,7 @@ struct NewsReelView: View {
                         }
                     }
                 )
-                .padding(.top, 52)
+                .padding(.top, 60)
             }
         }
         .preferredColorScheme(.dark)
