@@ -1014,6 +1014,26 @@ struct ContentView: View {
                         }
                     }
 
+                    NavigationLink {
+                        SavedArticlesView()
+                    } label: {
+                        Label {
+                            HStack {
+                                Text("Saved")
+                                if SavedArticlesManager.shared.savedArticles.count > 0 {
+                                    Spacer()
+                                    Text("\(SavedArticlesManager.shared.savedArticles.count)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.red)
+                        }
+                        .contentShape(Rectangle())
+                    }
+
                     ForEach(store.folders) { folder in
                         folderRow(folder)
                     }
@@ -1283,7 +1303,7 @@ struct ContentView: View {
                 .presentationDetents([.medium])
             }
             .sheet(item: $heroWebLink) { w in
-                ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
+                ArticleReaderView(url: w.url, articleTitle: w.title, articleDate: w.date, thumbnailURL: w.thumbnailURL, sourceIconURL: w.sourceIconURL, sourceTitle: w.sourceTitle)
             }
             .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in

@@ -29,10 +29,18 @@ struct SafariView: UIViewControllerRepresentable {
 struct WebLink: Identifiable {
     let id = UUID()
     let url: URL
+    let title: String?
     let date: Date?
+    let thumbnailURL: URL?
+    let sourceIconURL: URL?
+    let sourceTitle: String?
 
-    init(url: URL, date: Date? = nil) {
+    init(url: URL, title: String? = nil, date: Date? = nil, thumbnailURL: URL? = nil, sourceIconURL: URL? = nil, sourceTitle: String? = nil) {
         self.url = url
+        self.title = title
         self.date = date
+        self.thumbnailURL = thumbnailURL
+        self.sourceIconURL = sourceIconURL
+        self.sourceTitle = sourceTitle
     }
 }

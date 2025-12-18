@@ -35,10 +35,13 @@ struct AllArticlesView: View {
                         onTapArticle: {
                             readURLs.insert(item.link)
                             Task { await ArticleReadStateManager.shared.markAsRead(item.link) }
-                            webLink = WebLink(url: item.link, date: item.pubDate)
+                            webLink = WebLink(url: item.link, title: item.title, date: item.pubDate, thumbnailURL: item.thumbnailURL, sourceIconURL: item.sourceIconURL, sourceTitle: item.sourceTitle)
                         },
                         onTapSummarize: {
                             handleSummarizeAction(for: item)
+                        },
+                        onSave: {
+                            SavedArticlesManager.shared.toggleSaved(article: item)
                         }
                     )
                     .equatable()
@@ -111,7 +114,7 @@ struct AllArticlesView: View {
         .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.large)
         .sheet(item: $webLink) { w in
-            ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
+            ArticleReaderView(url: w.url, articleTitle: w.title, articleDate: w.date, thumbnailURL: w.thumbnailURL, sourceIconURL: w.sourceIconURL, sourceTitle: w.sourceTitle)
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -159,7 +162,8 @@ struct AllArticlesView: View {
             summaryText: aiSummary,
             isExpanded: expandedSummaries.contains(item.id),
             isError: summaryErrors.contains(item.id),
-            isGenerating: summarizingID == item.id
+            isGenerating: summarizingID == item.id,
+            isSaved: SavedArticlesManager.shared.isSaved(url: item.link)
         )
     }
 

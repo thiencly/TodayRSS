@@ -118,6 +118,7 @@ struct SettingsView: View {
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
     @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
+    @AppStorage("readerFontSize") private var readerFontSize: Double = 18
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Bindable private var syncManager = BackgroundSyncManager.shared
@@ -220,6 +221,42 @@ struct SettingsView: View {
                     Text("Highlights")
                 } footer: {
                     Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
+                }
+
+                // MARK: - Reader Section
+                Section {
+                    HStack {
+                        Text("Font Size")
+                        Spacer()
+                        HStack(spacing: 16) {
+                            Button {
+                                if readerFontSize > 14 { readerFontSize -= 2 }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+
+                            Text("\(Int(readerFontSize))")
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.medium)
+                                .frame(width: 30)
+
+                            Button {
+                                if readerFontSize < 28 { readerFontSize += 2 }
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } header: {
+                    Text("Reader")
+                } footer: {
+                    Text("Adjust the text size for the article reader view.")
                 }
 
                 // MARK: - Appearance Section

@@ -15,11 +15,17 @@ struct ArticleReaderView: View {
     let url: URL
     let articleTitle: String?
     let articleDate: Date?
+    let thumbnailURL: URL?
+    let sourceIconURL: URL?
+    let sourceTitle: String?
 
-    init(url: URL, articleTitle: String?, articleDate: Date? = nil) {
+    init(url: URL, articleTitle: String?, articleDate: Date? = nil, thumbnailURL: URL? = nil, sourceIconURL: URL? = nil, sourceTitle: String? = nil) {
         self.url = url
         self.articleTitle = articleTitle
         self.articleDate = articleDate
+        self.thumbnailURL = thumbnailURL
+        self.sourceIconURL = sourceIconURL
+        self.sourceTitle = sourceTitle
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -29,6 +35,7 @@ struct ArticleReaderView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showSettings = false
+    @State private var isSaved: Bool = false
     @AppStorage("readerFontSize") private var fontSize: Double = 18
 
     // Format date as relative time string
@@ -52,38 +59,68 @@ struct ArticleReaderView: View {
                     articleWebView(content)
                 }
             }
+            .navigationTitle(sourceTitle ?? url.host ?? "Article")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
                         dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .bottomBar) {
+                    Spacer()
+                }
+
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button {
+                        toggleSaved()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .medium))
+                        Image(systemName: isSaved ? "heart.fill" : "heart")
+                            .foregroundStyle(isSaved ? .red : .primary)
                     }
-                }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        Button {
-                            showSettings.toggle()
-                        } label: {
-                            Image(systemName: "textformat.size")
-                        }
+                    Button {
+                        showSettings.toggle()
+                    } label: {
+                        Image(systemName: "textformat.size")
+                    }
 
-                        ShareLink(item: url) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
+                    Button {
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Image(systemName: "safari")
+                    }
+
+                    ShareLink(item: url) {
+                        Image(systemName: "square.and.arrow.up")
                     }
                 }
             }
-            .sheet(isPresented: $showSettings) {
-                readerSettingsSheet
-            }
+        }
+        .sheet(isPresented: $showSettings) {
+            readerSettingsSheet
         }
         .task {
             await loadArticle()
         }
+        .onAppear {
+            isSaved = SavedArticlesManager.shared.isSaved(url: url)
+        }
+    }
+
+    private func toggleSaved() {
+        HapticManager.shared.click()
+        let title = articleTitle ?? extractedContent?.extracted.title ?? url.host ?? "Article"
+        SavedArticlesManager.shared.toggleSaved(
+            url: url,
+            title: title,
+            pubDate: articleDate,
+            thumbnailURL: thumbnailURL,
+            sourceIconURL: sourceIconURL,
+            sourceTitle: sourceTitle
+        )
+        isSaved = SavedArticlesManager.shared.isSaved(url: url)
     }
 
     // MARK: - Subviews
@@ -153,58 +190,52 @@ struct ArticleReaderView: View {
             colorScheme: colorScheme,
             relativeDate: relativeDate
         )
-        .ignoresSafeArea(edges: .bottom)
+        .ignoresSafeArea()
     }
 
     private var readerSettingsSheet: some View {
-        NavigationStack {
-            VStack(spacing: 32) {
-                VStack(spacing: 16) {
-                    Text("Text Size")
-                        .font(.roundedHeadline)
+        VStack(spacing: 24) {
+            // Drag indicator
+            Capsule()
+                .fill(Color.secondary.opacity(0.4))
+                .frame(width: 36, height: 5)
+                .padding(.top, 8)
 
-                    HStack(spacing: 24) {
-                        Button {
-                            if fontSize > 14 { fontSize -= 2 }
-                        } label: {
-                            Image(systemName: "textformat.size.smaller")
-                                .font(.title2)
-                                .frame(width: 44, height: 44)
-                                .background(Color.gray.opacity(0.2))
-                                .clipShape(Circle())
-                        }
+            Text("Text Size")
+                .font(.roundedHeadline)
 
-                        Text("\(Int(fontSize))")
-                            .font(.title)
-                            .fontWeight(.medium)
-                            .frame(width: 60)
-
-                        Button {
-                            if fontSize < 28 { fontSize += 2 }
-                        } label: {
-                            Image(systemName: "textformat.size.larger")
-                                .font(.title2)
-                                .frame(width: 44, height: 44)
-                                .background(Color.gray.opacity(0.2))
-                                .clipShape(Circle())
-                        }
+            GlassEffectContainer {
+                HStack(spacing: 20) {
+                    Button {
+                        if fontSize > 14 { fontSize -= 2 }
+                    } label: {
+                        Image(systemName: "textformat.size.smaller")
+                            .font(.title2)
+                            .frame(width: 48, height: 48)
                     }
-                }
+                    .glassEffect(.regular.interactive(), in: .circle)
 
-                Spacer()
-            }
-            .padding(.top, 32)
-            .navigationTitle("Reader Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        showSettings = false
+                    Text("\(Int(fontSize))")
+                        .font(.system(.title, design: .rounded))
+                        .fontWeight(.medium)
+                        .frame(width: 50)
+
+                    Button {
+                        if fontSize < 28 { fontSize += 2 }
+                    } label: {
+                        Image(systemName: "textformat.size.larger")
+                            .font(.title2)
+                            .frame(width: 48, height: 48)
                     }
+                    .glassEffect(.regular.interactive(), in: .circle)
                 }
             }
-            .presentationDetents([.height(200)])
+
+            Spacer()
         }
+        .padding(.top, 8)
+        .presentationDetents([.height(180)])
+        .presentationDragIndicator(.hidden)
     }
 
     // MARK: - Data Loading
@@ -372,6 +403,13 @@ struct ReeeederWebView: UIViewRepresentable {
                 text-transform: uppercase !important;
                 letter-spacing: 0.5px !important;
                 opacity: 0.6 !important;
+                color: inherit !important;
+                text-decoration: none !important;
+            }
+            .__source-badge a {
+                color: inherit !important;
+                text-decoration: none !important;
+                pointer-events: none !important;
             }
             .__source-badge .separator {
                 opacity: 0.4 !important;

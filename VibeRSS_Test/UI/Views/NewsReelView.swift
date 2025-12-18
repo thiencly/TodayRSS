@@ -94,54 +94,65 @@ struct NewsReelView: View {
 
                 ToolbarItem(placement: .principal) {
                     if !viewModel.currentArticles.isEmpty {
-                        Button {
-                            HapticManager.shared.click()
-                            jumpToFirstArticle()
-                        } label: {
-                            Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.currentArticles.count)")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .glassEffect(.regular.interactive())
-                        }
-                        .buttonStyle(.plain)
+                        Text("\(viewModel.currentArticleIndex + 1)/\(viewModel.currentArticles.count)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .onTapGesture {
+                                HapticManager.shared.click()
+                                jumpToFirstArticle()
+                            }
                     }
                 }
+            }
+        }
+        .overlay(alignment: .trailing) {
+            // Vertical action buttons on the right side
+            if let article = viewModel.currentArticle {
+                VStack(spacing: 0) {
+                    Button {
+                        HapticManager.shared.click()
+                        SavedArticlesManager.shared.toggleSaved(article: article)
+                    } label: {
+                        Image(systemName: SavedArticlesManager.shared.isSaved(url: article.link) ? "heart.fill" : "heart")
+                            .font(.title2)
+                            .foregroundStyle(SavedArticlesManager.shared.isSaved(url: article.link) ? .red : .white)
+                            .frame(width: 44, height: 44)
+                    }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if viewModel.currentArticle != nil {
-                        HStack(spacing: 16) {
-                            Button {
-                                HapticManager.shared.click()
-                                refreshArticles()
-                            } label: {
-                                Group {
-                                    if isRefreshing {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                            .scaleEffect(0.8)
-                                    } else {
-                                        Image(systemName: "arrow.clockwise")
-                                    }
-                                }
-                                .frame(width: 20, height: 20)
-                            }
-                            .disabled(isRefreshing)
-
-                            Button {
-                                HapticManager.shared.click()
-                                if let article = viewModel.currentArticle {
-                                    shareArticle(article)
-                                }
-                            } label: {
-                                Image(systemName: "square.and.arrow.up")
+                    Button {
+                        HapticManager.shared.click()
+                        refreshArticles()
+                    } label: {
+                        Group {
+                            if isRefreshing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
                             }
                         }
+                        .frame(width: 44, height: 44)
+                    }
+                    .disabled(isRefreshing)
+
+                    Button {
+                        HapticManager.shared.click()
+                        shareArticle(article)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
                     }
                 }
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .padding(.trailing, 16)
             }
         }
         .overlay(alignment: .top) {
@@ -185,7 +196,7 @@ struct NewsReelView: View {
             }
         }
         .sheet(item: $webLink) { w in
-            ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
+            ArticleReaderView(url: w.url, articleTitle: w.title, articleDate: w.date, thumbnailURL: w.thumbnailURL, sourceIconURL: w.sourceIconURL, sourceTitle: w.sourceTitle)
         }
     }
 
@@ -438,7 +449,7 @@ struct NewsReelView: View {
     // MARK: - Actions
 
     private func openInReader(_ article: Article) {
-        webLink = WebLink(url: article.link, date: article.pubDate)
+        webLink = WebLink(url: article.link, title: article.title, date: article.pubDate, thumbnailURL: article.thumbnailURL, sourceIconURL: article.sourceIconURL, sourceTitle: article.sourceTitle)
     }
 
     private func shareArticle(_ article: Article) {
