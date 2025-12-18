@@ -156,8 +156,7 @@ struct NewsReelCardView: View {
 
                         // Article title
                         Text(article.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(primaryTextColor)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)

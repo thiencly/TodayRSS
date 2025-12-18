@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		11B437F12EF3CFD90088C572 /* Reeeed in Frameworks */ = {isa = PBXBuildFile; productRef = 11B437F02EF3CFD90088C572 /* Reeeed */; };
 		WIDGET004000000000000001 /* TodayRSSWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -92,6 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11B437F12EF3CFD90088C572 /* Reeeed in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -164,6 +166,7 @@
 			);
 			name = VibeRSS_Test;
 			packageProductDependencies = (
+				11B437F02EF3CFD90088C572 /* Reeeed */,
 			);
 			productName = VibeRSS_Test;
 			productReference = 1191FA032E934A3900738217 /* VibeRSS_Test.app */;
@@ -264,6 +267,9 @@
 			);
 			mainGroup = 1191F9FA2E934A3900738217;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				11B437EF2EF3CFD90088C572 /* XCRemoteSwiftPackageReference "reeeed" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1191FA042E934A3900738217 /* Products */;
 			projectDirPath = "";
@@ -745,6 +751,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		11B437EF2EF3CFD90088C572 /* XCRemoteSwiftPackageReference "reeeed" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/nate-parrott/reeeed";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		11B437F02EF3CFD90088C572 /* Reeeed */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 11B437EF2EF3CFD90088C572 /* XCRemoteSwiftPackageReference "reeeed" */;
+			productName = Reeeed;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1191F9FB2E934A3900738217 /* Project object */;
 }

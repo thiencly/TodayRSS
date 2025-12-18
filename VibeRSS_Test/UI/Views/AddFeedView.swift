@@ -175,7 +175,7 @@ struct AddFeedView: View {
             // Info
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.title)
-                    .font(.headline)
+                    .font(.roundedHeadline)
                     .lineLimit(1)
 
                 if let description = result.description, !description.isEmpty {

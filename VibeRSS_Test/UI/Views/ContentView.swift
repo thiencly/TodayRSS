@@ -162,7 +162,7 @@ private struct SidebarHeroCardView: View {
                     .foregroundStyle(.primary)
 
                 Text("Today Highlights")
-                    .font(.headline.weight(.bold))
+                    .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
 
                 Image(systemName: "sparkles")
@@ -1024,7 +1024,7 @@ struct ContentView: View {
                 header: {
                     HStack(spacing: 8) {
                         Text("Folders")
-                            .font(.title2.bold())
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.right")
                             .font(.callout.weight(.semibold))
@@ -1152,7 +1152,7 @@ struct ContentView: View {
                 } header: {
                     HStack(spacing: 8) {
                         Text("Sources")
-                            .font(.title2.bold())
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.right")
                             .font(.callout.weight(.semibold))
@@ -1283,7 +1283,7 @@ struct ContentView: View {
                 .presentationDetents([.medium])
             }
             .sheet(item: $heroWebLink) { w in
-                ReaderSafariView(url: w.url).ignoresSafeArea()
+                ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
             }
             .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in

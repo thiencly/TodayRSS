@@ -26,4 +26,13 @@ struct SafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
-struct WebLink: Identifiable { let id = UUID(); let url: URL }
+struct WebLink: Identifiable {
+    let id = UUID()
+    let url: URL
+    let date: Date?
+
+    init(url: URL, date: Date? = nil) {
+        self.url = url
+        self.date = date
+    }
+}

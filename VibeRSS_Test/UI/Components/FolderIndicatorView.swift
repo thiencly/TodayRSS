@@ -67,8 +67,7 @@ struct FolderPill: View {
     var body: some View {
         Button(action: action) {
             Text(name)
-                .font(.subheadline)
-                .fontWeight(.bold)
+                .font(.system(.subheadline, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                 .padding(.horizontal, 16)

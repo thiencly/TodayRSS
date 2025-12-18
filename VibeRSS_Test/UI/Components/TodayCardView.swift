@@ -29,7 +29,7 @@ struct TodayCardView: View {
                 FeedIconView(iconURL: card.source.iconURL)
                     .frame(width: 26, height: 26)
                 Text(card.source.title)
-                    .font(.headline)
+                    .font(.roundedHeadline)
                     .lineLimit(1)
                     .foregroundStyle(.primary)
                 Spacer()

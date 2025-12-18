@@ -162,7 +162,7 @@ struct OnboardingView: View {
                         }
                     } label: {
                         Text(currentPage < pages.count - 1 ? "Continue" : "Get Started")
-                            .font(.headline)
+                            .font(.roundedHeadline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
@@ -352,7 +352,7 @@ struct FeatureRow: View {
             // Text content
             VStack(alignment: .leading, spacing: 4) {
                 Text(feature.title)
-                    .font(.headline)
+                    .font(.roundedHeadline)
 
                 Text(feature.description)
                     .font(.subheadline)

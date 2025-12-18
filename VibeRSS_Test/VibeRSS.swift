@@ -26,6 +26,9 @@ struct VibeRSSApp: App {
     }
 
     init() {
+        // Setup SF Pro Rounded for navigation bar titles
+        AppAppearance.setupNavigationBarAppearance()
+
         // Register background tasks
         BackgroundSyncManager.shared.registerBackgroundTasks()
 
@@ -57,9 +60,8 @@ struct VibeRSSApp: App {
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)
                 }
-                .fullScreenCover(item: $deepLinkURL) { url in
-                    ReaderSafariView(url: url)
-                        .ignoresSafeArea()
+                .sheet(item: $deepLinkURL) { url in
+                    ArticleReaderView(url: url, articleTitle: nil)
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)

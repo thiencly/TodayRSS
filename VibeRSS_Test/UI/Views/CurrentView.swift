@@ -43,7 +43,7 @@ struct CurrentView: View {
                         onTapArticle: {
                             readURLs.insert(item.link)
                             Task { await ArticleReadStateManager.shared.markAsRead(item.link) }
-                            webLink = WebLink(url: item.link)
+                            webLink = WebLink(url: item.link, date: item.pubDate)
                         },
                         onTapSummarize: {
                             handleSummarizeAction(for: item)
@@ -99,8 +99,8 @@ struct CurrentView: View {
         }
         .navigationTitle("Latest")
         .navigationBarTitleDisplayMode(.large)
-        .fullScreenCover(item: $webLink) { w in
-            ReaderSafariView(url: w.url).ignoresSafeArea()
+        .sheet(item: $webLink) { w in
+            ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

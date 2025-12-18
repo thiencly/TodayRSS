@@ -184,8 +184,8 @@ struct NewsReelView: View {
                 ShareSheet(items: [url])
             }
         }
-        .fullScreenCover(item: $webLink) { w in
-            ReaderSafariView(url: w.url).ignoresSafeArea()
+        .sheet(item: $webLink) { w in
+            ArticleReaderView(url: w.url, articleTitle: nil, articleDate: w.date)
         }
     }
 
@@ -438,7 +438,7 @@ struct NewsReelView: View {
     // MARK: - Actions
 
     private func openInReader(_ article: Article) {
-        webLink = WebLink(url: article.link)
+        webLink = WebLink(url: article.link, date: article.pubDate)
     }
 
     private func shareArticle(_ article: Article) {
@@ -573,7 +573,7 @@ struct NewsReelView: View {
                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 .scaleEffect(1.5)
             Text("Loading articles...")
-                .font(.headline)
+                .font(.roundedHeadline)
                 .foregroundStyle(.white.opacity(0.7))
         }
     }
@@ -585,8 +585,7 @@ struct NewsReelView: View {
                 .foregroundStyle(.white.opacity(0.5))
 
             Text("No Articles")
-                .font(.title2)
-                .fontWeight(.semibold)
+                .font(.system(.title2, design: .rounded, weight: .semibold))
                 .foregroundStyle(.white)
 
             Text("Add some feeds to see articles here")
@@ -598,7 +597,7 @@ struct NewsReelView: View {
                 dismiss()
             } label: {
                 Text("Go Back")
-                    .font(.headline)
+                    .font(.roundedHeadline)
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)

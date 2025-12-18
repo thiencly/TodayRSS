@@ -95,7 +95,7 @@ struct ContentPlaceholder: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 48))
-            Text("Add a source to start vibing").font(.headline).foregroundStyle(.secondary)
+            Text("Add a source to start vibing").font(.roundedHeadline).foregroundStyle(.secondary)
         }.padding()
     }
 }

@@ -41,7 +41,7 @@ struct ArticleRowView: View, Equatable {
             VStack(alignment: .leading, spacing: 10) {
                 // Title with unread indicator (inline at end of text)
                 titleWithNewIndicator
-                    .font(.headline)
+                    .font(.roundedHeadline)
                     .foregroundStyle(state.isRead ? .secondary : .primary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(nil)
