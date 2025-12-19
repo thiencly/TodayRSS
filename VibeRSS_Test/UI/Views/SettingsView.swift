@@ -124,6 +124,7 @@ struct SettingsView: View {
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
+    @State private var showAIRevealDemo = false
 
     var body: some View {
         NavigationStack {
@@ -366,9 +367,32 @@ struct SettingsView: View {
                 } footer: {
                     Text("View the welcome tutorial again.")
                 }
+
+                // MARK: - Developer Section
+                Section {
+                    Button {
+                        showAIRevealDemo = true
+                    } label: {
+                        HStack {
+                            Label("Test AI Reveal Effect", systemImage: "sparkles")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Test the Apple Mail-style AI summary reveal animation.")
+                }
             }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView(isPresented: $showOnboarding)
+            }
+            .sheet(isPresented: $showAIRevealDemo) {
+                AIRevealDemoView()
             }
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus

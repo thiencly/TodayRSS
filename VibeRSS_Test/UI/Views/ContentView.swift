@@ -122,6 +122,8 @@ private struct SidebarHeroCardView: View {
     }
 
     let entries: [Entry]
+    var previousEntries: [Entry] = []  // Old entries for diagonal reveal
+    var showDiagonalReveal: Bool = false  // Trigger for diagonal reveal animation
     var expectedCount: Int = 3
     var isUpdating: Bool = false
     var isCollapsed: Bool = false
@@ -130,6 +132,7 @@ private struct SidebarHeroCardView: View {
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
     var onGradientComplete: ((URL) -> Void)? = nil
+    var onDiagonalRevealComplete: (() -> Void)? = nil
 
     private var sortedEntries: [Entry] {
         entries.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
@@ -183,9 +186,26 @@ private struct SidebarHeroCardView: View {
                 onToggleCollapse?()
             }
 
-            // Entries
+            // Entries with diagonal reveal animation
             Group {
-                if entries.isEmpty {
+                if showDiagonalReveal && !previousEntries.isEmpty && !entries.isEmpty {
+                    // Diagonal reveal animation from old entries to new entries
+                    AIDiagonalReveal(
+                        showNew: .constant(true),
+                        fadeDuration: 0.2,
+                        revealDuration: 0.25,
+                        flashDuration: 0.35,
+                        onComplete: {
+                            onDiagonalRevealComplete?()
+                        }
+                    ) {
+                        // Old content - previous entries
+                        entriesContentView(from: previousEntries)
+                    } newContent: {
+                        // New content - current entries
+                        entriesContentView(from: entries)
+                    }
+                } else if entries.isEmpty {
                     ForEach(0..<visibleEntryCount, id: \.self) { _ in
                         placeholderRow
                     }
@@ -291,6 +311,48 @@ private struct SidebarHeroCardView: View {
         .redacted(reason: .placeholder)
         .shimmer(if: true)
     }
+
+    /// Helper to render entries content for use in diagonal reveal animation
+    @ViewBuilder
+    private func entriesContentView(from entryList: [Entry]) -> some View {
+        let sorted = entryList.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let visible = isCollapsed ? Array(sorted.prefix(1)) : Array(sorted.prefix(expectedCount))
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(visible) { entry in
+                staticEntryRow(entry)
+            }
+        }
+    }
+
+    /// Static entry row for diagonal reveal (no shimmer/gradient animations)
+    @ViewBuilder
+    private func staticEntryRow(_ entry: Entry) -> some View {
+        let displayText = entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                FeedIconView(iconURL: entry.source.iconURL)
+                    .frame(width: 20, height: 20)
+                Text(entry.source.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+                if entry.isNew {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                        .accessibilityLabel("New article")
+                }
+                Spacer()
+            }
+            Text(displayText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTapLink?(entry.link) }
+    }
 }
 
 // MARK: - Article Collector for Widget Sync
@@ -345,6 +407,8 @@ struct ContentView: View {
     @State private var pendingHeroRefresh: Bool = false
     @State private var loadingSummarySourceIDs: Set<UUID> = []
     @State private var gradientRevealLinks: Set<URL> = []
+    @State private var previousHeroEntries: [SidebarHeroCardView.Entry] = []
+    @State private var showDiagonalReveal: Bool = false
     @State private var heroCardHeight: CGFloat = 200
     @State private var isHeroCollapsed: Bool = false
     @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
@@ -727,6 +791,13 @@ struct ContentView: View {
 
         // If any sources have new articles, show shimmer on ALL sources to hide reordering
         let hasAnyNewArticles = !sourcesNeedingNewSummary.isEmpty
+
+        // Store current entries for diagonal reveal animation (only if we have entries)
+        let shouldTriggerDiagonalReveal = hasAnyNewArticles && !heroEntries.isEmpty
+        if shouldTriggerDiagonalReveal {
+            previousHeroEntries = heroEntries
+        }
+
         if hasAnyNewArticles {
             for feed in feeds {
                 loadingSummarySourceIDs.insert(feed.id)
@@ -837,6 +908,11 @@ struct ContentView: View {
 
         // Final update
         updateHeroEntriesFromMap(entriesBySourceID)
+
+        // Trigger diagonal reveal animation if we stored previous entries
+        if shouldTriggerDiagonalReveal && !previousHeroEntries.isEmpty {
+            showDiagonalReveal = true
+        }
 
         saveHeroEntriesToCache()
         isLoadingHero = false
@@ -1202,6 +1278,8 @@ struct ContentView: View {
                 if !heroSourceIDs.isEmpty {
                     SidebarHeroCardView(
                         entries: heroEntries,
+                        previousEntries: previousHeroEntries,
+                        showDiagonalReveal: showDiagonalReveal,
                         expectedCount: heroSourceIDs.count,
                         isUpdating: isLoadingHero,
                         isCollapsed: isHeroCollapsed,
@@ -1217,6 +1295,10 @@ struct ContentView: View {
                         },
                         onGradientComplete: { link in
                             gradientRevealLinks.remove(link)
+                        },
+                        onDiagonalRevealComplete: {
+                            showDiagonalReveal = false
+                            previousHeroEntries = []
                         }
                     )
                     .padding(.horizontal, 20)
