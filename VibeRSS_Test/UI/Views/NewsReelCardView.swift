@@ -19,6 +19,8 @@ struct NewsReelCardView: View {
     @State private var dominantColor: Color = Color.black
     @State private var isDarkBackground: Bool = true
     @State private var sparkleColor: Color = AppleIntelligenceColors.colors.randomElement() ?? .purple
+    @State private var shouldRevealSummary: Bool = false
+    @State private var wasLoadingSummary: Bool = false
 
     // Text colors based on background brightness
     private var primaryTextColor: Color {
@@ -169,16 +171,28 @@ struct NewsReelCardView: View {
 
                         // Reel summary - also tappable to open reader
                         if let summary = reelSummary, !summary.isEmpty {
-                            (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
-                                .font(.body)
-                                .foregroundStyle(summaryTextColor)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    HapticManager.shared.click()
-                                    onTitleTap()
+                            AISummaryReveal(isRevealed: $shouldRevealSummary) {
+                                (Text(Image(systemName: "sparkles")).foregroundColor(sparkleColor) + Text(" ") + Text(summary))
+                                    .font(.body)
+                                    .foregroundStyle(summaryTextColor)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                HapticManager.shared.click()
+                                onTitleTap()
+                            }
+                            .onAppear {
+                                // If summary was just loaded (was loading before), trigger reveal
+                                if wasLoadingSummary {
+                                    shouldRevealSummary = true
+                                    wasLoadingSummary = false
+                                } else {
+                                    // Summary was cached, show immediately without animation
+                                    shouldRevealSummary = true
                                 }
+                            }
                         } else if isLoadingSummary || isRetryingSummary {
                             HStack(spacing: 8) {
                                 ProgressView()
@@ -221,6 +235,19 @@ struct NewsReelCardView: View {
                 }
             }
             .clipped()
+        }
+        .onChange(of: isLoadingSummary) { _, newValue in
+            if newValue {
+                // Loading started - mark so we know to animate when it finishes
+                wasLoadingSummary = true
+                shouldRevealSummary = false
+            }
+        }
+        .onChange(of: reelSummary) { oldValue, newValue in
+            // Reset reveal state when summary changes (new article)
+            if oldValue != newValue {
+                shouldRevealSummary = false
+            }
         }
     }
 

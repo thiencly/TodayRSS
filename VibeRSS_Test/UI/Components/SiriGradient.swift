@@ -1098,6 +1098,7 @@ struct AIDiagonalReveal<OldContent: View, NewContent: View>: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + fadeDuration + revealDuration * 0.5) {
             phase = .flashing
             flashProgress = 0
+            HapticManager.shared.success()  // Magical completion haptic
             withAnimation(.easeInOut(duration: flashDuration)) {
                 flashProgress = 1.0
             }
@@ -1117,6 +1118,110 @@ struct AIDiagonalReveal<OldContent: View, NewContent: View>: View {
         phase = .showingOld
         revealProgress = 0
         flashProgress = 0
+    }
+}
+
+// MARK: - AI Summary Reveal (for News Reel summaries)
+// Reveals content with top-to-bottom sweep and rainbow flash when summary finishes generating
+
+struct AISummaryReveal<Content: View>: View {
+    let content: Content
+    @Binding var isRevealed: Bool
+    var revealDuration: Double = 0.3
+    var flashDuration: Double = 0.4
+    var onComplete: (() -> Void)? = nil
+
+    @State private var phase: RevealPhase = .hidden
+    @State private var revealProgress: CGFloat = 0
+    @State private var flashProgress: CGFloat = 0
+
+    enum RevealPhase {
+        case hidden
+        case revealing
+        case flashing
+        case done
+    }
+
+    init(
+        isRevealed: Binding<Bool>,
+        revealDuration: Double = 0.3,
+        flashDuration: Double = 0.4,
+        onComplete: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self._isRevealed = isRevealed
+        self.revealDuration = revealDuration
+        self.flashDuration = flashDuration
+        self.onComplete = onComplete
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .mask(
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        // Revealed portion
+                        Rectangle()
+                            .fill(Color.white)
+                            .frame(height: phase == .done ? geometry.size.height : geometry.size.height * revealProgress)
+                        Spacer(minLength: 0)
+                    }
+                }
+            )
+            // Rainbow text coloring during flash phase
+            .overlay(
+                GeometryReader { geometry in
+                    if phase == .flashing {
+                        // Wide rainbow gradient that lights up text as it passes
+                        let gradientWidth = geometry.size.width * 1.2
+                        let totalTravel = geometry.size.width + gradientWidth
+                        let xOffset = -gradientWidth + totalTravel * flashProgress
+
+                        LinearGradient(
+                            colors: [.clear] + AppleIntelligenceColors.colors + [.clear],
+                            startPoint: UnitPoint(x: 0, y: 0.3),
+                            endPoint: UnitPoint(x: 1, y: 0.7)
+                        )
+                        .frame(width: gradientWidth)
+                        .offset(x: xOffset)
+                        .blendMode(.sourceAtop)
+                    }
+                }
+                .allowsHitTesting(false)
+            )
+            .compositingGroup()
+            .opacity(phase == .hidden ? 0 : 1)
+            .onChange(of: isRevealed) { _, newValue in
+                if newValue && phase == .hidden {
+                    startRevealSequence()
+                }
+            }
+    }
+
+    private func startRevealSequence() {
+        // Phase 1: Reveal content top to bottom
+        phase = .revealing
+        revealProgress = 0
+        withAnimation(.easeOut(duration: revealDuration)) {
+            revealProgress = 1.0
+        }
+
+        // Phase 2: Rainbow flash - starts early during reveal for overlap
+        DispatchQueue.main.asyncAfter(deadline: .now() + revealDuration * 0.2) {
+            phase = .flashing
+            flashProgress = 0
+            HapticManager.shared.success()  // Magical completion haptic
+            withAnimation(.easeInOut(duration: flashDuration)) {
+                flashProgress = 1.0
+            }
+        }
+
+        // Phase 3: Done
+        DispatchQueue.main.asyncAfter(deadline: .now() + revealDuration * 0.2 + flashDuration) {
+            phase = .done
+            onComplete?()
+        }
     }
 }
 
