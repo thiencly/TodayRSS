@@ -1098,7 +1098,6 @@ struct AIDiagonalReveal<OldContent: View, NewContent: View>: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + fadeDuration + revealDuration * 0.5) {
             phase = .flashing
             flashProgress = 0
-            HapticManager.shared.success()  // Magical completion haptic
             withAnimation(.easeInOut(duration: flashDuration)) {
                 flashProgress = 1.0
             }
@@ -1211,7 +1210,6 @@ struct AISummaryReveal<Content: View>: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + revealDuration * 0.2) {
             phase = .flashing
             flashProgress = 0
-            HapticManager.shared.success()  // Magical completion haptic
             withAnimation(.easeInOut(duration: flashDuration)) {
                 flashProgress = 1.0
             }

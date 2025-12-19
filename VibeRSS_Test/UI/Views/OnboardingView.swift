@@ -51,8 +51,8 @@ struct OnboardingView: View {
                 OnboardingFeature(
                     icon: "folder.fill",
                     iconColor: .orange,
-                    title: "Create Folders",
-                    description: "Group related sources into folders for easy access"
+                    title: "Create Sections",
+                    description: "Group related sources into sections for easy access"
                 ),
                 OnboardingFeature(
                     icon: "hand.draw.fill",
@@ -95,13 +95,13 @@ struct OnboardingView: View {
         ),
         OnboardingPage(
             type: .features,
-            title: "Today Highlights",
-            subtitle: "Your personalized news at a glance",
+            title: "At a Glance",
+            subtitle: "Your personalized news summary",
             features: [
                 OnboardingFeature(
                     icon: "rectangle.stack.fill",
                     iconColor: .blue,
-                    title: "Highlights",
+                    title: "Priority Sources",
                     description: "See the latest from your favorite sources front and center"
                 ),
                 OnboardingFeature(

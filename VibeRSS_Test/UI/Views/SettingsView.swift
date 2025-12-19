@@ -112,7 +112,8 @@ enum AppIconOption: String, CaseIterable {
 }
 
 struct SettingsView: View {
-    @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
+    @AppStorage("atAGlanceCount") private var atAGlanceCount: Int = 3
+    @AppStorage("atAGlanceAutoExpand") private var atAGlanceAutoExpand: Bool = true
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
@@ -215,13 +216,19 @@ struct SettingsView: View {
                     Text("Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.")
                 }
 
-                // MARK: - Highlights Section
+                // MARK: - At a Glance Section
                 Section {
-                    Toggle("Collapse Highlights on Launch", isOn: $heroCollapsedOnLaunch)
+                    Picker("Articles to Show", selection: $atAGlanceCount) {
+                        ForEach(1...4, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+
+                    Toggle("Auto-expand on New Articles", isOn: $atAGlanceAutoExpand)
                 } header: {
-                    Text("Highlights")
+                    Text("At a Glance")
                 } footer: {
-                    Text("When enabled, the Today Highlights section will start collapsed when you open the app.")
+                    Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
                 }
 
                 // MARK: - Reader Section
@@ -345,7 +352,7 @@ struct SettingsView: View {
                 } header: {
                     Text("iCloud")
                 } footer: {
-                    Text("Your feeds, folders, and highlight sources are automatically synced across all your devices using iCloud.")
+                    Text("Your feeds, sections, and highlight sources are automatically synced across all your devices using iCloud.")
                 }
 
                 // MARK: - About Section

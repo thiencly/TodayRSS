@@ -122,38 +122,16 @@ private struct SidebarHeroCardView: View {
     }
 
     let entries: [Entry]
-    var previousEntries: [Entry] = []  // Old entries for diagonal reveal
-    var showDiagonalReveal: Bool = false  // Trigger for diagonal reveal animation
-    var expectedCount: Int = 3
-    var isUpdating: Bool = false
+    var previousEntries: [Entry] = []
+    var showDiagonalReveal: Bool = false
+    var isLoading: Bool = false
     var isCollapsed: Bool = false
-    var loadingSourceIDs: Set<UUID> = []
-    var gradientRevealLinks: Set<URL> = []  // Entries that should show gradient reveal animation
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
-    var onGradientComplete: ((URL) -> Void)? = nil
     var onDiagonalRevealComplete: (() -> Void)? = nil
 
-    private var sortedEntries: [Entry] {
-        entries.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-    }
-
-    private var visibleEntryCount: Int {
-        isCollapsed ? 1 : expectedCount
-    }
-
-    private var visibleEntries: [Entry] {
-        let sorted = sortedEntries
-        return Array(sorted.prefix(visibleEntryCount))
-    }
-
-    private var remainingPlaceholderCount: Int {
-        if isCollapsed {
-            return entries.isEmpty ? 1 : 0
-        } else {
-            // Show placeholders for entries not yet loaded
-            return max(0, expectedCount - entries.count)
-        }
+    private var newArticleCount: Int {
+        entries.filter { $0.isNew }.count
     }
 
     var body: some View {
@@ -164,134 +142,87 @@ private struct SidebarHeroCardView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                Text("Today Highlights")
+                Text("At a Glance")
                     .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
 
-                Image(systemName: "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                // Loading indicator when generating summaries
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+
+                // New articles badge
+                if newArticleCount > 0 && !isLoading {
+                    Text("\(newArticleCount) new")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.blue))
+                }
 
                 Spacer()
 
-                // Collapse chevron
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
-                    .animation(.snappy(duration: 0.25), value: isCollapsed)
+                // Only show chevron when there are entries to show
+                if !entries.isEmpty || isLoading {
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                        .animation(.snappy(duration: 0.25), value: isCollapsed)
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                onToggleCollapse?()
+                if !entries.isEmpty {
+                    onToggleCollapse?()
+                }
             }
 
-            // Entries with diagonal reveal animation
-            Group {
-                if showDiagonalReveal && !previousEntries.isEmpty && !entries.isEmpty {
-                    // Diagonal reveal animation from old entries to new entries
-                    AIDiagonalReveal(
-                        showNew: .constant(true),
-                        fadeDuration: 0.2,
-                        revealDuration: 0.25,
-                        flashDuration: 0.35,
-                        onComplete: {
-                            onDiagonalRevealComplete?()
+            // Only show entries when not collapsed and has entries
+            if !isCollapsed && !entries.isEmpty {
+                // Entries with diagonal reveal animation
+                Group {
+                    if showDiagonalReveal && !previousEntries.isEmpty {
+                        // Diagonal reveal animation from old entries to new entries
+                        AIDiagonalReveal(
+                            showNew: .constant(true),
+                            fadeDuration: 0.2,
+                            revealDuration: 0.25,
+                            flashDuration: 0.35,
+                            onComplete: {
+                                onDiagonalRevealComplete?()
+                            }
+                        ) {
+                            // Old content - previous entries
+                            entriesContentView(from: previousEntries)
+                        } newContent: {
+                            // New content - current entries
+                            entriesContentView(from: entries)
                         }
-                    ) {
-                        // Old content - previous entries
-                        entriesContentView(from: previousEntries)
-                    } newContent: {
-                        // New content - current entries
+                    } else {
+                        // Use entriesContentView for consistent styling with diagonal reveal
                         entriesContentView(from: entries)
-                    }
-                } else if entries.isEmpty {
-                    ForEach(0..<visibleEntryCount, id: \.self) { _ in
-                        placeholderRow
-                    }
-                } else {
-                    ForEach(visibleEntries) { entry in
-                        entryRow(entry)
-                    }
-                    if !isCollapsed && isUpdating && remainingPlaceholderCount > 0 {
-                        ForEach(0..<remainingPlaceholderCount, id: \.self) { _ in
-                            placeholderRow
-                        }
                     }
                 }
             }
-            .animation(nil, value: entries.count)
         }
         .padding(14)
-        .animation(.snappy(duration: 0.25), value: isCollapsed)
+        .animation(.snappy(duration: 0.3), value: isCollapsed)
+        .animation(.snappy(duration: 0.3), value: entries.isEmpty)
         .background {
-            // Priority notification glow effect - fills the card with ambient animated colors
-            PriorityNotificationGlow(isActive: true, cornerRadius: 20)
+            // Only show glow when there are new articles
+            if newArticleCount > 0 || isLoading {
+                PriorityNotificationGlow(isActive: true, cornerRadius: 20)
+                AppleIntelligenceGlow(cornerRadius: 20, isActive: isLoading, showIdle: newArticleCount > 0)
+            }
         }
         .glassEffect(
             .regular.interactive(),
             in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.snappy(duration: 0.2), value: isUpdating)
-    }
-
-    @ViewBuilder
-    private func entryRow(_ entry: Entry) -> some View {
-        let isLoadingSummary = loadingSourceIDs.contains(entry.source.id)
-        let showGradient = gradientRevealLinks.contains(entry.link)
-        let displayText = entry.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : entry.oneLine
-
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                FeedIconView(iconURL: entry.source.iconURL)
-                    .frame(width: 20, height: 20)
-                Text(entry.source.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
-                if entry.isNew {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 6, height: 6)
-                        .accessibilityLabel("New article")
-                }
-                Spacer()
-            }
-
-            if isLoadingSummary {
-                // Shimmer placeholder while generating summary
-                VStack(alignment: .leading, spacing: 4) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.secondary.opacity(0.15))
-                        .frame(height: 11)
-                        .shimmer(if: true)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.secondary.opacity(0.15))
-                        .frame(width: 160, height: 11)
-                        .shimmer(if: true)
-                }
-            } else if showGradient {
-                // Text with gradient overlay that fades away
-                GradientRevealText(
-                    text: displayText,
-                    font: .footnote,
-                    foregroundStyle: .secondary,
-                    gradientDuration: 1.0,
-                    onComplete: {
-                        onGradientComplete?(entry.link)
-                    }
-                )
-            } else {
-                // Static text
-                Text(displayText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onTapLink?(entry.link) }
     }
 
     private var placeholderRow: some View {
@@ -316,12 +247,13 @@ private struct SidebarHeroCardView: View {
     @ViewBuilder
     private func entriesContentView(from entryList: [Entry]) -> some View {
         let sorted = entryList.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-        let visible = isCollapsed ? Array(sorted.prefix(1)) : Array(sorted.prefix(expectedCount))
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(visible) { entry in
+            ForEach(sorted) { entry in
                 staticEntryRow(entry)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .clipped()
     }
 
     /// Static entry row for diagonal reveal (no shimmer/gradient animations)
@@ -348,7 +280,8 @@ private struct SidebarHeroCardView: View {
             Text(displayText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .lineLimit(2...3)  // Minimum 2 lines, max 3 lines
+                .frame(maxWidth: .infinity, minHeight: 34, alignment: .topLeading)  // ~2 lines minimum
         }
         .contentShape(Rectangle())
         .onTapGesture { onTapLink?(entry.link) }
@@ -400,62 +333,25 @@ struct ContentView: View {
     @State private var showingSettings: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("heroCollapsedOnLaunch") private var heroCollapsedOnLaunch: Bool = false
+
+    // At a Glance settings
+    @AppStorage("atAGlanceCount") private var atAGlanceCount: Int = 3
+    @AppStorage("atAGlanceAutoExpand") private var atAGlanceAutoExpand: Bool = true
 
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
-    @State private var loadingSummarySourceIDs: Set<UUID> = []
-    @State private var gradientRevealLinks: Set<URL> = []
     @State private var previousHeroEntries: [SidebarHeroCardView.Entry] = []
     @State private var showDiagonalReveal: Bool = false
-    @State private var heroCardHeight: CGFloat = 200
-    @State private var isHeroCollapsed: Bool = false
-    @AppStorage("heroSourceIDs") private var heroSourceIDsData: Data = Data()
+    @State private var isHeroCollapsed: Bool = true
+    @State private var lastHeroUpdateDate: Date? = nil
+    private let heroUpdateCooldown: TimeInterval = 300 // 5 minutes
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
     @State private var isInitialLoad: Bool = true
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
-
-    private var heroSourceIDs: Set<UUID> {
-        (try? JSONDecoder().decode(Set<UUID>.self, from: heroSourceIDsData)) ?? []
-    }
-
-    private func saveHeroSourceIDs(_ ids: Set<UUID>) {
-        heroSourceIDsData = (try? JSONEncoder().encode(ids)) ?? Data()
-        // Sync to iCloud
-        let idStrings = ids.map { $0.uuidString }
-        iCloudSyncManager.shared.saveHeroSourceIDs(idStrings)
-    }
-
-    private func loadHeroSourceIDsFromiCloud() {
-        if let cloudIDs = iCloudSyncManager.shared.loadHeroSourceIDs() {
-            let uuids = Set(cloudIDs.compactMap { UUID(uuidString: $0) })
-            if !uuids.isEmpty && heroSourceIDs.isEmpty {
-                // Only load from cloud if local is empty
-                saveHeroSourceIDs(uuids)
-            }
-        }
-    }
-
-    private func toggleHeroSource(_ source: Source) {
-        var ids = heroSourceIDs
-        if ids.contains(source.id) {
-            ids.remove(source.id)
-            // Immediately remove the entry from heroEntries for instant UI feedback
-            heroEntries.removeAll { $0.source.id == source.id }
-        } else if ids.count < 3 {
-            ids.insert(source.id)
-        }
-        saveHeroSourceIDs(ids)
-        Task { await loadHeroEntries() }
-    }
-
-    private func isHeroSource(_ source: Source) -> Bool {
-        heroSourceIDs.contains(source.id)
-    }
 
     private let refreshService = FeedService()
 
@@ -724,36 +620,39 @@ struct ContentView: View {
         return Set(links.compactMap { URL(string: $0) })
     }
 
-    @MainActor private func loadHeroEntries() async {
+    @MainActor private func loadHeroEntries(forceReveal: Bool = false, bypassCooldown: Bool = false) async {
         // If already loading, mark for refresh after current load completes
         if isLoadingHero {
             pendingHeroRefresh = true
             return
         }
-        // Only show loading indicator if we don't have entries yet (initial load)
-        // This prevents UI jank when refreshing with existing content
-        let showLoadingState = heroEntries.isEmpty
-        if showLoadingState {
-            isLoadingHero = true
+
+        // Check cooldown - don't update more than once every 5 minutes (unless initial load or bypassed)
+        if !bypassCooldown && !isInitialLoad, let lastUpdate = lastHeroUpdateDate {
+            let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdate)
+            if timeSinceLastUpdate < heroUpdateCooldown {
+                // Within cooldown period, skip update
+                return
+            }
         }
+
+        // Start loading with indicator (but don't collapse yet - wait to see if there are new articles)
+        isLoadingHero = true
         pendingHeroRefresh = false
 
-        let selectedIDs = heroSourceIDs
-        let feeds = store.feeds.filter { selectedIDs.contains($0.id) }
+        // Fetch from ALL sources
+        let feeds = store.feeds
 
-        // Use persisted seen links (survives app restart) merged with entries already marked as seen
-        var previouslySeenLinks = loadSeenLinks()
-        for entry in heroEntries where !entry.isNew {
-            previouslySeenLinks.insert(entry.link)
-        }
+        // Use persisted seen links (survives app restart)
+        let previouslySeenLinks = loadSeenLinks()
 
-        // Keep existing entries as fallback (indexed by source ID)
-        let existingEntriesBySource: [UUID: SidebarHeroCardView.Entry] = Dictionary(
-            heroEntries.map { ($0.source.id, $0) },
+        // Keep existing entries indexed by link for comparison
+        let existingEntriesByLink: [URL: SidebarHeroCardView.Entry] = Dictionary(
+            heroEntries.map { ($0.link, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
-        // Step 1: Fetch all feeds in parallel (fast - just RSS parsing)
+        // Step 1: Fetch latest article from each feed in parallel
         var feedArticles: [(feed: Feed, article: FeedItem)] = []
         await withTaskGroup(of: (Feed, FeedItem)?.self) { group in
             for feed in feeds {
@@ -777,162 +676,138 @@ struct ContentView: View {
         // Sort by most recent first
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
 
-        // Step 2: Determine which sources need new summaries
-        var sourcesNeedingNewSummary: Set<UUID> = []
-        var articleByFeedID: [UUID: (feed: Feed, article: FeedItem)] = [:]
-
+        // Only keep NEW articles (not seen before)
+        var newArticles: [(feed: Feed, article: FeedItem)] = []
         for (feed, article) in feedArticles {
-            articleByFeedID[feed.id] = (feed, article)
-            let existingEntry = existingEntriesBySource[feed.id]
-            if existingEntry?.link != article.link {
-                sourcesNeedingNewSummary.insert(feed.id)
+            if !previouslySeenLinks.contains(article.link) {
+                newArticles.append((feed, article))
+                // Limit to atAGlanceCount
+                if newArticles.count >= atAGlanceCount {
+                    break
+                }
             }
         }
 
-        // If any sources have new articles, show shimmer on ALL sources to hide reordering
-        let hasAnyNewArticles = !sourcesNeedingNewSummary.isEmpty
+        let hasNewArticles = !newArticles.isEmpty
 
-        // Store current entries for diagonal reveal animation (only if we have entries)
-        let shouldTriggerDiagonalReveal = hasAnyNewArticles && !heroEntries.isEmpty
+        // If no new articles, mark all existing entries as not new and collapse
+        if !hasNewArticles {
+            // Mark all existing entries as not new
+            for i in heroEntries.indices {
+                heroEntries[i].isNew = false
+            }
+            isLoadingHero = false
+            isInitialLoad = false
+            lastHeroUpdateDate = Date()
+
+            // Collapse the card (user can tap to expand and see prior articles)
+            withAnimation(.snappy(duration: 0.3)) {
+                isHeroCollapsed = true
+            }
+
+            saveHeroEntriesToCache()
+
+            if pendingHeroRefresh {
+                pendingHeroRefresh = false
+                Task { await loadHeroEntries(bypassCooldown: true) }
+            }
+            return
+        }
+
+        // Has new articles - collapse first to show loading state
+        withAnimation(.snappy(duration: 0.3)) {
+            isHeroCollapsed = true
+        }
+
+        // Store current entries for diagonal reveal animation
+        let shouldTriggerDiagonalReveal = forceReveal || (!heroEntries.isEmpty && atAGlanceAutoExpand)
         if shouldTriggerDiagonalReveal {
             previousHeroEntries = heroEntries
         }
 
-        if hasAnyNewArticles {
-            for feed in feeds {
-                loadingSummarySourceIDs.insert(feed.id)
-            }
-        }
-
-        // Build entries map starting with existing
-        var entriesBySourceID: [UUID: SidebarHeroCardView.Entry] = existingEntriesBySource
-        var processedSourceIDs: Set<UUID> = []
-
-        // Process all feeds concurrently
-        await withTaskGroup(of: (UUID, SidebarHeroCardView.Entry?, URL?, Bool).self) { group in
-            for (feed, article) in feedArticles {
-                let isNew = !previouslySeenLinks.contains(article.link)
-                let existingEntry = existingEntriesBySource[feed.id]
-                let needsNewSummary = sourcesNeedingNewSummary.contains(feed.id)
+        // Step 2: Generate summaries for new articles
+        var newEntries: [SidebarHeroCardView.Entry] = []
+        await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
+            for (feed, article) in newArticles {
+                let existingEntry = existingEntriesByLink[article.link]
 
                 group.addTask {
-                    if needsNewSummary {
-                        // Generate new summary with retry on failure
-                        // Minimum 50 chars to avoid very short/useless summaries
-                        let minSummaryLength = 50
-                        var summary = ""
-                        for attempt in 1...3 {
-                            summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
-                            let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !trimmed.isEmpty && trimmed.count >= minSummaryLength {
-                                break
-                            }
-                            // Wait before retry (increasing delay)
-                            if attempt < 3 {
-                                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000) // 0.5s, 1s
-                            }
-                        }
-
-                        // If summary still too short after retries, keep existing entry
-                        let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if trimmedSummary.isEmpty || trimmedSummary.count < minSummaryLength {
-                            if let existingEntry = existingEntry {
-                                return (feed.id, existingEntry, nil, false)
-                            }
-                            return (feed.id, nil, nil, false)
-                        }
-
-                        let entry = SidebarHeroCardView.Entry(
-                            source: feed,
-                            title: article.title,
-                            oneLine: summary,
-                            link: article.link,
-                            isNew: isNew,
-                            pubDate: article.pubDate
+                    // Check if we already have a valid summary
+                    if let existing = existingEntry, !existing.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return SidebarHeroCardView.Entry(
+                            source: existing.source,
+                            title: existing.title,
+                            oneLine: existing.oneLine,
+                            link: existing.link,
+                            isNew: true,
+                            pubDate: existing.pubDate
                         )
-                        return (feed.id, entry, article.link, true)
-                    } else {
-                        // No new summary needed - wait 1s then reveal
-                        if hasAnyNewArticles {
-                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                        }
-
-                        let summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
-
-                        if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            // Preserve isNew status from existing entry (don't reset blue dot)
-                            let preservedIsNew = existingEntry?.isNew ?? isNew
-                            let entry = SidebarHeroCardView.Entry(
-                                source: feed,
-                                title: article.title,
-                                oneLine: summary,
-                                link: article.link,
-                                isNew: preservedIsNew,
-                                pubDate: article.pubDate
-                            )
-                            return (feed.id, entry, nil, false)
-                        }
-                        return (feed.id, nil, nil, false)
                     }
+
+                    // Generate new summary
+                    let minSummaryLength = 50
+                    var summary = ""
+                    for attempt in 1...3 {
+                        summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+                        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty && trimmed.count >= minSummaryLength {
+                            break
+                        }
+                        if attempt < 3 {
+                            try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
+                        }
+                    }
+
+                    let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedSummary.isEmpty || trimmedSummary.count < minSummaryLength {
+                        return nil
+                    }
+
+                    return SidebarHeroCardView.Entry(
+                        source: feed,
+                        title: article.title,
+                        oneLine: summary,
+                        link: article.link,
+                        isNew: true,
+                        pubDate: article.pubDate
+                    )
                 }
             }
 
-            // Process results as they complete
-            for await (feedID, entry, gradientLink, needsGradient) in group {
-                processedSourceIDs.insert(feedID)
-
+            for await entry in group {
                 if let entry = entry {
-                    entriesBySourceID[feedID] = entry
+                    newEntries.append(entry)
                 }
-
-                // Remove shimmer for this source
-                loadingSummarySourceIDs.remove(feedID)
-
-                // Show gradient reveal for new summaries
-                if let link = gradientLink, needsGradient {
-                    gradientRevealLinks.insert(link)
-                }
-
-                // Update UI after each source completes
-                updateHeroEntriesFromMap(entriesBySourceID)
             }
         }
 
-        // For sources where feed fetch failed entirely, keep existing entries (preserve isNew status)
-        for (sourceID, existingEntry) in existingEntriesBySource {
-            if !processedSourceIDs.contains(sourceID) && selectedIDs.contains(sourceID) {
-                entriesBySourceID[sourceID] = existingEntry
-                loadingSummarySourceIDs.remove(sourceID)
+        // Sort entries by date
+        newEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+        // Update heroEntries
+        heroEntries = newEntries
+        isLoadingHero = false
+        lastHeroUpdateDate = Date()
+
+        // Auto-expand with reveal animation if setting is on (but NOT on initial app open)
+        if atAGlanceAutoExpand && !newEntries.isEmpty && !isInitialLoad {
+            // Trigger reveal animation
+            if shouldTriggerDiagonalReveal && !previousHeroEntries.isEmpty {
+                showDiagonalReveal = true
             }
-        }
-
-        // Final update
-        updateHeroEntriesFromMap(entriesBySourceID)
-
-        // Trigger diagonal reveal animation if we stored previous entries
-        if shouldTriggerDiagonalReveal && !previousHeroEntries.isEmpty {
-            showDiagonalReveal = true
+            // Expand with animation
+            withAnimation(.snappy(duration: 0.3)) {
+                isHeroCollapsed = false
+            }
         }
 
         saveHeroEntriesToCache()
-        isLoadingHero = false
         isInitialLoad = false
-        loadingSummarySourceIDs.removeAll()
 
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
             pendingHeroRefresh = false
-            Task { await loadHeroEntries() }
-        }
-    }
-
-    /// Helper to update heroEntries from a source ID -> entry map, sorted by date
-    private func updateHeroEntriesFromMap(_ map: [UUID: SidebarHeroCardView.Entry]) {
-        let sorted = map.values.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            heroEntries = sorted
+            Task { await loadHeroEntries(bypassCooldown: true) }
         }
     }
 
@@ -1027,25 +902,11 @@ struct ContentView: View {
                         .frame(width: 8, height: 8)
                 }
                 Spacer()
-                if isHeroSource(source) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.blue)
-                        .font(.subheadline)
-                }
             }
             .contentShape(Rectangle())
         }
         .padding(.leading, 20)
         .contextMenu {
-            Button {
-                toggleHeroSource(source)
-            } label: {
-                Label(
-                    isHeroSource(source) ? "Remove from Highlights" : "Add to Highlights",
-                    systemImage: isHeroSource(source) ? "minus.circle" : "plus.circle"
-                )
-            }
-            .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
             Button {
                 renameText = source.title
                 renamingSource = source
@@ -1055,7 +916,7 @@ struct ContentView: View {
             Button {
                 store.assign(source, to: nil)
             } label: {
-                Label("Remove from Folder", systemImage: "folder.badge.minus")
+                Label("Remove from Section", systemImage: "folder.badge.minus")
             }
             Button(role: .destructive) {
                 if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
@@ -1120,7 +981,7 @@ struct ContentView: View {
                 }
                 header: {
                     HStack(spacing: 8) {
-                        Text("Folders")
+                        Text("Sections")
                             .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(.primary)
                         Image(systemName: "chevron.right")
@@ -1159,28 +1020,10 @@ struct ContentView: View {
                                             .frame(width: 8, height: 8)
                                     }
                                     Spacer()
-                                    if isHeroSource(source) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.blue)
-                                            .font(.subheadline)
-                                    }
                                 }
                                 .contentShape(Rectangle())
                             }
                             .contextMenu {
-                                Button {
-                                    toggleHeroSource(source)
-                                } label: {
-                                    if isHeroSource(source) {
-                                        Label("Remove from Highlights", systemImage: "star.slash")
-                                    } else if heroSourceIDs.count < 3 {
-                                        Label("Add to Highlights", systemImage: "star")
-                                    } else {
-                                        Label("Highlights Full (3 max)", systemImage: "star.slash")
-                                    }
-                                }
-                                .disabled(!isHeroSource(source) && heroSourceIDs.count >= 3)
-
                                 Button {
                                     Task { await store.refreshIcon(for: source) }
                                 } label: {
@@ -1205,11 +1048,11 @@ struct ContentView: View {
                                         Button {
                                             store.assign(source, to: nil)
                                         } label: {
-                                            Label("Remove from Folder", systemImage: "folder.badge.minus")
+                                            Label("Remove from Section", systemImage: "folder.badge.minus")
                                         }
                                     }
                                 } label: {
-                                    Label("Move to Folder", systemImage: "folder.badge.plus")
+                                    Label("Move to Section", systemImage: "folder.badge.plus")
                                 }
                                 Divider()
                                 Button(role: .destructive) {
@@ -1275,26 +1118,22 @@ struct ContentView: View {
             .navigationTitle("TodayRSS")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if !heroSourceIDs.isEmpty {
+                // Only show At a Glance when loading or has new articles
+                if isLoadingHero || !heroEntries.isEmpty {
                     SidebarHeroCardView(
                         entries: heroEntries,
                         previousEntries: previousHeroEntries,
                         showDiagonalReveal: showDiagonalReveal,
-                        expectedCount: heroSourceIDs.count,
-                        isUpdating: isLoadingHero,
+                        isLoading: isLoadingHero,
                         isCollapsed: isHeroCollapsed,
-                        loadingSourceIDs: loadingSummarySourceIDs,
-                        gradientRevealLinks: gradientRevealLinks,
                         onTapLink: { url in
                             heroWebLink = WebLink(url: url)
                         },
                         onToggleCollapse: {
-                            withAnimation(.snappy(duration: 0.25)) {
+                            HapticManager.shared.click()
+                            withAnimation(.snappy(duration: 0.3)) {
                                 isHeroCollapsed.toggle()
                             }
-                        },
-                        onGradientComplete: { link in
-                            gradientRevealLinks.remove(link)
                         },
                         onDiagonalRevealComplete: {
                             showDiagonalReveal = false
@@ -1303,7 +1142,9 @@ struct ContentView: View {
                     )
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
-                    .animation(.snappy(duration: 0.25), value: isHeroCollapsed)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .animation(.snappy(duration: 0.3), value: isHeroCollapsed)
+                    .animation(.snappy(duration: 0.3), value: heroEntries.isEmpty)
                 }
             }
             .toolbar {
@@ -1321,7 +1162,7 @@ struct ContentView: View {
 
                         Menu {
                             Button { showingAddFolder = true } label: {
-                                Label("New Folder", systemImage: "folder.badge.plus")
+                                Label("New Section", systemImage: "folder.badge.plus")
                             }
 
                             Divider()
@@ -1336,14 +1177,14 @@ struct ContentView: View {
                             Divider()
 
                             Button {
-                                heroEntries.removeAll()
+                                // Clear cache but keep showing old entries until new ones are ready
                                 UserDefaults.standard.removeObject(forKey: heroCacheKey)
                                 Task {
                                     await ArticleSummarizer.shared.clearHeroSummaries()
-                                    await loadHeroEntries()
+                                    await loadHeroEntries(forceReveal: true)
                                 }
                             } label: {
-                                Label("Clear Today Highlights", systemImage: "sun.horizon")
+                                Label("Clear At a Glance", systemImage: "sun.horizon")
                             }
                             Button(role: .destructive) {
                                 Task { await ArticleSummarizer.shared.clearArticleSummaries() }
@@ -1397,7 +1238,7 @@ struct ContentView: View {
             .sheet(item: $heroWebLink) { w in
                 ArticleReaderView(url: w.url, articleTitle: w.title, articleDate: w.date, thumbnailURL: w.thumbnailURL, sourceIconURL: w.sourceIconURL, sourceTitle: w.sourceTitle)
             }
-            .confirmationDialog("Move to Folder", isPresented: $showingMoveDialog, presenting: movingSource) { source in
+            .confirmationDialog("Move to Section", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in
                     let isCurrentFolder = source.folderID == folder.id
                     Button(isCurrentFolder ? "\(folder.name) ✓" : folder.name) {
@@ -1405,13 +1246,13 @@ struct ContentView: View {
                     }
                 }
                 if source.folderID != nil {
-                    Button("Remove from Folder", role: .destructive) {
+                    Button("Remove from Section", role: .destructive) {
                         store.assign(source, to: nil)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { source in
-                Text("Choose a folder for \(source.title)")
+                Text("Choose a section for \(source.title)")
             }
             .alert("Rename Source", isPresented: Binding(
                 get: { renamingSource != nil },
@@ -1431,7 +1272,7 @@ struct ContentView: View {
             } message: {
                 Text("Enter a new name for this source")
             }
-            .alert("Rename Folder", isPresented: Binding(
+            .alert("Rename Section", isPresented: Binding(
                 get: { renamingFolder != nil },
                 set: { if !$0 { renamingFolder = nil } }
             )) {
@@ -1449,7 +1290,7 @@ struct ContentView: View {
                     renamingFolder = nil
                 }
             } message: {
-                Text("Enter a new name for this folder")
+                Text("Enter a new name for this section")
             }
 
             // Refresh progress overlay at bottom
@@ -1538,15 +1379,13 @@ struct ContentView: View {
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()
-            loadHeroSourceIDsFromiCloud()
             loadHeroEntriesFromCache()
-            isHeroCollapsed = heroCollapsedOnLaunch
+            // Start collapsed - will auto-expand if there are new articles
+            isHeroCollapsed = true
             Task {
                 // Small delay to allow child views (article list) to register their appearance first
-                // This ensures isSourceListVisible is set correctly before we check it
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
                 // Only generate hero summaries if source list is visible
-                // This handles the case when app is restored with article list visible
                 if isSourceListVisible {
                     await loadHeroEntries()
                 }
