@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WidgetKit
 
 // MARK: - Hero Card Height Preference Key
@@ -209,6 +210,8 @@ private struct SidebarHeroCardView: View {
             }
         }
         .padding(14)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .animation(.snappy(duration: 0.3), value: isCollapsed)
         .animation(.snappy(duration: 0.3), value: entries.isEmpty)
         .background {
@@ -921,226 +924,157 @@ struct ContentView: View {
         }
     }
 
+    // Navigation state for UIKit sidebar
+    @State private var navigationDestination: SidebarDestination?
+
+    // Hero card height for content inset (measured from GeometryReader)
+    @State private var heroCardHeight: CGFloat = 0
+
+    // MARK: - Navigation Handling
+
+    private func handleNavigation(_ destination: SidebarDestination) {
+        navigationDestination = destination
+    }
+
+    // MARK: - Context Menu Builders
+
+    private func createFolderContextMenu(_ folder: Folder) -> UIMenu? {
+        let renameAction = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
+            renameFolderText = folder.name
+            renamingFolder = folder
+        }
+
+        let deleteAction = UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+            store.removeFolder(folder)
+        }
+
+        return UIMenu(children: [renameAction, deleteAction])
+    }
+
+    private func createFeedContextMenu(_ feed: Feed) -> UIMenu? {
+        var actions: [UIMenuElement] = []
+
+        let refreshIconAction = UIAction(title: "Refresh Icon", image: UIImage(systemName: "arrow.triangle.2.circlepath")) { _ in
+            Task { await store.refreshIcon(for: feed) }
+        }
+        actions.append(refreshIconAction)
+
+        let renameAction = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
+            renameText = feed.title
+            renamingSource = feed
+        }
+        actions.append(renameAction)
+
+        // Move to Section submenu
+        var moveActions: [UIAction] = []
+        for folder in store.folders {
+            let isCurrentFolder = feed.folderID == folder.id
+            let action = UIAction(
+                title: folder.name,
+                image: UIImage(systemName: isCurrentFolder ? "checkmark" : "folder")
+            ) { _ in
+                store.assign(feed, to: folder)
+            }
+            moveActions.append(action)
+        }
+
+        if feed.folderID != nil {
+            let removeAction = UIAction(title: "Remove from Section", image: UIImage(systemName: "folder.badge.minus")) { _ in
+                store.assign(feed, to: nil)
+            }
+            moveActions.append(removeAction)
+        }
+
+        if !moveActions.isEmpty {
+            let moveMenu = UIMenu(title: "Move to Section", image: UIImage(systemName: "folder.badge.plus"), children: moveActions)
+            actions.append(moveMenu)
+        }
+
+        let deleteAction = UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+            if let idx = store.feeds.firstIndex(where: { $0.id == feed.id }) {
+                store.feeds.remove(at: idx)
+                if selectedSource?.id == feed.id {
+                    selectedSource = store.feeds.first
+                }
+            }
+        }
+        actions.append(deleteAction)
+
+        return UIMenu(children: actions)
+    }
+
     @ViewBuilder private var sidebar: some View {
-        ZStack(alignment: .top) {
-            List {
-                Section {
-                    if showLatestView {
-                        NavigationLink {
-                            CurrentView(refreshID: refreshID)
-                                .environmentObject(store)
-                        } label: {
-                            Label("Latest", systemImage: "clock")
-                                .contentShape(Rectangle())
-                        }
-                    }
-
-                    if showTodayView {
-                        NavigationLink {
-                            AllArticlesView(refreshID: refreshID)
-                                .environmentObject(store)
-                        } label: {
-                            Label("Today", systemImage: "newspaper")
-                                .contentShape(Rectangle())
-                        }
-                    }
-
-                    NavigationLink {
-                        SavedArticlesView()
-                    } label: {
-                        Label {
-                            HStack {
-                                Text("Saved")
-                                if SavedArticlesManager.shared.savedArticles.count > 0 {
-                                    Spacer()
-                                    Text("\(SavedArticlesManager.shared.savedArticles.count)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        } icon: {
-                            Image(systemName: "heart.fill")
-                                .foregroundStyle(.red)
-                        }
-                        .contentShape(Rectangle())
-                    }
-
-                    ForEach(store.folders) { folder in
-                        folderRow(folder)
-                    }
-                    .onMove { indices, destination in
-                        store.folders.move(fromOffsets: indices, toOffset: destination)
-                    }
-                }
-                header: {
-                    HStack(spacing: 8) {
-                        Text("Sections")
-                            .font(.system(.title2, design: .rounded, weight: .bold))
-                            .foregroundStyle(.primary)
-                        Image(systemName: "chevron.right")
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(areFoldersCollapsed ? 0 : 90))
-                            .animation(.snappy(duration: 0.2), value: areFoldersCollapsed)
-                        Spacer()
-                        Text("\(store.folders.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.snappy(duration: 0.25)) {
-                            areFoldersCollapsed.toggle()
-                        }
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: areFoldersCollapsed)
-
-                Section {
-                    if !areSourcesCollapsed {
-                        ForEach(store.feeds) { source in
-                            let hasNewArticles = ArticleReadStateManager.sourceHasNewArticlesSync(source.id)
-                            NavigationLink {
-                                FeedDetailView(source: source, refreshID: refreshID)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    FeedIconView(iconURL: source.iconURL)
-                                    Text(source.title)
-                                    if hasNewArticles {
-                                        Circle()
-                                            .fill(Color.blue)
-                                            .frame(width: 8, height: 8)
-                                    }
-                                    Spacer()
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .contextMenu {
-                                Button {
-                                    Task { await store.refreshIcon(for: source) }
-                                } label: {
-                                    Label("Refresh Icon", systemImage: "arrow.triangle.2.circlepath")
-                                }
-                                Button {
-                                    renameText = source.title
-                                    renamingSource = source
-                                } label: {
-                                    Label("Rename", systemImage: "pencil")
-                                }
-                                Menu {
-                                    ForEach(store.folders) { folder in
-                                        Button {
-                                            store.assign(source, to: folder)
-                                        } label: {
-                                            let isCurrentFolder = source.folderID == folder.id
-                                            Label(folder.name, systemImage: isCurrentFolder ? "checkmark" : "folder")
-                                        }
-                                    }
-                                    if source.folderID != nil {
-                                        Button {
-                                            store.assign(source, to: nil)
-                                        } label: {
-                                            Label("Remove from Section", systemImage: "folder.badge.minus")
-                                        }
-                                    }
-                                } label: {
-                                    Label("Move to Section", systemImage: "folder.badge.plus")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                        store.feeds.remove(at: idx)
-                                        if selectedSource?.id == source.id {
-                                            selectedSource = store.feeds.first
-                                        }
-                                    }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .swipeActions {
-                                Button {
-                                    movingSource = source
-                                    showingMoveDialog = true
-                                } label: {
-                                    Label("Move", systemImage: "folder")
-                                }
-                                Button(role: .destructive) {
-                                    if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
-                                        store.feeds.remove(at: idx)
-                                        if selectedSource?.id == source.id {
-                                            selectedSource = store.feeds.first
-                                        }
-                                    }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                        }
-                        .onMove { indices, destination in
-                            store.feeds.move(fromOffsets: indices, toOffset: destination)
-                        }
-                    }
-                } header: {
-                    HStack(spacing: 8) {
-                        Text("Sources")
-                            .font(.system(.title2, design: .rounded, weight: .bold))
-                            .foregroundStyle(.primary)
-                        Image(systemName: "chevron.right")
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(areSourcesCollapsed ? 0 : 90))
-                            .animation(.snappy(duration: 0.2), value: areSourcesCollapsed)
-                        Spacer()
-                        Text("\(store.feeds.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.snappy(duration: 0.25)) {
-                            areSourcesCollapsed.toggle()
-                        }
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: areSourcesCollapsed)
+        // UIKit-based collapsible list with native animations
+        CollapsibleSidebarList(
+            folders: store.folders,
+            feeds: store.feeds,
+            showLatestView: showLatestView,
+            showTodayView: showTodayView,
+            savedCount: SavedArticlesManager.shared.savedArticles.count,
+            sectionsExpanded: Binding(
+                get: { !areFoldersCollapsed },
+                set: { areFoldersCollapsed = !$0 }
+            ),
+            sourcesExpanded: Binding(
+                get: { !areSourcesCollapsed },
+                set: { areSourcesCollapsed = !$0 }
+            ),
+            topInset: heroCardHeight > 0 ? heroCardHeight : 0,
+            onNavigate: { destination in
+                handleNavigation(destination)
+            },
+            onFolderContextMenu: { folder in
+                createFolderContextMenu(folder)
+            },
+            onFeedContextMenu: { feed in
+                createFeedContextMenu(feed)
             }
-            .id(sidebarRefreshTrigger)
-            .navigationTitle("TodayRSS")
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                // Only show At a Glance when loading or has new articles
-                if isLoadingHero || !heroEntries.isEmpty {
-                    SidebarHeroCardView(
-                        entries: heroEntries,
-                        previousEntries: previousHeroEntries,
-                        showDiagonalReveal: showDiagonalReveal,
-                        isLoading: isLoadingHero,
-                        isCollapsed: isHeroCollapsed,
-                        onTapLink: { url in
-                            heroWebLink = WebLink(url: url)
-                        },
-                        onToggleCollapse: {
-                            HapticManager.shared.click()
-                            withAnimation(.snappy(duration: 0.3)) {
-                                isHeroCollapsed.toggle()
-                            }
-                        },
-                        onDiagonalRevealComplete: {
-                            showDiagonalReveal = false
-                            previousHeroEntries = []
+        )
+        .ignoresSafeArea(edges: .top)
+        .id(sidebarRefreshTrigger)
+        .navigationTitle("TodayRSS")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) {
+            // At a Glance card as overlay - list scrolls behind it
+            if isLoadingHero || !heroEntries.isEmpty {
+                SidebarHeroCardView(
+                    entries: heroEntries,
+                    previousEntries: previousHeroEntries,
+                    showDiagonalReveal: showDiagonalReveal,
+                    isLoading: isLoadingHero,
+                    isCollapsed: isHeroCollapsed,
+                    onTapLink: { url in
+                        heroWebLink = WebLink(url: url)
+                    },
+                    onToggleCollapse: {
+                        HapticManager.shared.click()
+                        withAnimation(.snappy(duration: 0.3)) {
+                            isHeroCollapsed.toggle()
                         }
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .animation(.snappy(duration: 0.3), value: isHeroCollapsed)
-                    .animation(.snappy(duration: 0.3), value: heroEntries.isEmpty)
-                }
+                    },
+                    onDiagonalRevealComplete: {
+                        showDiagonalReveal = false
+                        previousHeroEntries = []
+                    }
+                )
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                heroCardHeight = geo.size.height
+                            }
+                            .onChange(of: geo.size.height) { _, newHeight in
+                                // Update immediately to track card animation
+                                heroCardHeight = newHeight
+                            }
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .toolbar {
+        }
+        .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showingSettings = true } label: {
                         Image(systemName: "gearshape")
@@ -1285,33 +1219,30 @@ struct ContentView: View {
             } message: {
                 Text("Enter a new name for this section")
             }
-
+        .overlay(alignment: .bottom) {
             // Refresh progress overlay at bottom
-            VStack {
-                Spacer()
-                if isRefreshingAll {
-                    HStack(spacing: 10) {
-                        ProgressView(value: Double(refreshCompleted), total: Double(refreshTotal))
-                            .progressViewStyle(.linear)
-                            .tint(.accentColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Refreshing feeds: \(refreshCompleted)/\(refreshTotal)")
-                            Text("Cached (new): \(refreshArticlesCachedThisRun)")
-                            Text("Skipped (already cached): \(refreshArticlesSkippedThisRun)")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+            if isRefreshingAll {
+                HStack(spacing: 10) {
+                    ProgressView(value: Double(refreshCompleted), total: Double(refreshTotal))
+                        .progressViewStyle(.linear)
+                        .tint(.accentColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Refreshing feeds: \(refreshCompleted)/\(refreshTotal)")
+                        Text("Cached (new): \(refreshArticlesCachedThisRun)")
+                        Text("Skipped (already cached): \(refreshArticlesSkippedThisRun)")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(
-                        Capsule().strokeBorder(Color.secondary.opacity(0.2))
-                    )
-                    .padding(.bottom, 8)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(Color.secondary.opacity(0.2))
+                )
+                .padding(.bottom, 8)
+                .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -1365,7 +1296,30 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            sidebar
+            NavigationStack {
+                sidebar
+                    .navigationDestination(item: $navigationDestination) { destination in
+                        switch destination {
+                        case .latest:
+                            CurrentView(refreshID: refreshID)
+                                .environmentObject(store)
+                        case .today:
+                            AllArticlesView(refreshID: refreshID)
+                                .environmentObject(store)
+                        case .saved:
+                            SavedArticlesView()
+                        case .folder(let id):
+                            if let folder = store.folders.first(where: { $0.id == id }) {
+                                FolderDetailView(folder: folder, refreshID: refreshID)
+                                    .environmentObject(store)
+                            }
+                        case .feed(let id):
+                            if let feed = store.feeds.first(where: { $0.id == id }) {
+                                FeedDetailView(source: feed, refreshID: refreshID)
+                            }
+                        }
+                    }
+            }
         } detail: {
             detailView
         }
