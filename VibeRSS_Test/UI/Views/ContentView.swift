@@ -123,14 +123,11 @@ private struct SidebarHeroCardView: View {
     }
 
     let entries: [Entry]
-    var previousEntries: [Entry] = []
-    var showDiagonalReveal: Bool = false
     var isLoading: Bool = false
     var isCollapsed: Bool = false
     var tintColor: Color = .blue
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
-    var onDiagonalRevealComplete: (() -> Void)? = nil
 
     private var newArticleCount: Int {
         entries.filter { $0.isNew }.count
@@ -184,30 +181,7 @@ private struct SidebarHeroCardView: View {
 
             // Only show entries when not collapsed and has entries
             if !isCollapsed && !entries.isEmpty {
-                // Entries with diagonal reveal animation
-                Group {
-                    if showDiagonalReveal && !previousEntries.isEmpty {
-                        // Diagonal reveal animation from old entries to new entries
-                        AIDiagonalReveal(
-                            showNew: .constant(true),
-                            fadeDuration: 0.2,
-                            revealDuration: 0.25,
-                            flashDuration: 0.35,
-                            onComplete: {
-                                onDiagonalRevealComplete?()
-                            }
-                        ) {
-                            // Old content - previous entries
-                            entriesContentView(from: previousEntries)
-                        } newContent: {
-                            // New content - current entries
-                            entriesContentView(from: entries)
-                        }
-                    } else {
-                        // Use entriesContentView for consistent styling with diagonal reveal
-                        entriesContentView(from: entries)
-                    }
-                }
+                entriesContentView(from: entries)
             }
         }
         .padding(14)
@@ -339,8 +313,6 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
-    @State private var previousHeroEntries: [SidebarHeroCardView.Entry] = []
-    @State private var showDiagonalReveal: Bool = false
     @State private var isHeroCollapsed: Bool = true
     @State private var lastHeroUpdateDate: Date? = nil
     private let heroUpdateCooldown: TimeInterval = 300 // 5 minutes
@@ -562,6 +534,7 @@ struct ContentView: View {
     private func saveHeroEntriesToCache() {
         // Encode JSON off main thread to prevent UI freeze
         let entries = heroEntries
+        let seenLinksKey = self.seenLinksKey
         Task.detached(priority: .utility) {
             do {
                 // Only cache entries that have valid summaries
@@ -569,11 +542,22 @@ struct ContentView: View {
                 let data = try JSONEncoder().encode(validEntries)
                 UserDefaults.standard.set(data, forKey: self.heroCacheKey)
 
-                // Only save links that are already marked as seen (isNew = false)
-                // This preserves blue dots during the session - they only clear on app restart
-                let seenLinks = validEntries.filter { !$0.isNew }.map { $0.link.absoluteString }
-                let linksData = try JSONEncoder().encode(seenLinks)
-                UserDefaults.standard.set(linksData, forKey: self.seenLinksKey)
+                // MERGE new seen links with existing ones to persist across cold starts
+                // This ensures articles are only marked as new once, even if they're
+                // no longer displayed in the current At a Glance entries
+                var existingLinks: Set<String> = []
+                if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
+                   let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
+                    existingLinks = Set(decoded)
+                }
+
+                let newLinks = Set(validEntries.map { $0.link.absoluteString })
+                let mergedLinks = existingLinks.union(newLinks)
+
+                // Limit to last 500 links to prevent unbounded growth
+                let limitedLinks = Array(mergedLinks.suffix(500))
+                let linksData = try JSONEncoder().encode(limitedLinks)
+                UserDefaults.standard.set(linksData, forKey: seenLinksKey)
             } catch {}
         }
     }
@@ -585,14 +569,27 @@ struct ContentView: View {
             heroEntries[i].isNew = false
         }
 
-        // Persist to UserDefaults
+        // Persist to UserDefaults - merge with existing seen links
         let entries = heroEntries
+        let seenLinksKey = self.seenLinksKey
         Task.detached(priority: .utility) {
             do {
+                // Load existing seen links
+                var existingLinks: Set<String> = []
+                if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
+                   let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
+                    existingLinks = Set(decoded)
+                }
+
+                // Merge with current entries
                 let validEntries = entries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                let allLinks = validEntries.map { $0.link.absoluteString }
-                let linksData = try JSONEncoder().encode(allLinks)
-                UserDefaults.standard.set(linksData, forKey: self.seenLinksKey)
+                let newLinks = Set(validEntries.map { $0.link.absoluteString })
+                let mergedLinks = existingLinks.union(newLinks)
+
+                // Limit to last 500 links to prevent unbounded growth
+                let limitedLinks = Array(mergedLinks.suffix(500))
+                let linksData = try JSONEncoder().encode(limitedLinks)
+                UserDefaults.standard.set(linksData, forKey: seenLinksKey)
             } catch {}
         }
     }
@@ -618,7 +615,7 @@ struct ContentView: View {
         return Set(links.compactMap { URL(string: $0) })
     }
 
-    @MainActor private func loadHeroEntries(forceReveal: Bool = false, bypassCooldown: Bool = false) async {
+    @MainActor private func loadHeroEntries(bypassCooldown: Bool = false) async {
         // If already loading, mark for refresh after current load completes
         if isLoadingHero {
             pendingHeroRefresh = true
@@ -675,10 +672,14 @@ struct ContentView: View {
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
 
         // Only keep NEW articles (not seen before)
+        // Also deduplicate by link to prevent count mismatch when syndicated content
+        // appears in multiple feeds with the same URL
         var newArticles: [(feed: Feed, article: FeedItem)] = []
+        var seenNewLinks: Set<URL> = []
         for (feed, article) in feedArticles {
-            if !previouslySeenLinks.contains(article.link) {
+            if !previouslySeenLinks.contains(article.link) && !seenNewLinks.contains(article.link) {
                 newArticles.append((feed, article))
+                seenNewLinks.insert(article.link)
                 // Limit to atAGlanceCount
                 if newArticles.count >= atAGlanceCount {
                     break
@@ -710,12 +711,6 @@ struct ContentView: View {
                 Task { await loadHeroEntries(bypassCooldown: true) }
             }
             return
-        }
-
-        // Store current entries for diagonal reveal when expanding
-        let shouldTriggerDiagonalReveal = forceReveal || (!heroEntries.isEmpty && atAGlanceAutoExpand)
-        if shouldTriggerDiagonalReveal {
-            previousHeroEntries = heroEntries
         }
 
         // Step 2: Generate summaries for new articles
@@ -784,11 +779,6 @@ struct ContentView: View {
 
         // Handle reveal and expand based on context
         if !newEntries.isEmpty && !isInitialLoad {
-            // Trigger diagonal reveal animation if we have previous entries to transition from
-            if shouldTriggerDiagonalReveal && !previousHeroEntries.isEmpty {
-                showDiagonalReveal = true
-            }
-
             // Only expand if card is collapsed and auto-expand is on
             if isHeroCollapsed && atAGlanceAutoExpand {
                 HapticManager.shared.success()
@@ -1037,8 +1027,6 @@ struct ContentView: View {
             if isLoadingHero || !heroEntries.isEmpty {
                 SidebarHeroCardView(
                     entries: heroEntries,
-                    previousEntries: previousHeroEntries,
-                    showDiagonalReveal: showDiagonalReveal,
                     isLoading: isLoadingHero,
                     isCollapsed: isHeroCollapsed,
                     tintColor: AppTint(rawValue: appTint)?.color ?? .blue,
@@ -1050,10 +1038,6 @@ struct ContentView: View {
                         withAnimation(.snappy(duration: 0.3)) {
                             isHeroCollapsed.toggle()
                         }
-                    },
-                    onDiagonalRevealComplete: {
-                        showDiagonalReveal = false
-                        previousHeroEntries = []
                     }
                 )
                 .padding(.horizontal, 16)
@@ -1095,7 +1079,7 @@ struct ContentView: View {
                                 UserDefaults.standard.removeObject(forKey: heroCacheKey)
                                 Task {
                                     await ArticleSummarizer.shared.clearHeroSummaries()
-                                    await loadHeroEntries(forceReveal: true)
+                                    await loadHeroEntries(bypassCooldown: true)
                                 }
                             } label: {
                                 Label("Clear At a Glance", systemImage: "sun.horizon")

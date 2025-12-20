@@ -273,23 +273,17 @@ final class SidebarCollectionVC: UIViewController {
         let headerReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
             guard let self = self else { return }
 
-            let (title, count): (String, Int) = {
+            let title: String = {
                 switch item {
-                case .sectionsHeader: return ("Topics", self.folders.count)
-                case .sourcesHeader: return ("Sources", self.feeds.count)
-                default: return ("", 0)
+                case .sectionsHeader: return "Topics"
+                case .sourcesHeader: return "Sources"
+                default: return ""
                 }
             }()
 
             var content = UIListContentConfiguration.prominentInsetGroupedHeader()
             content.text = title
             content.textProperties.font = .systemFont(ofSize: 22, weight: .bold).rounded()
-
-            // Use secondary text for count - more reliable than custom accessory
-            content.secondaryText = "\(count)"
-            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
-            content.secondaryTextProperties.color = .secondaryLabel
-            content.prefersSideBySideTextAndSecondaryText = true
 
             cell.contentConfiguration = content
 
