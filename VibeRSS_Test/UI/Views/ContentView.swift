@@ -127,6 +127,7 @@ private struct SidebarHeroCardView: View {
     var showDiagonalReveal: Bool = false
     var isLoading: Bool = false
     var isCollapsed: Bool = false
+    var tintColor: Color = .blue
     var onTapLink: ((URL) -> Void)? = nil
     var onToggleCollapse: (() -> Void)? = nil
     var onDiagonalRevealComplete: (() -> Void)? = nil
@@ -160,7 +161,7 @@ private struct SidebarHeroCardView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.blue))
+                        .background(Capsule().fill(tintColor))
                 }
 
                 Spacer()
@@ -1016,6 +1017,7 @@ struct ContentView: View {
                 get: { !areSourcesCollapsed },
                 set: { areSourcesCollapsed = !$0 }
             ),
+            tintColor: AppTint(rawValue: appTint)?.uiColor ?? .systemBlue,
             onNavigate: { destination in
                 handleNavigation(destination)
             },
@@ -1026,7 +1028,7 @@ struct ContentView: View {
                 createFeedContextMenu(feed)
             }
         )
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea()
         .id(sidebarRefreshTrigger)
         .navigationTitle("TodayRSS")
         .navigationBarTitleDisplayMode(.inline)
@@ -1039,6 +1041,7 @@ struct ContentView: View {
                     showDiagonalReveal: showDiagonalReveal,
                     isLoading: isLoadingHero,
                     isCollapsed: isHeroCollapsed,
+                    tintColor: AppTint(rawValue: appTint)?.color ?? .blue,
                     onTapLink: { url in
                         heroWebLink = WebLink(url: url)
                     },

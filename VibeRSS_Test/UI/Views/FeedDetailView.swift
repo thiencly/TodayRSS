@@ -16,6 +16,7 @@ struct FeedDetailView: View {
     @State private var currentDay: Date? = nil
     @State private var readURLs: Set<URL> = []
     @State private var seenURLs: Set<URL> = []
+    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
 
     var body: some View {
         Group {
@@ -42,7 +43,8 @@ struct FeedDetailView: View {
                         },
                         onSave: {
                             SavedArticlesManager.shared.toggleSaved(article: item)
-                        }
+                        },
+                        tintColor: AppTint(rawValue: appTint)?.color ?? .blue
                     )
                     .equatable()
                     .background(DayAnchorReporter(date: item.pubDate, coordinateSpaceName: "FeedListScroll"))

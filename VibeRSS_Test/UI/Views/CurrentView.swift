@@ -22,6 +22,7 @@ struct CurrentView: View {
     @State private var hasCachedSummaryCache: Set<UUID> = []
     @State private var readURLs: Set<URL> = []
     @State private var seenURLs: Set<URL> = []
+    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
 
     private let service = FeedService()
 
@@ -50,7 +51,8 @@ struct CurrentView: View {
                         },
                         onSave: {
                             SavedArticlesManager.shared.toggleSaved(article: item)
-                        }
+                        },
+                        tintColor: AppTint(rawValue: appTint)?.color ?? .blue
                     )
                     .equatable()
                     .background(DayAnchorReporter(date: item.pubDate, coordinateSpaceName: "CurrentListScroll"))

@@ -51,9 +51,10 @@ struct ArticleRowView: View, Equatable {
     let onTapArticle: () -> Void
     let onTapSummarize: () -> Void
     var onSave: (() -> Void)?
+    var tintColor: Color = .blue
 
     static func == (lhs: ArticleRowView, rhs: ArticleRowView) -> Bool {
-        lhs.state == rhs.state
+        lhs.state == rhs.state && lhs.tintColor == rhs.tintColor
     }
 
     var body: some View {
@@ -151,13 +152,13 @@ struct ArticleRowView: View, Equatable {
         }
     }
 
-    // Title with inline blue dot at the very end (after last character on last line)
+    // Title with inline dot at the very end (after last character on last line)
     private var titleWithNewIndicator: Text {
         if state.isNew {
             // Use non-breaking space (\u{00A0}) so dot doesn't wrap to new line alone
-            return Text(state.title) + Text("\u{00A0}") + Text(Image(systemName: "circle.fill"))
+            return Text(state.title) + Text(" \u{00A0}") + Text(Image(systemName: "circle.fill"))
                 .font(.system(size: 6))
-                .foregroundColor(.blue)
+                .foregroundColor(tintColor)
                 .baselineOffset(4) // Vertically center with headline text
         } else {
             return Text(state.title)

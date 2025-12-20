@@ -97,9 +97,32 @@ final class SidebarCollectionVC: UIViewController {
     var sectionsExpanded: Bool = true
     var sourcesExpanded: Bool = true
 
+    // App tint color for new article indicators
+    var tintColor: UIColor = .systemBlue
+
     // Fixed top inset for collapsed At a Glance card
     // Card overlays the list when expanded - list position stays static
     static let collapsedCardInset: CGFloat = 60
+
+    // Helper to create attributed text with a dot indicator next to the name
+    private func attributedTextWithDot(_ text: String, tintColor: UIColor) -> NSAttributedString {
+        // Add extra spacing before the dot
+        let result = NSMutableAttributedString(string: text + "  ")
+
+        // Create dot using SF Symbol
+        let config = UIImage.SymbolConfiguration(pointSize: 6, weight: .regular)
+        if let dotImage = UIImage(systemName: "circle.fill", withConfiguration: config) {
+            let tintedImage = dotImage.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+            let attachment = NSTextAttachment()
+            attachment.image = tintedImage
+            // Adjust vertical alignment to center with text baseline
+            attachment.bounds = CGRect(x: 0, y: 1, width: 6, height: 6)
+            let dotString = NSAttributedString(attachment: attachment)
+            result.append(dotString)
+        }
+
+        return result
+    }
 
     // Callbacks
     var onNavigate: ((SidebarDestination) -> Void)?
@@ -269,9 +292,10 @@ final class SidebarCollectionVC: UIViewController {
             countLabel.text = "\(count)"
             countLabel.font = .preferredFont(forTextStyle: .caption1)
             countLabel.textColor = .secondaryLabel
+            countLabel.sizeToFit()
 
-            // Use outlineDisclosure for native rotating chevron animation
-            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .header)
+            // Use outlineDisclosure for native rotating chevron animation with app tint
+            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .header, tintColor: self.tintColor)
 
             cell.accessories = [
                 .customView(configuration: .init(customView: countLabel, placement: .trailing())),
@@ -303,6 +327,7 @@ final class SidebarCollectionVC: UIViewController {
                     countLabel.text = "\(count)"
                     countLabel.font = .preferredFont(forTextStyle: .caption1)
                     countLabel.textColor = .secondaryLabel
+                    countLabel.sizeToFit()
                     cell.accessories = [
                         .customView(configuration: .init(customView: countLabel, placement: .trailing()))
                     ]
@@ -322,35 +347,31 @@ final class SidebarCollectionVC: UIViewController {
             guard case .folder(_, let name, let count, let hasNew) = item else { return }
 
             var content = UIListContentConfiguration.cell()
-            content.text = name
             content.image = UIImage(systemName: "folder")
+
+            // Show dot next to name if has new articles
+            if hasNew {
+                content.attributedText = self.attributedTextWithDot(name, tintColor: self.tintColor)
+            } else {
+                content.text = name
+            }
 
             cell.contentConfiguration = content
 
-            var accessories: [UICellAccessory] = []
+            // Add outline disclosure for expand/collapse with app tint color
+            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell, tintColor: self.tintColor)
 
-            if hasNew {
-                let dot = UIView()
-                dot.backgroundColor = .systemBlue
-                dot.layer.cornerRadius = 4
-                NSLayoutConstraint.activate([
-                    dot.widthAnchor.constraint(equalToConstant: 8),
-                    dot.heightAnchor.constraint(equalToConstant: 8)
-                ])
-                accessories.append(.customView(configuration: .init(customView: dot, placement: .trailing())))
-            }
-
+            // Count label showing number of feeds in folder
             let countLabel = UILabel()
             countLabel.text = "\(count)"
             countLabel.font = .preferredFont(forTextStyle: .caption1)
             countLabel.textColor = .secondaryLabel
-            accessories.append(.customView(configuration: .init(customView: countLabel, placement: .trailing())))
+            countLabel.sizeToFit()
 
-            // Add outline disclosure for expand/collapse
-            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell)
-            accessories.append(.outlineDisclosure(options: disclosureOptions))
-
-            cell.accessories = accessories
+            cell.accessories = [
+                .customView(configuration: .init(customView: countLabel, placement: .trailing())),
+                .outlineDisclosure(options: disclosureOptions)
+            ]
 
             // Apply corner-aware grouped background
             let position = self.cornerPosition(for: item, in: .topics)
@@ -363,9 +384,15 @@ final class SidebarCollectionVC: UIViewController {
             guard case .folderFeed(_, let title, let iconURL, let hasNew) = item else { return }
 
             var content = UIListContentConfiguration.cell()
-            content.text = title
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+
+            // Show dot next to name if has new articles
+            if hasNew {
+                content.attributedText = self.attributedTextWithDot(title, tintColor: self.tintColor)
+            } else {
+                content.text = title
+            }
 
             // Load icon async
             if let iconURL = iconURL {
@@ -384,19 +411,7 @@ final class SidebarCollectionVC: UIViewController {
             cell.contentConfiguration = content
             cell.indentationLevel = 1
             cell.indentationWidth = 20
-
-            if hasNew {
-                let dot = UIView()
-                dot.backgroundColor = .systemBlue
-                dot.layer.cornerRadius = 4
-                NSLayoutConstraint.activate([
-                    dot.widthAnchor.constraint(equalToConstant: 8),
-                    dot.heightAnchor.constraint(equalToConstant: 8)
-                ])
-                cell.accessories = [.customView(configuration: .init(customView: dot, placement: .trailing()))]
-            } else {
-                cell.accessories = []
-            }
+            cell.accessories = []
 
             // Apply corner-aware grouped background
             let position = self.cornerPosition(for: item, in: .topics)
@@ -409,9 +424,15 @@ final class SidebarCollectionVC: UIViewController {
             guard case .feed(_, let title, let iconURL, let hasNew) = item else { return }
 
             var content = UIListContentConfiguration.cell()
-            content.text = title
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+
+            // Show dot next to name if has new articles
+            if hasNew {
+                content.attributedText = self.attributedTextWithDot(title, tintColor: self.tintColor)
+            } else {
+                content.text = title
+            }
 
             // Load icon async
             if let iconURL = iconURL {
@@ -428,19 +449,7 @@ final class SidebarCollectionVC: UIViewController {
             }
 
             cell.contentConfiguration = content
-
-            if hasNew {
-                let dot = UIView()
-                dot.backgroundColor = .systemBlue
-                dot.layer.cornerRadius = 4
-                NSLayoutConstraint.activate([
-                    dot.widthAnchor.constraint(equalToConstant: 8),
-                    dot.heightAnchor.constraint(equalToConstant: 8)
-                ])
-                cell.accessories = [.customView(configuration: .init(customView: dot, placement: .trailing()))]
-            } else {
-                cell.accessories = []
-            }
+            cell.accessories = []
 
             // Apply corner-aware grouped background
             let position = self.cornerPosition(for: item, in: .sources)
@@ -692,6 +701,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     let savedCount: Int
     @Binding var sectionsExpanded: Bool
     @Binding var sourcesExpanded: Bool
+    var tintColor: UIColor = .systemBlue
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
@@ -716,6 +726,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.savedCount = savedCount
         vc.sectionsExpanded = sectionsExpanded
         vc.sourcesExpanded = sourcesExpanded
+        vc.tintColor = tintColor
 
         vc.onNavigate = onNavigate
 

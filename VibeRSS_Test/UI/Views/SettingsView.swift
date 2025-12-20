@@ -40,6 +40,20 @@ enum AppTint: String, CaseIterable {
         case .indigo: return .indigo
         }
     }
+
+    var uiColor: UIColor {
+        switch self {
+        case .blue: return .systemBlue
+        case .purple: return .systemPurple
+        case .pink: return .systemPink
+        case .red: return .systemRed
+        case .orange: return .systemOrange
+        case .yellow: return .systemYellow
+        case .green: return .systemGreen
+        case .teal: return .systemTeal
+        case .indigo: return .systemIndigo
+        }
+    }
 }
 
 // MARK: - Appearance Mode

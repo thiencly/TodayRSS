@@ -17,6 +17,7 @@ struct FolderDetailView: View {
     @State private var hasCachedSummaryCache: Set<UUID> = []
     @State private var readURLs: Set<URL> = []
     @State private var seenURLs: Set<URL> = []
+    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
 
     var body: some View {
         Group {
@@ -43,7 +44,8 @@ struct FolderDetailView: View {
                         },
                         onSave: {
                             SavedArticlesManager.shared.toggleSaved(article: item)
-                        }
+                        },
+                        tintColor: AppTint(rawValue: appTint)?.color ?? .blue
                     )
                     .equatable()
                     .background(DayAnchorReporter(date: item.pubDate, coordinateSpaceName: "FolderListScroll"))
