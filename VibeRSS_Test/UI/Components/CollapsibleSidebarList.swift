@@ -285,22 +285,17 @@ final class SidebarCollectionVC: UIViewController {
             content.text = title
             content.textProperties.font = .systemFont(ofSize: 22, weight: .bold).rounded()
 
-            cell.contentConfiguration = content
+            // Use secondary text for count - more reliable than custom accessory
+            content.secondaryText = "\(count)"
+            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.prefersSideBySideTextAndSecondaryText = true
 
-            // Count label as custom accessory
-            let countLabel = UILabel()
-            countLabel.text = "\(count)"
-            countLabel.font = .preferredFont(forTextStyle: .caption1)
-            countLabel.textColor = .secondaryLabel
-            countLabel.sizeToFit()
+            cell.contentConfiguration = content
 
             // Use outlineDisclosure for native rotating chevron animation with app tint
             let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .header, tintColor: self.tintColor)
-
-            cell.accessories = [
-                .customView(configuration: .init(customView: countLabel, placement: .trailing())),
-                .outlineDisclosure(options: disclosureOptions)
-            ]
+            cell.accessories = [.outlineDisclosure(options: disclosureOptions)]
 
             // Header has NO background - only content items have grouped background
             cell.backgroundConfiguration = .clear()
@@ -323,17 +318,12 @@ final class SidebarCollectionVC: UIViewController {
                 content.imageProperties.tintColor = .systemRed
 
                 if count > 0 {
-                    let countLabel = UILabel()
-                    countLabel.text = "\(count)"
-                    countLabel.font = .preferredFont(forTextStyle: .caption1)
-                    countLabel.textColor = .secondaryLabel
-                    countLabel.sizeToFit()
-                    cell.accessories = [
-                        .customView(configuration: .init(customView: countLabel, placement: .trailing()))
-                    ]
-                } else {
-                    cell.accessories = []
+                    content.secondaryText = "\(count)"
+                    content.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+                    content.secondaryTextProperties.color = .secondaryLabel
+                    content.prefersSideBySideTextAndSecondaryText = true
                 }
+                cell.accessories = []
             default: break
             }
 
@@ -346,7 +336,7 @@ final class SidebarCollectionVC: UIViewController {
             guard let self = self else { return }
             guard case .folder(_, let name, let count, let hasNew) = item else { return }
 
-            var content = UIListContentConfiguration.cell()
+            var content = UIListContentConfiguration.sidebarCell()
             content.image = UIImage(systemName: "folder")
 
             // Show dot next to name if has new articles
@@ -356,22 +346,17 @@ final class SidebarCollectionVC: UIViewController {
                 content.text = name
             }
 
+            // Use secondary text for count - more reliable than custom accessory
+            content.secondaryText = "\(count)"
+            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.prefersSideBySideTextAndSecondaryText = true
+
             cell.contentConfiguration = content
 
             // Add outline disclosure for expand/collapse with app tint color
             let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell, tintColor: self.tintColor)
-
-            // Count label showing number of feeds in folder
-            let countLabel = UILabel()
-            countLabel.text = "\(count)"
-            countLabel.font = .preferredFont(forTextStyle: .caption1)
-            countLabel.textColor = .secondaryLabel
-            countLabel.sizeToFit()
-
-            cell.accessories = [
-                .customView(configuration: .init(customView: countLabel, placement: .trailing())),
-                .outlineDisclosure(options: disclosureOptions)
-            ]
+            cell.accessories = [.outlineDisclosure(options: disclosureOptions)]
 
             // Apply corner-aware grouped background
             let position = self.cornerPosition(for: item, in: .topics)
