@@ -97,54 +97,9 @@ final class SidebarCollectionVC: UIViewController {
     var sectionsExpanded: Bool = true
     var sourcesExpanded: Bool = true
 
-    // Content inset for glass card
-    var topInset: CGFloat = 0
-    private var hasSetInitialScrollPosition: Bool = false
-
-    func updateContentInset(_ inset: CGFloat, animated: Bool = true) {
-        guard let collectionView = collectionView else {
-            topInset = inset
-            return
-        }
-
-        let oldInset = topInset
-
-        // Skip if inset hasn't changed significantly
-        guard abs(inset - oldInset) > 0.5 else { return }
-
-        topInset = inset
-
-        // On initial setup, set without animation
-        if !hasSetInitialScrollPosition {
-            collectionView.contentInset.top = inset
-            collectionView.verticalScrollIndicatorInsets.top = inset
-            if inset > 0 {
-                collectionView.setContentOffset(CGPoint(x: 0, y: -inset), animated: false)
-                hasSetInitialScrollPosition = true
-            }
-        } else {
-            // Check if content is currently at the top (showing first items)
-            let isAtTop = collectionView.contentOffset.y <= -oldInset + 10
-
-            if animated {
-                // Card is expanding/collapsing - animate inset and scroll together
-                UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseInOut]) {
-                    collectionView.contentInset.top = inset
-                    collectionView.verticalScrollIndicatorInsets.top = inset
-                    // If user was at top, keep them at top after inset change
-                    if isAtTop {
-                        collectionView.contentOffset = CGPoint(x: 0, y: -inset)
-                    }
-                }
-            } else {
-                collectionView.contentInset.top = inset
-                collectionView.verticalScrollIndicatorInsets.top = inset
-                if isAtTop {
-                    collectionView.contentOffset = CGPoint(x: 0, y: -inset)
-                }
-            }
-        }
-    }
+    // Fixed top inset for collapsed At a Glance card
+    // Card overlays the list when expanded - list position stays static
+    static let collapsedCardInset: CGFloat = 60
 
     // Callbacks
     var onNavigate: ((SidebarDestination) -> Void)?
@@ -213,13 +168,11 @@ final class SidebarCollectionVC: UIViewController {
         collectionView.clipsToBounds = false
         view.clipsToBounds = false
 
-        // Set content inset and initial scroll position
-        collectionView.contentInset.top = topInset
-        collectionView.verticalScrollIndicatorInsets.top = topInset
-        if topInset > 0 {
-            collectionView.contentOffset = CGPoint(x: 0, y: -topInset)
-            hasSetInitialScrollPosition = true
-        }
+        // Fixed inset for collapsed At a Glance card - list stays static
+        let inset = Self.collapsedCardInset
+        collectionView.contentInset.top = inset
+        collectionView.verticalScrollIndicatorInsets.top = inset
+        collectionView.contentOffset = CGPoint(x: 0, y: -inset)
 
         view.addSubview(collectionView)
     }
@@ -739,7 +692,6 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     let savedCount: Int
     @Binding var sectionsExpanded: Bool
     @Binding var sourcesExpanded: Bool
-    var topInset: CGFloat = 0
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
@@ -747,18 +699,11 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SidebarCollectionVC {
         let vc = SidebarCollectionVC()
         configureVC(vc)
-        // Set initial content inset (may be 0 if hero card not measured yet)
-        vc.updateContentInset(topInset)
         return vc
     }
 
     func updateUIViewController(_ vc: SidebarCollectionVC, context: Context) {
         configureVC(vc)
-
-        // Update content inset for glass card overlay AFTER configuring data
-        // This must happen after configureVC to properly track old vs new inset
-        vc.updateContentInset(topInset)
-
         // Always apply data to keep list in sync
         vc.applyData(animated: false)
     }
@@ -771,8 +716,6 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.savedCount = savedCount
         vc.sectionsExpanded = sectionsExpanded
         vc.sourcesExpanded = sourcesExpanded
-        // Note: Do NOT set vc.topInset here - let updateContentInset manage it
-        // Setting it here would break the old vs new comparison in updateContentInset
 
         vc.onNavigate = onNavigate
 

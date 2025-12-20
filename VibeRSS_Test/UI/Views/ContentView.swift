@@ -927,9 +927,6 @@ struct ContentView: View {
     // Navigation state for UIKit sidebar
     @State private var navigationDestination: SidebarDestination?
 
-    // Hero card height for content inset (measured from GeometryReader)
-    @State private var heroCardHeight: CGFloat = 0
-
     // MARK: - Navigation Handling
 
     private func handleNavigation(_ destination: SidebarDestination) {
@@ -1019,7 +1016,6 @@ struct ContentView: View {
                 get: { !areSourcesCollapsed },
                 set: { areSourcesCollapsed = !$0 }
             ),
-            topInset: heroCardHeight > 0 ? heroCardHeight : 0,
             onNavigate: { destination in
                 handleNavigation(destination)
             },
@@ -1035,7 +1031,7 @@ struct ContentView: View {
         .navigationTitle("TodayRSS")
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) {
-            // At a Glance card as overlay - list scrolls behind it
+            // At a Glance card as overlay - expands on top of the list
             if isLoadingHero || !heroEntries.isEmpty {
                 SidebarHeroCardView(
                     entries: heroEntries,
@@ -1057,20 +1053,8 @@ struct ContentView: View {
                         previousHeroEntries = []
                     }
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear {
-                                heroCardHeight = geo.size.height
-                            }
-                            .onChange(of: geo.size.height) { _, newHeight in
-                                // Update immediately to track card animation
-                                heroCardHeight = newHeight
-                            }
-                    }
-                )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
