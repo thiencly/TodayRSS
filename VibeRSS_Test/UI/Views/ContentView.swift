@@ -269,12 +269,6 @@ private struct SidebarHeroCardView: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .foregroundStyle(.primary)
-                if entry.isNew {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 6, height: 6)
-                        .accessibilityLabel("New article")
-                }
                 Spacer()
             }
             Text(displayText)
@@ -631,12 +625,12 @@ struct ContentView: View {
         if !bypassCooldown && !isInitialLoad, let lastUpdate = lastHeroUpdateDate {
             let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdate)
             if timeSinceLastUpdate < heroUpdateCooldown {
-                // Within cooldown period, skip update
+                // Within cooldown period, keep collapsed and skip update
                 return
             }
         }
 
-        // Start loading with indicator (but don't collapse yet - wait to see if there are new articles)
+        // Show loading indicator (glow will appear on collapsed card)
         isLoadingHero = true
         pendingHeroRefresh = false
 
@@ -714,12 +708,7 @@ struct ContentView: View {
             return
         }
 
-        // Has new articles - collapse first to show loading state
-        withAnimation(.snappy(duration: 0.3)) {
-            isHeroCollapsed = true
-        }
-
-        // Store current entries for diagonal reveal animation
+        // Store current entries for diagonal reveal when expanding
         let shouldTriggerDiagonalReveal = forceReveal || (!heroEntries.isEmpty && atAGlanceAutoExpand)
         if shouldTriggerDiagonalReveal {
             previousHeroEntries = heroEntries
@@ -789,15 +778,19 @@ struct ContentView: View {
         isLoadingHero = false
         lastHeroUpdateDate = Date()
 
-        // Auto-expand with reveal animation if setting is on (but NOT on initial app open)
-        if atAGlanceAutoExpand && !newEntries.isEmpty && !isInitialLoad {
-            // Trigger reveal animation
+        // Handle reveal and expand based on context
+        if !newEntries.isEmpty && !isInitialLoad {
+            // Trigger diagonal reveal animation if we have previous entries to transition from
             if shouldTriggerDiagonalReveal && !previousHeroEntries.isEmpty {
                 showDiagonalReveal = true
             }
-            // Expand with animation
-            withAnimation(.snappy(duration: 0.3)) {
-                isHeroCollapsed = false
+
+            // Only expand if card is collapsed and auto-expand is on
+            if isHeroCollapsed && atAGlanceAutoExpand {
+                HapticManager.shared.success()
+                withAnimation(.snappy(duration: 0.3)) {
+                    isHeroCollapsed = false
+                }
             }
         }
 
@@ -1403,6 +1396,9 @@ struct ContentView: View {
                     Task { await loadHeroEntries() }
                 }
             } else if phase == .background {
+                // Collapse card when app goes to background
+                // So it's already collapsed on hot start (no animation visible to user)
+                isHeroCollapsed = true
                 // Mark all current hero entries as "seen" when app goes to background
                 // This clears blue dots on next launch if no new articles
                 markAllHeroEntriesAsSeen()
