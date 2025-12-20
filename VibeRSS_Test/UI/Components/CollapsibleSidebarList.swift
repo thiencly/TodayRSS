@@ -61,7 +61,18 @@ enum SidebarDestination: Hashable, Sendable {
 // MARK: - Sidebar Sections for hierarchical data
 
 enum SidebarSection: Int, CaseIterable {
-    case main = 0
+    case fixed = 0    // Latest, Today, Saved
+    case topics = 1   // Topics header + folders
+    case sources = 2  // Sources header + feeds
+}
+
+// MARK: - Corner Position for grouped cells
+
+enum CellCornerPosition {
+    case top        // First item - top corners rounded
+    case middle     // Middle item - no corners
+    case bottom     // Last item - bottom corners rounded
+    case alone      // Only item - all corners rounded
 }
 
 // MARK: - UIKit Collection View Controller
@@ -156,17 +167,37 @@ final class SidebarCollectionVC: UIViewController {
     }
 
     private func initializeSnapshot() {
-        // Initialize the data source with the main section
+        // Initialize the data source with all sections
         var snapshot = Snapshot()
-        snapshot.appendSections([.main])
+        snapshot.appendSections([.fixed, .topics, .sources])
         dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     private func setupCollectionView() {
-        var config = UICollectionLayoutListConfiguration(appearance: .sidebar)
-        config.showsSeparators = false
+        var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+        config.showsSeparators = true
         config.headerMode = .none
         config.backgroundColor = .clear
+
+        // Hide separator after header items
+        config.itemSeparatorHandler = { [weak self] indexPath, sectionSeparatorConfiguration in
+            guard let self = self else { return sectionSeparatorConfiguration }
+
+            var separatorConfig = sectionSeparatorConfiguration
+
+            // Get the item at this index path
+            if let item = self.dataSource.itemIdentifier(for: indexPath) {
+                switch item {
+                case .sectionsHeader, .sourcesHeader:
+                    // Hide separator after headers
+                    separatorConfig.bottomSeparatorVisibility = .hidden
+                default:
+                    break
+                }
+            }
+
+            return separatorConfig
+        }
 
         let layout = UICollectionViewCompositionalLayout.list(using: config)
 
@@ -193,6 +224,74 @@ final class SidebarCollectionVC: UIViewController {
         view.addSubview(collectionView)
     }
 
+    // Determines corner position for an item within its section's visible content items
+    private func cornerPosition(for item: SidebarItem, in section: SidebarSection) -> CellCornerPosition {
+        let snapshot = dataSource.snapshot(for: section)
+        let visibleItems = snapshot.visibleItems
+
+        // Filter out headers - we only care about content items
+        let contentItems = visibleItems.filter { visibleItem in
+            switch visibleItem {
+            case .sectionsHeader, .sourcesHeader:
+                return false
+            default:
+                return true
+            }
+        }
+
+        guard let index = contentItems.firstIndex(of: item) else {
+            return .middle
+        }
+
+        let isFirst = index == 0
+        let isLast = index == contentItems.count - 1
+
+        if isFirst && isLast {
+            return .alone
+        } else if isFirst {
+            return .top
+        } else if isLast {
+            return .bottom
+        } else {
+            return .middle
+        }
+    }
+
+    // System insetGrouped corner radius (iOS 26 uses more rounded corners)
+    private static let groupedCornerRadius: CGFloat = 24
+
+    // Configures cell with grouped background and appropriate corners
+    private func configureGroupedCell(_ cell: UICollectionViewListCell, position: CellCornerPosition) {
+        // Use standard grouped cell background
+        cell.backgroundConfiguration = .listGroupedCell()
+
+        // Find and configure the background view's corners after a layout pass
+        DispatchQueue.main.async {
+            // The background view is typically a subview of the cell
+            for subview in cell.subviews {
+                // Look for the background view (it's not the contentView)
+                if subview !== cell.contentView {
+                    subview.clipsToBounds = true
+
+                    switch position {
+                    case .alone:
+                        subview.layer.cornerRadius = Self.groupedCornerRadius
+                        subview.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+                    case .top:
+                        subview.layer.cornerRadius = Self.groupedCornerRadius
+                        subview.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+                    case .bottom:
+                        subview.layer.cornerRadius = Self.groupedCornerRadius
+                        subview.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+                    case .middle:
+                        subview.layer.cornerRadius = 0
+                        subview.layer.maskedCorners = []
+                    }
+                }
+            }
+        }
+    }
+
     private func setupDataSource() {
         // Header cell (Sections / Sources) - uses outlineDisclosure for native animation
         let headerReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
@@ -200,13 +299,13 @@ final class SidebarCollectionVC: UIViewController {
 
             let (title, count): (String, Int) = {
                 switch item {
-                case .sectionsHeader: return ("Sections", self.folders.count)
+                case .sectionsHeader: return ("Topics", self.folders.count)
                 case .sourcesHeader: return ("Sources", self.feeds.count)
                 default: return ("", 0)
                 }
             }()
 
-            var content = UIListContentConfiguration.sidebarHeader()
+            var content = UIListContentConfiguration.prominentInsetGroupedHeader()
             content.text = title
             content.textProperties.font = .systemFont(ofSize: 22, weight: .bold).rounded()
 
@@ -226,12 +325,13 @@ final class SidebarCollectionVC: UIViewController {
                 .outlineDisclosure(options: disclosureOptions)
             ]
 
+            // Header has NO background - only content items have grouped background
             cell.backgroundConfiguration = .clear()
         }
 
         // Fixed items (Latest, Today, Saved)
         let fixedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { cell, indexPath, item in
-            var content = UIListContentConfiguration.sidebarCell()
+            var content = UIListContentConfiguration.cell()
 
             switch item {
             case .latest:
@@ -260,14 +360,15 @@ final class SidebarCollectionVC: UIViewController {
             }
 
             cell.contentConfiguration = content
-            cell.backgroundConfiguration = .listSidebarCell()
+            cell.backgroundConfiguration = .listGroupedCell()
         }
 
         // Folder cell
-        let folderReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { cell, indexPath, item in
+        let folderReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
+            guard let self = self else { return }
             guard case .folder(_, let name, let count, let hasNew) = item else { return }
 
-            var content = UIListContentConfiguration.sidebarCell()
+            var content = UIListContentConfiguration.cell()
             content.text = name
             content.image = UIImage(systemName: "folder")
 
@@ -292,15 +393,23 @@ final class SidebarCollectionVC: UIViewController {
             countLabel.textColor = .secondaryLabel
             accessories.append(.customView(configuration: .init(customView: countLabel, placement: .trailing())))
 
+            // Add outline disclosure for expand/collapse
+            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell)
+            accessories.append(.outlineDisclosure(options: disclosureOptions))
+
             cell.accessories = accessories
-            cell.backgroundConfiguration = .listSidebarCell()
+
+            // Apply corner-aware grouped background
+            let position = self.cornerPosition(for: item, in: .topics)
+            self.configureGroupedCell(cell, position: position)
         }
 
         // Folder feed cell (indented)
-        let folderFeedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { cell, indexPath, item in
+        let folderFeedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
+            guard let self = self else { return }
             guard case .folderFeed(_, let title, let iconURL, let hasNew) = item else { return }
 
-            var content = UIListContentConfiguration.sidebarCell()
+            var content = UIListContentConfiguration.cell()
             content.text = title
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
@@ -336,14 +445,17 @@ final class SidebarCollectionVC: UIViewController {
                 cell.accessories = []
             }
 
-            cell.backgroundConfiguration = .listSidebarCell()
+            // Apply corner-aware grouped background
+            let position = self.cornerPosition(for: item, in: .topics)
+            self.configureGroupedCell(cell, position: position)
         }
 
         // Feed cell
-        let feedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { cell, indexPath, item in
+        let feedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
+            guard let self = self else { return }
             guard case .feed(_, let title, let iconURL, let hasNew) = item else { return }
 
-            var content = UIListContentConfiguration.sidebarCell()
+            var content = UIListContentConfiguration.cell()
             content.text = title
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
@@ -377,7 +489,9 @@ final class SidebarCollectionVC: UIViewController {
                 cell.accessories = []
             }
 
-            cell.backgroundConfiguration = .listSidebarCell()
+            // Apply corner-aware grouped background
+            let position = self.cornerPosition(for: item, in: .sources)
+            self.configureGroupedCell(cell, position: position)
         }
 
         dataSource = DataSource(collectionView: collectionView) { (cv: UICollectionView, indexPath: IndexPath, item: SidebarItem) -> UICollectionViewCell? in
@@ -426,74 +540,93 @@ final class SidebarCollectionVC: UIViewController {
     }
 
     func applyData(animated: Bool = true) {
-        // Use section snapshot for hierarchical data with native expand/collapse animations
-        var sectionSnapshot = SectionSnapshot()
-
-        // === SECTIONS HEADER with children ===
-        let sectionsHeader = SidebarItem.sectionsHeader(isExpanded: sectionsExpanded)
-        sectionSnapshot.append([sectionsHeader])
-
-        // Children of Sections header
-        var sectionsChildren: [SidebarItem] = []
-
+        // === FIXED SECTION (Latest, Today, Saved) - their own grouped list ===
+        var fixedSnapshot = SectionSnapshot()
+        var fixedItems: [SidebarItem] = []
         if showLatestView {
-            sectionsChildren.append(.latest)
+            fixedItems.append(.latest)
         }
         if showTodayView {
-            sectionsChildren.append(.today)
+            fixedItems.append(.today)
         }
-        sectionsChildren.append(.saved(count: savedCount))
+        fixedItems.append(.saved(count: savedCount))
+        fixedSnapshot.append(fixedItems)
+        dataSource.apply(fixedSnapshot, to: .fixed, animatingDifferences: animated)
 
-        // Folders and their feeds
+        // === TOPICS SECTION - hierarchical data with expand/collapse ===
+        var topicsSnapshot = SectionSnapshot()
+
+        // Topics header with folders as children
+        let sectionsHeader = SidebarItem.sectionsHeader(isExpanded: sectionsExpanded)
+        topicsSnapshot.append([sectionsHeader])
+
+        // Folders as children of Topics header
+        var folderItems: [SidebarItem] = []
         for folder in folders {
             let folderFeeds = feeds.filter { $0.folderID == folder.id }
             let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
-            sectionsChildren.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew))
+            folderItems.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew))
+        }
+        topicsSnapshot.append(folderItems, to: sectionsHeader)
 
-            // Folder's feeds (indented)
+        // Each folder has its feeds as children (collapsible)
+        for folder in folders {
+            let folderFeeds = feeds.filter { $0.folderID == folder.id }
+            let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
+            let folderItem = SidebarItem.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew)
+
+            var feedItems: [SidebarItem] = []
             for feed in folderFeeds {
                 let feedHasNew = ArticleReadStateManager.sourceHasNewArticlesSync(feed.id)
-                sectionsChildren.append(.folderFeed(id: feed.id, title: feed.title, iconURL: feed.iconURL, hasNew: feedHasNew))
+                feedItems.append(.folderFeed(id: feed.id, title: feed.title, iconURL: feed.iconURL, hasNew: feedHasNew))
+            }
+            if !feedItems.isEmpty {
+                topicsSnapshot.append(feedItems, to: folderItem)
+                // Folders start collapsed
+                topicsSnapshot.collapse([folderItem])
             }
         }
 
-        sectionSnapshot.append(sectionsChildren, to: sectionsHeader)
-
-        // Expand or collapse based on state
+        // Expand or collapse Topics header based on state
         if sectionsExpanded {
-            sectionSnapshot.expand([sectionsHeader])
+            topicsSnapshot.expand([sectionsHeader])
         } else {
-            sectionSnapshot.collapse([sectionsHeader])
+            topicsSnapshot.collapse([sectionsHeader])
         }
 
-        // === SOURCES HEADER with children ===
-        let sourcesHeader = SidebarItem.sourcesHeader(isExpanded: sourcesExpanded)
-        sectionSnapshot.append([sourcesHeader])
+        // Apply Topics snapshot to .topics section
+        dataSource.apply(topicsSnapshot, to: .topics, animatingDifferences: animated)
 
-        // Children of Sources header
+        // === SOURCES SECTION - hierarchical data with expand/collapse ===
+        var sourcesSnapshot = SectionSnapshot()
+
+        // Sources header with feeds as children
+        let sourcesHeader = SidebarItem.sourcesHeader(isExpanded: sourcesExpanded)
+        sourcesSnapshot.append([sourcesHeader])
+
+        // Feeds as children of Sources header
         var sourcesChildren: [SidebarItem] = []
         for feed in feeds {
             let hasNew = ArticleReadStateManager.sourceHasNewArticlesSync(feed.id)
             sourcesChildren.append(.feed(id: feed.id, title: feed.title, iconURL: feed.iconURL, hasNew: hasNew))
         }
+        sourcesSnapshot.append(sourcesChildren, to: sourcesHeader)
 
-        sectionSnapshot.append(sourcesChildren, to: sourcesHeader)
-
-        // Expand or collapse based on state
+        // Expand or collapse Sources header based on state
         if sourcesExpanded {
-            sectionSnapshot.expand([sourcesHeader])
+            sourcesSnapshot.expand([sourcesHeader])
         } else {
-            sectionSnapshot.collapse([sourcesHeader])
+            sourcesSnapshot.collapse([sourcesHeader])
         }
 
-        // Apply the section snapshot to the main section
-        dataSource.apply(sectionSnapshot, to: .main, animatingDifferences: animated)
+        // Apply Sources snapshot to .sources section
+        dataSource.apply(sourcesSnapshot, to: .sources, animatingDifferences: animated)
     }
 
     // Toggle expansion with native sliding animation
     private func toggleSectionsExpansion() {
-        // Get current snapshot
-        var snapshot = dataSource.snapshot(for: .main)
+        // Get current snapshot for Topics section
+        var snapshot = dataSource.snapshot(for: .topics)
 
         // Find the sections header (use any isExpanded value since stableID matches)
         let sectionsHeader = SidebarItem.sectionsHeader(isExpanded: sectionsExpanded)
@@ -511,12 +644,12 @@ final class SidebarCollectionVC: UIViewController {
         onToggleSections?(sectionsExpanded)
 
         // Apply with animation for sliding effect
-        dataSource.apply(snapshot, to: .main, animatingDifferences: true)
+        dataSource.apply(snapshot, to: .topics, animatingDifferences: true)
     }
 
     private func toggleSourcesExpansion() {
-        // Get current snapshot
-        var snapshot = dataSource.snapshot(for: .main)
+        // Get current snapshot for Sources section
+        var snapshot = dataSource.snapshot(for: .sources)
 
         // Find the sources header (use any isExpanded value since stableID matches)
         let sourcesHeader = SidebarItem.sourcesHeader(isExpanded: sourcesExpanded)
@@ -534,7 +667,7 @@ final class SidebarCollectionVC: UIViewController {
         onToggleSources?(sourcesExpanded)
 
         // Apply with animation for sliding effect
-        dataSource.apply(snapshot, to: .main, animatingDifferences: true)
+        dataSource.apply(snapshot, to: .sources, animatingDifferences: true)
     }
 }
 
