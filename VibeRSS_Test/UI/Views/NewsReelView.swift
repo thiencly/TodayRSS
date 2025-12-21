@@ -726,6 +726,83 @@ class ReelsPagerViewController: UIViewController, UIScrollViewDelegate {
     }
 }
 
+// MARK: - Edge Swipe Gesture View (UIKit-based for proper edge recognition)
+
+struct EdgeSwipeGestureView: UIViewRepresentable {
+    let onDragChanged: (CGFloat) -> Void
+    let onDismiss: () -> Void
+    let onCancel: () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        let edgePan = UIScreenEdgePanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleEdgePan(_:))
+        )
+        edgePan.edges = .left
+        edgePan.delegate = context.coordinator
+        view.addGestureRecognizer(edgePan)
+
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onDragChanged = onDragChanged
+        context.coordinator.onDismiss = onDismiss
+        context.coordinator.onCancel = onCancel
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onDragChanged: onDragChanged, onDismiss: onDismiss, onCancel: onCancel)
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onDragChanged: (CGFloat) -> Void
+        var onDismiss: () -> Void
+        var onCancel: () -> Void
+
+        init(onDragChanged: @escaping (CGFloat) -> Void, onDismiss: @escaping () -> Void, onCancel: @escaping () -> Void) {
+            self.onDragChanged = onDragChanged
+            self.onDismiss = onDismiss
+            self.onCancel = onCancel
+        }
+
+        @objc func handleEdgePan(_ gesture: UIScreenEdgePanGestureRecognizer) {
+            guard let view = gesture.view else { return }
+
+            let translation = gesture.translation(in: view).x
+            let velocity = gesture.velocity(in: view).x
+
+            switch gesture.state {
+            case .changed:
+                if translation > 0 {
+                    onDragChanged(translation)
+                }
+            case .ended, .cancelled:
+                if translation > 100 || velocity > 500 {
+                    onDismiss()
+                } else {
+                    onCancel()
+                }
+            default:
+                break
+            }
+        }
+
+        // Allow simultaneous recognition with other gestures
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            return false  // Edge pan should take priority
+        }
+
+        // Give edge pan gesture priority
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            return true
+        }
+    }
+}
+
 struct NewsReelView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -749,6 +826,9 @@ struct NewsReelView: View {
 
     // Track current source for horizontal TabView paging
     @State private var selectedSourceIndex: Int
+
+    // Edge swipe to dismiss
+    @State private var dragOffset: CGFloat = 0
 
     init(pinnedFolderID: UUID? = nil, initialSourceIndex: Int = 0) {
         self.pinnedFolderID = pinnedFolderID
@@ -786,68 +866,87 @@ struct NewsReelView: View {
         }
         .overlay(alignment: .trailing) {
             // Vertical action buttons on the right side
-            if let article = viewModel.currentArticle {
-                GlassEffectContainer {
-                    VStack(spacing: 0) {
-                        Button {
-                            HapticManager.shared.click()
-                            SavedArticlesManager.shared.toggleSaved(article: article)
-                        } label: {
-                            Image(systemName: SavedArticlesManager.shared.isSaved(url: article.link) ? "heart.fill" : "heart")
-                                .font(.title2)
-                                .foregroundStyle(SavedArticlesManager.shared.isSaved(url: article.link) ? .red : .white)
-                                .frame(width: 44, height: 44)
-                        }
-
-                        Button {
-                            HapticManager.shared.click()
-                            refreshArticles()
-                        } label: {
-                            Group {
-                                if isRefreshing {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.title2)
-                                        .foregroundStyle(.white)
-                                }
+            VStack(spacing: 12) {
+                if let article = viewModel.currentArticle {
+                    GlassEffectContainer {
+                        VStack(spacing: 0) {
+                            Button {
+                                HapticManager.shared.click()
+                                SavedArticlesManager.shared.toggleSaved(article: article)
+                            } label: {
+                                Image(systemName: SavedArticlesManager.shared.isSaved(url: article.link) ? "heart.fill" : "heart")
+                                    .font(.title2)
+                                    .foregroundStyle(SavedArticlesManager.shared.isSaved(url: article.link) ? .red : .white)
+                                    .frame(width: 44, height: 44)
                             }
-                            .frame(width: 44, height: 44)
-                        }
-                        .disabled(isRefreshing)
 
-                        Button {
-                            HapticManager.shared.click()
-                            shareArticle(article)
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.title2)
-                                .foregroundStyle(.white)
+                            Button {
+                                HapticManager.shared.click()
+                                refreshArticles()
+                            } label: {
+                                Group {
+                                    if isRefreshing {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.title2)
+                                            .foregroundStyle(.white)
+                                    }
+                                }
                                 .frame(width: 44, height: 44)
+                            }
+                            .disabled(isRefreshing)
+
+                            Button {
+                                HapticManager.shared.click()
+                                shareArticle(article)
+                            } label: {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                            }
                         }
+                        .glassEffect(.regular.interactive(), in: .capsule)
                     }
-                    .glassEffect(.regular.interactive(), in: .capsule)
                 }
-                .padding(.trailing, 16)
+
+                // Close button
+                Button {
+                    HapticManager.shared.click()
+                    dismiss()
+                } label: {
+                    GlassEffectContainer {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                }
             }
+            .padding(.trailing, 16)
         }
-        .overlay(alignment: .topLeading) {
-            // Close button - 44x44pt per Apple HIG
-            Button {
-                HapticManager.shared.click()
-                dismiss()
-            } label: {
-                GlassEffectContainer {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .glassEffect(.regular.interactive(), in: .circle)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            // Close button - positioned to match Apple's liquid glass back button
+            HStack {
+                Button {
+                    HapticManager.shared.click()
+                    dismiss()
+                } label: {
+                    GlassEffectContainer {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
                 }
+                Spacer()
             }
-            .padding(.leading, 16)
-            .padding(.top, 8)
+            .padding(.leading, 20)
+            .padding(.top, 6)
         }
         .overlay(alignment: .top) {
             // Article counter
@@ -886,6 +985,30 @@ struct NewsReelView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .offset(x: dragOffset)
+        .overlay(alignment: .leading) {
+            // Edge swipe gesture recognizer - only covers left edge
+            EdgeSwipeGestureView(
+                onDragChanged: { translation in
+                    dragOffset = translation * 0.8
+                },
+                onDismiss: {
+                    HapticManager.shared.click()
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        dragOffset = UIScreen.main.bounds.width
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        dismiss()
+                    }
+                },
+                onCancel: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragOffset = 0
+                    }
+                }
+            )
+            .frame(width: 25)  // Only capture touches in left 25pt
+        }
         .onAppear {
             viewModel.initialize(folders: store.folders, feeds: store.feeds, pinnedFolderID: pinnedFolderID)
             // viewModel.currentSourceIndex is already set by initialize based on pinnedFolderID
