@@ -16,6 +16,23 @@ struct FolderIndicatorView: View {
 
     @Namespace private var selectionAnimation
     @State private var contentWidth: CGFloat = 0
+    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollViewWidth: CGFloat = 0
+
+    /// Whether content overflows and needs scrolling
+    private var needsScrolling: Bool {
+        contentWidth > scrollViewWidth && scrollViewWidth > 0
+    }
+
+    /// Whether we're scrolled away from the leading edge
+    private var showLeadingFade: Bool {
+        needsScrolling && scrollOffset > 5
+    }
+
+    /// Whether we're scrolled away from the trailing edge
+    private var showTrailingFade: Bool {
+        needsScrolling && (contentWidth - scrollOffset - scrollViewWidth) > 5
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -62,6 +79,16 @@ struct FolderIndicatorView: View {
                             }
                         }
                         .scrollEdgeEffectStyle(.soft, for: .horizontal)
+                        .onScrollGeometryChange(for: CGFloat.self) { geo in
+                            geo.contentOffset.x
+                        } action: { _, newValue in
+                            scrollOffset = newValue
+                        }
+                        .onScrollGeometryChange(for: CGFloat.self) { geo in
+                            geo.containerSize.width
+                        } action: { _, newValue in
+                            scrollViewWidth = newValue
+                        }
                         .onChange(of: selectedIndex) { _, newIndex in
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 proxy.scrollTo(newIndex, anchor: .center)
@@ -72,11 +99,14 @@ struct FolderIndicatorView: View {
                     .clipShape(Capsule())
                     .mask {
                         HStack(spacing: 0) {
-                            // Leading fade - stronger at edge
+                            // Leading fade - only when scrolled
                             LinearGradient(
-                                stops: [
+                                stops: showLeadingFade ? [
                                     .init(color: .clear, location: 0),
                                     .init(color: .clear, location: 0.3),
+                                    .init(color: .white, location: 1)
+                                ] : [
+                                    .init(color: .white, location: 0),
                                     .init(color: .white, location: 1)
                                 ],
                                 startPoint: .leading,
@@ -87,18 +117,23 @@ struct FolderIndicatorView: View {
                             // Middle - fully visible
                             Rectangle().fill(.white)
 
-                            // Trailing fade - stronger at edge
+                            // Trailing fade - only when scrolled
                             LinearGradient(
-                                stops: [
+                                stops: showTrailingFade ? [
                                     .init(color: .white, location: 0),
                                     .init(color: .clear, location: 0.7),
                                     .init(color: .clear, location: 1)
+                                ] : [
+                                    .init(color: .white, location: 0),
+                                    .init(color: .white, location: 1)
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                             .frame(width: 36)
                         }
+                        .animation(.easeInOut(duration: 0.15), value: showLeadingFade)
+                        .animation(.easeInOut(duration: 0.15), value: showTrailingFade)
                     }
                     .glassEffect(.regular.interactive(), in: .capsule)
                     .frame(width: contentWidth > 0 ? panelWidth : nil)
