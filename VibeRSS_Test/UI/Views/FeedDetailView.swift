@@ -236,15 +236,28 @@ struct FeedDetailView: View {
         }
 
         var sawAny = false
+        var lastUpdateTime = Date.distantPast
+        var latestText = ""
+        let throttleInterval: TimeInterval = 0.05  // 50ms = 20hz
 
         let stream = await ArticleSummarizer.shared.streamSummary(url: item.link, length: length, seedText: item.summary)
         for await partial in stream {
             sawAny = true
-            inlineSummaries[item.id] = partial
+            latestText = partial
+            let now = Date()
+            if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
+                lastUpdateTime = now
+                inlineSummaries[item.id] = latestText
+                summaryErrors.remove(item.id)
+                aiSummarized.insert(item.id)
+            }
+        }
+        // Final update
+        if sawAny {
+            inlineSummaries[item.id] = latestText
             summaryErrors.remove(item.id)
             aiSummarized.insert(item.id)
-        }
-        if !sawAny {
+        } else {
             summaryErrors.insert(item.id)
         }
         summarizingID = nil

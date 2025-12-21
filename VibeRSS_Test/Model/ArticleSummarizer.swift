@@ -38,6 +38,7 @@ actor ArticleSummarizer {
         case reel       // ~50 words, between quick (25) and short (80)
         case reelExpanded  // ~100-120 words, for news reel expanded view
         case short
+        case detailed   // ~200-250 words, comprehensive summary for reader mode
     }
 
     private var cache: [String: String] = [:] // key: "<url>#<length>"
@@ -103,6 +104,7 @@ actor ArticleSummarizer {
         case .reel:  len = "reel"
         case .reelExpanded: len = "reelExpanded"
         case .short: len = "short"
+        case .detailed: len = "detailed"
         }
         let key = url.absoluteString + "#" + len
         lookupLock.lock()
@@ -138,6 +140,7 @@ actor ArticleSummarizer {
     private var reelSession: LanguageModelSession?
     private var reelExpandedSession: LanguageModelSession?
     private var summarySessionShort: LanguageModelSession?
+    private var summarySessionDetailed: LanguageModelSession?
 
     /// Reset all cached sessions - call when sessions become stale
     private func resetSessions() {
@@ -145,6 +148,7 @@ actor ArticleSummarizer {
         reelSession = nil
         reelExpandedSession = nil
         summarySessionShort = nil
+        summarySessionDetailed = nil
     }
 
     /// Re-warm a specific session type in the background after reset
@@ -167,6 +171,9 @@ actor ArticleSummarizer {
             case .short:
                 let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences (60-80 words). Cover the main point and key facts. Make it concise and informative. No lists, no emojis.")
                 await self.setShortSession(session)
+            case .detailed:
+                let session = LanguageModelSession(instructions: "Provide a comprehensive summary in 6-8 sentences (200-250 words). Cover the main thesis, key arguments, important facts, and conclusions. Be thorough but avoid repetition. No lists, no emojis.")
+                await self.setDetailedSession(session)
             }
         }
     }
@@ -185,6 +192,10 @@ actor ArticleSummarizer {
 
     private func setShortSession(_ session: LanguageModelSession) {
         if summarySessionShort == nil { summarySessionShort = session }
+    }
+
+    private func setDetailedSession(_ session: LanguageModelSession) {
+        if summarySessionDetailed == nil { summarySessionDetailed = session }
     }
     #endif
 
@@ -451,6 +462,7 @@ actor ArticleSummarizer {
         case .reel:  len = "reel"
         case .reelExpanded: len = "reelExpanded"
         case .short: len = "short"
+        case .detailed: len = "detailed"
         }
         return url.absoluteString + "#" + len
     }
@@ -566,6 +578,101 @@ actor ArticleSummarizer {
         if picked.isEmpty { return String(paragraphs.first!.prefix(maxChars)) }
         let joined = picked.joined(separator: "\n\n")
         return joined.count <= maxChars ? joined : String(joined.prefix(maxChars))
+    }
+
+    /// Stream a summary using pre-extracted article text (for reader mode)
+    func streamSummaryFromText(url: URL, articleText: String, length: Length) async -> AsyncStream<String> {
+        AsyncStream { continuation in
+            let worker = Task {
+                let key = makeCacheKey(url: url, length: length)
+                if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    continuation.yield(cached)
+                    continuation.finish()
+                    return
+                } else if cache[key] != nil {
+                    cache.removeValue(forKey: key)
+                    Self.removeFromLookup(key)
+                }
+                if Task.isCancelled { continuation.finish(); return }
+
+#if canImport(FoundationModels)
+                let model = SystemLanguageModel.default
+                guard case .available = model.availability else {
+                    continuation.finish()
+                    return
+                }
+
+                let baseText = String(articleText.prefix(150_000))
+                guard !baseText.isEmpty else {
+                    continuation.finish()
+                    return
+                }
+
+                // Only handle detailed length for reader mode
+                guard length == .detailed else {
+                    continuation.finish()
+                    return
+                }
+
+                let instructions = "Provide a comprehensive summary in 6-8 sentences (200-250 words). Cover the main thesis, key arguments, important facts, and conclusions. Be thorough but avoid repetition. No lists, no emojis."
+                let prompt = "Summarize this article comprehensively:\n\n"
+                let primer = self.selectStructureAwareSlice(from: baseText, targetChars: 5000)
+                let promptPrimer = prompt + primer
+
+                do {
+                    let session = self.summarySessionDetailed ?? LanguageModelSession(instructions: instructions)
+                    if self.summarySessionDetailed == nil { self.summarySessionDetailed = session }
+
+                    let streamDetailed = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                    var finalText: String = ""
+                    var revealedCount: Int = 0
+                    let step = 2
+                    let stepDelay: UInt64 = 20_000_000 // 20 ms
+                    for try await partial in streamDetailed {
+                        if Task.isCancelled { continuation.finish(); return }
+                        guard let t = partial.content.text, !t.isEmpty else { continue }
+                        finalText = t
+                        if t.count <= revealedCount { continue }
+                        var target = min(revealedCount + step, t.count)
+                        while target < t.count {
+                            let idx = t.index(t.startIndex, offsetBy: target)
+                            let prefix = String(t[..<idx])
+                            continuation.yield(prefix)
+                            HapticManager.shared.typingHaptic()
+                            revealedCount = target
+                            try? await Task.sleep(nanoseconds: stepDelay)
+                            if Task.isCancelled { continuation.finish(); return }
+                            target = min(revealedCount + step, t.count)
+                        }
+                        continuation.yield(t)
+                        HapticManager.shared.typingHaptic()
+                        revealedCount = t.count
+                    }
+                    if !finalText.isEmpty {
+                        self.cache[key] = finalText
+                        Self.addToLookup(key)
+                        self.saveCache()
+                        HapticManager.shared.success()
+                        continuation.finish()
+                        return
+                    } else {
+                        self.summarySessionDetailed = nil
+                        self.rewarmSession(.detailed)
+                    }
+                } catch {
+                    self.summarySessionDetailed = nil
+                    self.rewarmSession(.detailed)
+                    continuation.finish()
+                    return
+                }
+#else
+                continuation.finish()
+#endif
+            }
+            continuation.onTermination = { _ in
+                worker.cancel()
+            }
+        }
     }
 
     func streamSummary(url: URL, length: Length, seedText: String?) async -> AsyncStream<String> {
@@ -726,6 +833,63 @@ actor ArticleSummarizer {
                     } catch {
                         self.summarySessionShort = nil
                         self.rewarmSession(.short)
+                        continuation.finish()
+                        return
+                    }
+                case .detailed:
+                    // Detailed summaries (~200-250 words) - comprehensive summary for reader mode
+                    let instructions = "Provide a comprehensive summary in 6-8 sentences (200-250 words). Cover the main thesis, key arguments, important facts, and conclusions. Be thorough but avoid repetition. No lists, no emojis."
+                    var prompt = "Summarize this article comprehensively:\n\n"
+                    if let seed = seedText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines), !seed.isEmpty {
+                        let s = String(seed.prefix(900))
+                        prompt += "Preview/context from feed:\n\(s)\n\n"
+                    }
+                    // Use structure-aware slice with more content for detailed summaries
+                    let primer = self.selectStructureAwareSlice(from: baseText, targetChars: 5000)
+                    let promptPrimer = prompt + primer
+                    do {
+                        let session = self.summarySessionDetailed ?? LanguageModelSession(instructions: instructions)
+                        if self.summarySessionDetailed == nil { self.summarySessionDetailed = session }
+
+                        let streamDetailed = session.streamResponse(to: promptPrimer, generating: InlineSummary.self)
+                        var finalText: String = ""
+                        var revealedCount: Int = 0
+                        let step = 2
+                        let stepDelay: UInt64 = 20_000_000 // 20 ms
+                        for try await partial in streamDetailed {
+                            if Task.isCancelled { continuation.finish(); return }
+                            guard let t = partial.content.text, !t.isEmpty else { continue }
+                            finalText = t
+                            if t.count <= revealedCount { continue }
+                            var target = min(revealedCount + step, t.count)
+                            while target < t.count {
+                                let idx = t.index(t.startIndex, offsetBy: target)
+                                let prefix = String(t[..<idx])
+                                continuation.yield(prefix)
+                                HapticManager.shared.typingHaptic()
+                                revealedCount = target
+                                try? await Task.sleep(nanoseconds: stepDelay)
+                                if Task.isCancelled { continuation.finish(); return }
+                                target = min(revealedCount + step, t.count)
+                            }
+                            continuation.yield(t)
+                            HapticManager.shared.typingHaptic()
+                            revealedCount = t.count
+                        }
+                        if !finalText.isEmpty {
+                            self.cache[key] = finalText
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            HapticManager.shared.success()
+                            continuation.finish()
+                            return
+                        } else {
+                            self.summarySessionDetailed = nil
+                            self.rewarmSession(.detailed)
+                        }
+                    } catch {
+                        self.summarySessionDetailed = nil
+                        self.rewarmSession(.detailed)
                         continuation.finish()
                         return
                     }

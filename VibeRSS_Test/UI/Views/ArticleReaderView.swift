@@ -36,6 +36,9 @@ struct ArticleReaderView: View {
     @State private var error: String?
     @State private var showSettings = false
     @State private var isSaved: Bool = false
+    @State private var isGeneratingSummary = false
+    @State private var summaryText: String = ""
+    @State private var showingSummary = false  // Toggle between article and summary view
     @AppStorage("readerFontSize") private var fontSize: Double = 18
 
     // Format date as relative time string
@@ -55,6 +58,9 @@ struct ArticleReaderView: View {
                     loadingView
                 } else if let error = error {
                     errorView(error)
+                } else if showingSummary {
+                    // Show summary view
+                    summaryContentView
                 } else if let content = extractedContent {
                     articleWebView(content)
                 }
@@ -66,46 +72,133 @@ struct ArticleReaderView: View {
                     Button("Done") {
                         dismiss()
                     }
-                }
-
-                ToolbarItem(placement: .bottomBar) {
-                    Spacer()
-                }
-
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Button {
-                        toggleSaved()
-                    } label: {
-                        Image(systemName: isSaved ? "heart.fill" : "heart")
-                            .foregroundStyle(isSaved ? .red : .primary)
-                    }
-
-                    Button {
-                        showSettings.toggle()
-                    } label: {
-                        Image(systemName: "textformat.size")
-                    }
-
-                    Button {
-                        UIApplication.shared.open(url)
-                    } label: {
-                        Image(systemName: "safari")
-                    }
-
-                    ShareLink(item: url) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
+                    .tint(.primary)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Spacer()
+                    floatingToolbar
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 8)
+            }
         }
-        .sheet(isPresented: $showSettings) {
-            readerSettingsSheet
+        .overlay(alignment: .bottom) {
+            if showSettings {
+                fontSizeOverlay
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: showSettings)
         .task {
             await loadArticle()
         }
         .onAppear {
             isSaved = SavedArticlesManager.shared.isSaved(url: url)
+        }
+    }
+
+    // MARK: - Floating Toolbar
+
+    private var floatingToolbar: some View {
+        HStack(spacing: 0) {
+            // Summarize button
+            Button {
+                handleSummarizeButtonTap()
+            } label: {
+                Group {
+                    if isGeneratingSummary {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: showingSummary ? "doc.text" : "sparkles")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+            .contentTransition(.symbolEffect(.replace))
+            .disabled(extractedContent == nil)
+
+            // Save button
+            Button {
+                toggleSaved()
+            } label: {
+                Image(systemName: isSaved ? "heart.fill" : "heart")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(isSaved ? .red : .white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+            .contentTransition(.symbolEffect(.replace))
+
+            // Text size button
+            Button {
+                showSettings.toggle()
+            } label: {
+                Image(systemName: "textformat.size")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+
+            // Safari button
+            Button {
+                UIApplication.shared.open(url)
+            } label: {
+                Image(systemName: "safari")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+
+            // Share button
+            ShareLink(item: url) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .overlay {
+            if isGeneratingSummary {
+                AppleIntelligenceGlow<Capsule>(
+                    shape: Capsule(),
+                    isActive: true,
+                    showIdle: false,
+                    scale: 1.0
+                )
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    // MARK: - Summarize Button Action
+
+    private func handleSummarizeButtonTap() {
+        HapticManager.shared.click()
+        if showingSummary && !summaryText.isEmpty && !isGeneratingSummary {
+            // Toggle back to article
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingSummary = false
+            }
+        } else if !isGeneratingSummary {
+            // Generate or show summary
+            Task { await generateSummary() }
         }
     }
 
@@ -193,49 +286,152 @@ struct ArticleReaderView: View {
         .ignoresSafeArea()
     }
 
-    private var readerSettingsSheet: some View {
-        VStack(spacing: 24) {
-            // Drag indicator
-            Capsule()
-                .fill(Color.secondary.opacity(0.4))
-                .frame(width: 36, height: 5)
-                .padding(.top, 8)
+    private var fontSizeOverlay: some View {
+        VStack(spacing: 0) {
+            // Tap outside to dismiss
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showSettings = false
+                }
 
-            Text("Text Size")
-                .font(.roundedHeadline)
+            // Font size controls
+            HStack(spacing: 16) {
+                Button {
+                    if fontSize > 14 { fontSize -= 2 }
+                } label: {
+                    Image(systemName: "textformat.size.smaller")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(GlassToolbarButtonStyle())
 
-            GlassEffectContainer {
-                HStack(spacing: 20) {
-                    Button {
-                        if fontSize > 14 { fontSize -= 2 }
-                    } label: {
-                        Image(systemName: "textformat.size.smaller")
-                            .font(.title2)
-                            .frame(width: 48, height: 48)
+                Text("\(Int(fontSize))")
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44)
+
+                Button {
+                    if fontSize < 28 { fontSize += 2 }
+                } label: {
+                    Image(systemName: "textformat.size.larger")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(GlassToolbarButtonStyle())
+
+                Divider()
+                    .frame(height: 24)
+                    .background(Color.white.opacity(0.3))
+
+                Button {
+                    showSettings = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(GlassToolbarButtonStyle())
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .glassEffect(.regular, in: .capsule)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 70)  // Above the toolbar
+        }
+    }
+
+    private var summaryContentView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header with sparkle icon
+                HStack(spacing: 10) {
+                    AnimatedGradientSparkle()
+                    Text("Summary")
+                        .font(.system(.title, design: .rounded, weight: .bold))
+                }
+                .padding(.top, 20)
+
+                // Article title
+                if let title = articleTitle ?? extractedContent?.extracted.title {
+                    Text(title)
+                        .font(.system(.title2, design: .default, weight: .semibold))
+                        .foregroundStyle(colorScheme == .dark ? .white : .black)
+                }
+
+                // Summary text with streaming effect
+                if summaryText.isEmpty && isGeneratingSummary {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Generating summary...")
+                            .foregroundStyle(secondaryTextColor)
                     }
-                    .glassEffect(.regular.interactive(), in: .circle)
+                    .padding(.top, 8)
+                } else {
+                    Text(summaryText)
+                        .font(.system(size: fontSize + 2))
+                        .lineSpacing(6)
+                        .foregroundStyle(colorScheme == .dark ? .white : .black)
+                }
 
-                    Text("\(Int(fontSize))")
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.medium)
-                        .frame(width: 50)
+                Spacer(minLength: 100)
+            }
+            .padding(.horizontal, 20)
+        }
+        .background(backgroundColor)
+    }
 
-                    Button {
-                        if fontSize < 28 { fontSize += 2 }
-                    } label: {
-                        Image(systemName: "textformat.size.larger")
-                            .font(.title2)
-                            .frame(width: 48, height: 48)
-                    }
-                    .glassEffect(.regular.interactive(), in: .circle)
+    private func generateSummary() async {
+        guard let content = extractedContent else { return }
+
+        // Check for cached summary first
+        if let cached = await ArticleSummarizer.shared.cachedSummary(for: url, length: .detailed) {
+            summaryText = cached
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingSummary = true
+            }
+            return
+        }
+
+        isGeneratingSummary = true
+        summaryText = ""
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showingSummary = true
+        }
+
+        // Extract readable text from the styled HTML
+        let articleText = await ArticleSummarizer.shared.extractReadableText(from: content.styledHTML)
+
+        // Stream the summary with throttled UI updates (max ~20hz to stay under 32hz limit)
+        let stream = await ArticleSummarizer.shared.streamSummaryFromText(
+            url: url,
+            articleText: articleText,
+            length: .detailed
+        )
+
+        var lastUpdateTime = Date.distantPast
+        var latestText = ""
+        let throttleInterval: TimeInterval = 0.05  // 50ms = 20hz
+
+        for await partial in stream {
+            latestText = partial
+            let now = Date()
+            if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
+                lastUpdateTime = now
+                await MainActor.run {
+                    summaryText = latestText
                 }
             }
-
-            Spacer()
         }
-        .padding(.top, 8)
-        .presentationDetents([.height(180)])
-        .presentationDragIndicator(.hidden)
+
+        // Final update to ensure we have the complete text
+        await MainActor.run {
+            summaryText = latestText
+            isGeneratingSummary = false
+        }
     }
 
     // MARK: - Data Loading
@@ -322,17 +518,41 @@ struct ReeeederWebView: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = colorScheme == .dark ? UIColor(white: 0.08, alpha: 1) : UIColor(white: 0.98, alpha: 1)
         webView.scrollView.backgroundColor = webView.backgroundColor
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+        webView.scrollView.bouncesZoom = false
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.navigationDelegate = context.coordinator
+        webView.scrollView.delegate = context.coordinator
+
+        // Initial load
+        let modifiedHTML = injectFontSize(styledHTML, fontSize: fontSize)
+        webView.loadHTMLString(modifiedHTML, baseURL: baseURL)
+        context.coordinator.lastFontSize = fontSize
 
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // Inject custom font size into the styled HTML
-        let modifiedHTML = injectFontSize(styledHTML, fontSize: fontSize)
-        webView.loadHTMLString(modifiedHTML, baseURL: baseURL)
-        webView.backgroundColor = colorScheme == .dark ? UIColor(white: 0.08, alpha: 1) : UIColor(white: 0.98, alpha: 1)
-        webView.scrollView.backgroundColor = webView.backgroundColor
+        // Update background color
+        let newBgColor = colorScheme == .dark ? UIColor(white: 0.08, alpha: 1) : UIColor(white: 0.98, alpha: 1)
+        webView.backgroundColor = newBgColor
+        webView.scrollView.backgroundColor = newBgColor
+
+        // Update font size via JavaScript (live update without reload)
+        if context.coordinator.lastFontSize != fontSize {
+            context.coordinator.lastFontSize = fontSize
+            let js = """
+            (function() {
+                document.body.style.fontSize = '\(fontSize)px';
+                document.querySelectorAll('p, li, td, th').forEach(function(el) { el.style.fontSize = '\(fontSize)px'; });
+                document.querySelectorAll('h1').forEach(function(el) { el.style.fontSize = '\(fontSize + 6)px'; });
+                document.querySelectorAll('h2').forEach(function(el) { el.style.fontSize = '\(fontSize + 4)px'; });
+                document.querySelectorAll('h3').forEach(function(el) { el.style.fontSize = '\(fontSize + 2)px'; });
+            })();
+            """
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -356,6 +576,7 @@ struct ReeeederWebView: UIViewRepresentable {
         // SF Pro for body, SF Pro Rounded for titles
         // Also style the source badge with favicon
         let fontSizeCSS = """
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
             body {
                 font-size: \(fontSize)px !important;
@@ -510,7 +731,9 @@ struct ReeeederWebView: UIViewRepresentable {
         return fontSizeCSS + html
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, UIScrollViewDelegate {
+        var lastFontSize: Double = 0
+
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
                 UIApplication.shared.open(url)
@@ -519,5 +742,48 @@ struct ReeeederWebView: UIViewRepresentable {
                 decisionHandler(.allow)
             }
         }
+
+        // Prevent zooming
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            scrollView.pinchGestureRecognizer?.isEnabled = false
+        }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            return nil
+        }
     }
 }
+
+// MARK: - Glass Toolbar Button Style
+
+struct GlassToolbarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Animated Gradient Sparkle
+
+struct AnimatedGradientSparkle: View {
+    @State private var animateGradient = false
+
+    var body: some View {
+        Image(systemName: "sparkles")
+            .font(.system(size: 28))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [.purple, .blue, .cyan, .purple],
+                    startPoint: animateGradient ? .topLeading : .bottomTrailing,
+                    endPoint: animateGradient ? .bottomTrailing : .topLeading
+                )
+            )
+            .onAppear {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    animateGradient = true
+                }
+            }
+    }
+}
+
