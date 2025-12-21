@@ -1277,7 +1277,17 @@ struct ContentView: View {
                 .presentationDetents([.large])
         }
         .fullScreenCover(isPresented: $showingNewsReel) {
-            NewsReelView(pinnedFolderID: UUID(uuidString: pinnedFolderID))
+            // Calculate initial source index: sources are [All, folder1, folder2, ...]
+            // So pinned folder at index N in folders array = source index N + 1
+            let pinnedUUID = UUID(uuidString: pinnedFolderID)
+            let initialIndex: Int = {
+                guard let pinnedID = pinnedUUID,
+                      let folderIndex = store.folders.firstIndex(where: { $0.id == pinnedID }) else {
+                    return 0
+                }
+                return folderIndex + 1  // +1 because "All" is at index 0
+            }()
+            NewsReelView(pinnedFolderID: pinnedUUID, initialSourceIndex: initialIndex)
                 .environmentObject(store)
         }
     }

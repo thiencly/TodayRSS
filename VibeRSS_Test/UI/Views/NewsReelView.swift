@@ -152,6 +152,8 @@ class HorizontalPagerViewController: UIViewController, UIScrollViewDelegate {
     private var pageWidth: CGFloat { view.bounds.width }
     private var currentPage: Int = 0
     private var isAnimating = false
+    private var hasPerformedInitialScroll = false
+    private var pendingScrollPage: Int?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -162,6 +164,29 @@ class HorizontalPagerViewController: UIViewController, UIScrollViewDelegate {
         super.viewDidLayoutSubviews()
         updateContentSize()
         layoutVisiblePages()
+
+        // Handle pending scroll that was requested before layout
+        if let pendingPage = pendingScrollPage, pageWidth > 0 {
+            pendingScrollPage = nil
+            scrollView.contentOffset.x = CGFloat(pendingPage) * pageWidth
+            currentPage = pendingPage
+            hasPerformedInitialScroll = true
+            layoutVisiblePages()
+            return
+        }
+
+        // Scroll to initial position on first layout
+        if !hasPerformedInitialScroll, let coordinator = coordinator, pageWidth > 0 {
+            let initialPage = coordinator.lastReportedIndex
+            if initialPage > 0 && initialPage < coordinator.itemCount {
+                scrollView.contentOffset.x = CGFloat(initialPage) * pageWidth
+                currentPage = initialPage
+                hasPerformedInitialScroll = true
+                layoutVisiblePages()
+            } else {
+                hasPerformedInitialScroll = true
+            }
+        }
     }
 
     private func setupScrollView() {
@@ -287,8 +312,13 @@ class HorizontalPagerViewController: UIViewController, UIScrollViewDelegate {
 
     func scrollToPage(_ page: Int, animated: Bool) {
         guard let coordinator = coordinator,
-              page >= 0 && page < coordinator.itemCount,
-              pageWidth > 0 else { return }
+              page >= 0 && page < coordinator.itemCount else { return }
+
+        // If layout hasn't happened yet, store as pending scroll
+        guard pageWidth > 0 else {
+            pendingScrollPage = page
+            return
+        }
 
         let targetOffset = CGFloat(page) * pageWidth
 
@@ -703,7 +733,10 @@ struct NewsReelView: View {
     @StateObject private var viewModel = NewsReelViewModel()
 
     /// The pinned folder ID to start on (optional)
-    var pinnedFolderID: UUID? = nil
+    let pinnedFolderID: UUID?
+
+    /// Initial source index to start on (calculated from pinnedFolderID)
+    let initialSourceIndex: Int
 
     // Sharing
     @State private var shareItem: URL?
@@ -715,7 +748,13 @@ struct NewsReelView: View {
     @State private var isRefreshing: Bool = false
 
     // Track current source for horizontal TabView paging
-    @State private var selectedSourceIndex: Int = 0
+    @State private var selectedSourceIndex: Int
+
+    init(pinnedFolderID: UUID? = nil, initialSourceIndex: Int = 0) {
+        self.pinnedFolderID = pinnedFolderID
+        self.initialSourceIndex = initialSourceIndex
+        _selectedSourceIndex = State(initialValue: initialSourceIndex)
+    }
 
     var body: some View {
         ZStack {
@@ -849,8 +888,8 @@ struct NewsReelView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             viewModel.initialize(folders: store.folders, feeds: store.feeds, pinnedFolderID: pinnedFolderID)
-            // Sync selectedSourceIndex to match viewModel's starting source
-            selectedSourceIndex = viewModel.currentSourceIndex
+            // viewModel.currentSourceIndex is already set by initialize based on pinnedFolderID
+            // selectedSourceIndex is initialized in init with initialSourceIndex
         }
         .onChange(of: selectedSourceIndex) { _, newIndex in
             viewModel.selectSource(at: newIndex)
@@ -966,11 +1005,27 @@ struct SourcePageView: View {
     }
 
     var body: some View {
-        ReelsVerticalPager(
-            items: articles.map { $0.id as AnyHashable },
-            currentIndex: $currentArticleIndex
-        ) { index in
-            articleCard(at: index)
+        Group {
+            if articles.isEmpty {
+                // Show loading while articles are being fetched
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.2)
+                    Text("Loading articles...")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+            } else {
+                ReelsVerticalPager(
+                    items: articles.map { $0.id as AnyHashable },
+                    currentIndex: $currentArticleIndex
+                ) { index in
+                    articleCard(at: index)
+                }
+            }
         }
         .ignoresSafeArea()
         .onChange(of: currentArticleIndex) { _, newIndex in
