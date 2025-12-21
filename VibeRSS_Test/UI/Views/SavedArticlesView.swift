@@ -3,7 +3,13 @@ import SwiftUI
 struct SavedArticlesView: View {
     @State private var savedManager = SavedArticlesManager.shared
     @State private var webLink: WebLink?
+    @State private var summarizingID: UUID?
+    @State private var inlineSummaries: [UUID: String] = [:]
+    @State private var expandedSummaries: Set<UUID> = []
+    @State private var summaryErrors: Set<UUID> = []
+    @State private var hasCachedSummaryCache: Set<UUID> = []
     @State private var readURLs: Set<URL> = []
+    @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
 
     var body: some View {
         Group {
@@ -12,24 +18,32 @@ struct SavedArticlesView: View {
             } else {
                 List {
                     ForEach(savedManager.savedArticles) { article in
-                        SavedArticleRow(
-                            article: article,
-                            isRead: readURLs.contains(article.url),
-                            onTap: {
+                        let rowState = makeRowState(for: article)
+                        ArticleRowView(
+                            state: rowState,
+                            onTapArticle: {
                                 readURLs.insert(article.url)
                                 Task { await ArticleReadStateManager.shared.markAsRead(article.url) }
                                 webLink = WebLink(url: article.url, title: article.title, date: article.pubDate, thumbnailURL: article.thumbnailURL, sourceIconURL: article.sourceIconURL, sourceTitle: article.sourceTitle)
                             },
-                            onUnsave: {
+                            onTapSummarize: {
+                                handleSummarizeAction(for: article)
+                            },
+                            onSave: {
                                 withAnimation {
                                     savedManager.unsave(url: article.url)
                                 }
-                            }
+                            },
+                            tintColor: AppTint(rawValue: appTint)?.color ?? .blue
                         )
+                        .equatable()
+                        .id(article.id)
                     }
                     .onDelete(perform: deleteArticles)
                 }
                 .listStyle(.plain)
+                .onChange(of: savedManager.savedArticles.count) { _, _ in preloadSummaries() }
+                .task { preloadSummaries() }
             }
         }
         .navigationTitle("Saved")
@@ -48,6 +62,122 @@ struct SavedArticlesView: View {
         }
     }
 
+    // MARK: - Row State Factory
+
+    private func makeRowState(for article: SavedArticle) -> ArticleRowState {
+        let aiSummary = inlineSummaries[article.id]
+        let hasCached = (aiSummary != nil) || hasCachedSummaryCache.contains(article.id)
+        let isRead = readURLs.contains(article.url)
+
+        return ArticleRowState(
+            id: article.id,
+            title: article.title,
+            link: article.url,
+            pubDate: article.pubDate,
+            thumbnailURL: article.thumbnailURL,
+            sourceIconURL: article.sourceIconURL,
+            sourceTitle: article.sourceTitle ?? "Source",
+            isNew: false,  // Saved articles are never "new"
+            isRead: isRead,
+            hasSummary: hasCached,
+            summaryText: aiSummary,
+            isExpanded: expandedSummaries.contains(article.id),
+            isError: summaryErrors.contains(article.id),
+            isGenerating: summarizingID == article.id,
+            isSaved: true  // All articles in this view are saved
+        )
+    }
+
+    // MARK: - Summary Handling
+
+    private func handleSummarizeAction(for article: SavedArticle) {
+        let aiSummary = inlineSummaries[article.id]
+        let hasSummary = (aiSummary != nil)
+
+        if hasSummary {
+            let length: ArticleSummarizer.Length = .short
+            if expandedSummaries.contains(article.id) {
+                expandedSummaries.remove(article.id)
+                Task { await ArticleSummarizer.shared.setExpanded(false, url: article.url, length: length) }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedSummaries.insert(article.id)
+                }
+                Task { await ArticleSummarizer.shared.setExpanded(true, url: article.url, length: length) }
+            }
+        } else if summarizingID != article.id {
+            Task { await summarize(article) }
+        }
+    }
+
+    private func preloadSummaries() {
+        let length: ArticleSummarizer.Length = .short
+        Task { @MainActor in
+            var updated = inlineSummaries
+            var expanded = expandedSummaries
+            var cachedStatus = hasCachedSummaryCache
+
+            for article in savedManager.savedArticles {
+                if ArticleSummarizer.hasCachedSummary(url: article.url, length: length) {
+                    cachedStatus.insert(article.id)
+                }
+
+                if updated[article.id] == nil, let cached = await ArticleSummarizer.shared.cachedSummary(for: article.url, length: length) {
+                    updated[article.id] = cached
+                    cachedStatus.insert(article.id)
+                }
+                if await ArticleSummarizer.shared.isExpanded(url: article.url, length: length) {
+                    expanded.insert(article.id)
+                } else {
+                    expanded.remove(article.id)
+                }
+            }
+            inlineSummaries = updated
+            expandedSummaries = expanded
+            hasCachedSummaryCache = cachedStatus
+        }
+    }
+
+    @MainActor private func summarize(_ article: SavedArticle) async {
+        summaryErrors.remove(article.id)
+        summarizingID = article.id
+        let length: ArticleSummarizer.Length = .short
+
+        if !expandedSummaries.contains(article.id) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedSummaries.insert(article.id)
+            }
+            Task { await ArticleSummarizer.shared.setExpanded(true, url: article.url, length: length) }
+        }
+
+        var sawAny = false
+        var lastUpdateTime = Date.distantPast
+        var latestText = ""
+        let throttleInterval: TimeInterval = 0.05
+
+        let stream = await ArticleSummarizer.shared.streamSummary(url: article.url, length: length, seedText: nil)
+        for await partial in stream {
+            sawAny = true
+            latestText = partial
+            let now = Date()
+            if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
+                lastUpdateTime = now
+                inlineSummaries[article.id] = latestText
+                summaryErrors.remove(article.id)
+            }
+        }
+
+        if sawAny {
+            inlineSummaries[article.id] = latestText
+            summaryErrors.remove(article.id)
+        } else {
+            summaryErrors.insert(article.id)
+        }
+        summarizingID = nil
+    }
+
+    // MARK: - Empty State
+
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "heart.slash")
@@ -65,106 +195,12 @@ struct SavedArticlesView: View {
         }
     }
 
+    // MARK: - Actions
+
     private func deleteArticles(at offsets: IndexSet) {
         for index in offsets {
             let article = savedManager.savedArticles[index]
             savedManager.unsave(url: article.url)
         }
-    }
-}
-
-// MARK: - Saved Article Row
-
-struct SavedArticleRow: View {
-    let article: SavedArticle
-    let isRead: Bool
-    let onTap: () -> Void
-    let onUnsave: () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Thumbnail
-                if let thumbnailURL = article.thumbnailURL {
-                    CachedAsyncImage(url: thumbnailURL, contentMode: .fill, size: CGSize(width: 80, height: 80)) {
-                        thumbnailPlaceholder
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    thumbnailPlaceholder
-                        .frame(width: 80, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    // Title
-                    Text(article.title)
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(isRead ? .secondary : .primary)
-                        .lineLimit(2)
-
-                    // Source and date
-                    HStack(spacing: 6) {
-                        if let iconURL = article.sourceIconURL {
-                            CachedAsyncImage(url: iconURL, size: CGSize(width: 14, height: 14)) {
-                                Image(systemName: "globe")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(width: 14, height: 14)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                        }
-
-                        if let source = article.sourceTitle {
-                            Text(source)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let date = article.pubDate {
-                            Text("·")
-                                .foregroundStyle(.tertiary)
-                            Text(date, style: .relative)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    // Saved date
-                    HStack(spacing: 4) {
-                        Image(systemName: "heart.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                        Text("Saved \(article.savedDate, style: .relative)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-
-                Spacer()
-            }
-        }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive, action: onUnsave) {
-                Label("Unsave", systemImage: "heart.slash")
-            }
-        }
-        .contextMenu {
-            Button(role: .destructive, action: onUnsave) {
-                Label("Remove from Saved", systemImage: "heart.slash")
-            }
-        }
-    }
-
-    private var thumbnailPlaceholder: some View {
-        Rectangle()
-            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-            .overlay {
-                Image(systemName: "doc.text")
-                    .foregroundStyle(.secondary)
-            }
     }
 }
