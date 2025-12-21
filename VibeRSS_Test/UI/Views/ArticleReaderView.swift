@@ -9,6 +9,45 @@ import SwiftUI
 import WebKit
 import Reeeed
 
+// MARK: - WebView Font Size Manager
+final class ReaderWebViewManager {
+    static let shared = ReaderWebViewManager()
+    private init() {}
+
+    var currentWebView: WKWebView?
+
+    func updateFontSize(_ fontSize: Double) {
+        guard let webView = currentWebView else {
+            print("ReaderWebViewManager: No webView available")
+            return
+        }
+        let js = """
+        (function() {
+            var style = document.getElementById('dynamic-font-size');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = 'dynamic-font-size';
+                document.head.appendChild(style);
+            }
+            style.textContent = `
+                body { font-size: \(fontSize)px !important; }
+                p, li, td, th { font-size: \(fontSize)px !important; }
+                h1 { font-size: \(fontSize + 6)px !important; }
+                h2 { font-size: \(fontSize + 4)px !important; }
+                h3 { font-size: \(fontSize + 2)px !important; }
+            `;
+        })();
+        """
+        DispatchQueue.main.async {
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error {
+                    print("ReaderWebViewManager: JS error - \(error)")
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Article Reader View
 
 struct ArticleReaderView: View {
@@ -76,21 +115,23 @@ struct ArticleReaderView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                HStack {
-                    Spacer()
-                    floatingToolbar
+                VStack(spacing: 12) {
+                    // Font size overlay (above toolbar)
+                    if showSettings {
+                        fontSizeOverlay
+                    }
+
+                    // Toolbar
+                    HStack {
+                        Spacer()
+                        floatingToolbar
+                    }
+                    .padding(.trailing, 16)
                 }
-                .padding(.trailing, 16)
                 .padding(.bottom, 8)
+                .animation(.easeOut(duration: 0.2), value: showSettings)
             }
         }
-        .overlay(alignment: .bottom) {
-            if showSettings {
-                fontSizeOverlay
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: showSettings)
         .task {
             await loadArticle()
         }
@@ -166,6 +207,18 @@ struct ArticleReaderView: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+
+            // Close button
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.8))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -279,7 +332,7 @@ struct ArticleReaderView: View {
         ReeeederWebView(
             styledHTML: content.styledHTML,
             baseURL: content.baseURL,
-            fontSize: fontSize,
+            fontSize: $fontSize,
             colorScheme: colorScheme,
             relativeDate: relativeDate
         )
@@ -287,61 +340,61 @@ struct ArticleReaderView: View {
     }
 
     private var fontSizeOverlay: some View {
-        VStack(spacing: 0) {
-            // Tap outside to dismiss
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showSettings = false
+        HStack(spacing: 0) {
+            Button {
+                if fontSize > 14 {
+                    let newSize = fontSize - 2
+                    fontSize = newSize
+                    ReaderWebViewManager.shared.updateFontSize(newSize)
                 }
-
-            // Font size controls
-            HStack(spacing: 16) {
-                Button {
-                    if fontSize > 14 { fontSize -= 2 }
-                } label: {
-                    Image(systemName: "textformat.size.smaller")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(GlassToolbarButtonStyle())
-
-                Text("\(Int(fontSize))")
-                    .font(.system(.title2, design: .rounded, weight: .semibold))
+            } label: {
+                Image(systemName: "textformat.size.smaller")
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white)
-                    .frame(width: 44)
-
-                Button {
-                    if fontSize < 28 { fontSize += 2 }
-                } label: {
-                    Image(systemName: "textformat.size.larger")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(GlassToolbarButtonStyle())
-
-                Divider()
-                    .frame(height: 24)
-                    .background(Color.white.opacity(0.3))
-
-                Button {
-                    showSettings = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(GlassToolbarButtonStyle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 70)  // Above the toolbar
+            .buttonStyle(GlassToolbarButtonStyle())
+
+            Text("\(Int(fontSize))")
+                .font(.system(.title2, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 50)
+
+            Button {
+                if fontSize < 28 {
+                    let newSize = fontSize + 2
+                    fontSize = newSize
+                    ReaderWebViewManager.shared.updateFontSize(newSize)
+                }
+            } label: {
+                Image(systemName: "textformat.size.larger")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
+
+            Rectangle()
+                .fill(Color.white.opacity(0.3))
+                .frame(width: 1, height: 24)
+                .padding(.horizontal, 8)
+
+            Button {
+                showSettings = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassToolbarButtonStyle())
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
     }
 
     private var summaryContentView: some View {
@@ -506,7 +559,7 @@ struct ArticleReaderView: View {
 struct ReeeederWebView: UIViewRepresentable {
     let styledHTML: String
     let baseURL: URL?
-    let fontSize: Double
+    @Binding var fontSize: Double
     let colorScheme: ColorScheme
     let relativeDate: String?
 
@@ -524,6 +577,11 @@ struct ReeeederWebView: UIViewRepresentable {
         webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.navigationDelegate = context.coordinator
         webView.scrollView.delegate = context.coordinator
+
+        // Store reference for font size updates via manager
+        ReaderWebViewManager.shared.currentWebView = webView
+        context.coordinator.webView = webView
+        print("ReaderWebViewManager: WebView registered")
 
         // Initial load
         let modifiedHTML = injectFontSize(styledHTML, fontSize: fontSize)
@@ -733,6 +791,7 @@ struct ReeeederWebView: UIViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate, UIScrollViewDelegate {
         var lastFontSize: Double = 0
+        weak var webView: WKWebView?
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
