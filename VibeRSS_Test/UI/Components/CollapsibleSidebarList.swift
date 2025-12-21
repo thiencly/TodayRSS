@@ -103,6 +103,9 @@ final class SidebarCollectionVC: UIViewController {
     // Chevron color (separate from tint for default theme)
     var chevronColor: UIColor = .systemBlue
 
+    // Icon color for SF Symbols (adapts to light/dark for default)
+    var iconColor: UIColor = .label
+
     // Fixed top inset for collapsed At a Glance card
     // Card overlays the list when expanded - list position stays static
     static let collapsedCardInset: CGFloat = 60
@@ -299,16 +302,19 @@ final class SidebarCollectionVC: UIViewController {
         }
 
         // Fixed items (Latest, Today, Saved)
-        let fixedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { cell, indexPath, item in
+        let fixedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
+            guard let self = self else { return }
             var content = UIListContentConfiguration.cell()
 
             switch item {
             case .latest:
                 content.text = "Latest"
                 content.image = UIImage(systemName: "clock")
+                content.imageProperties.tintColor = self.iconColor
             case .today:
                 content.text = "Today"
                 content.image = UIImage(systemName: "newspaper")
+                content.imageProperties.tintColor = self.iconColor
             case .saved(let count):
                 content.text = "Saved"
                 content.image = UIImage(systemName: "heart.fill")
@@ -336,6 +342,7 @@ final class SidebarCollectionVC: UIViewController {
             var content = UIListContentConfiguration.cell()
             content.image = UIImage(systemName: "folder")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+            content.imageProperties.tintColor = self.iconColor
 
             // Show dot next to name if has new articles
             if hasNew {
@@ -369,6 +376,7 @@ final class SidebarCollectionVC: UIViewController {
             var content = UIListContentConfiguration.cell()
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+            content.imageProperties.tintColor = self.iconColor
 
             // Show dot next to name if has new articles
             if hasNew {
@@ -409,6 +417,7 @@ final class SidebarCollectionVC: UIViewController {
             var content = UIListContentConfiguration.cell()
             content.image = UIImage(systemName: "doc.text")
             content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+            content.imageProperties.tintColor = self.iconColor
 
             // Show dot next to name if has new articles
             if hasNew {
@@ -686,6 +695,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     @Binding var sourcesExpanded: Bool
     var tintColor: UIColor = .systemBlue
     var chevronColor: UIColor = .systemBlue
+    var iconColor: UIColor = .label
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
@@ -712,6 +722,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.sourcesExpanded = sourcesExpanded
         vc.tintColor = tintColor
         vc.chevronColor = chevronColor
+        vc.iconColor = iconColor
 
         vc.onNavigate = onNavigate
 

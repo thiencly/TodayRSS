@@ -1008,7 +1008,8 @@ struct ContentView: View {
                 set: { areSourcesCollapsed = !$0 }
             ),
             tintColor: AppTint(rawValue: appTint)?.uiColor ?? .systemBlue,
-            chevronColor: AppTint(rawValue: appTint)?.chevronUIColor ?? .systemBlue,
+            chevronColor: AppTint(rawValue: appTint)?.chevronUIColor ?? .label,
+            iconColor: AppTint(rawValue: appTint)?.iconUIColor ?? .label,
             onNavigate: { destination in
                 handleNavigation(destination)
             },
