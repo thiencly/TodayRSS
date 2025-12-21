@@ -280,9 +280,8 @@ actor ArticleSummarizer {
         if primer.isEmpty { return nil }
 
         do {
-            // Reuse cached session or create new one
-            let session = heroSession ?? LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
-            if heroSession == nil { heroSession = session }
+            // Create fresh session for each request to avoid concurrent request errors
+            let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
 
             // Use respond() instead of streamResponse() - no streaming delays
             let result = try await session.respond(to: primer, generating: InlineSummary.self)
@@ -297,6 +296,18 @@ actor ArticleSummarizer {
             // Reset session on error and rewarm in background
             heroSession = nil
             rewarmSession(.quick)
+            print("Hero summary error: \(error)")
+
+            // Only show blocked message for guardrail violations, not for concurrent request errors
+            let errorDesc = String(describing: error).lowercased()
+            if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                let blockedText = "Summary blocked by Apple"
+                cache[key] = blockedText
+                Self.addToLookup(key)
+                saveCache()
+                return blockedText
+            }
+            // For other errors (like concurrent requests), just return nil to allow retry
         }
         #endif
 
@@ -344,8 +355,8 @@ actor ArticleSummarizer {
         if primer.isEmpty { return nil }
 
         do {
-            let session = reelSession ?? LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
-            if reelSession == nil { reelSession = session }
+            // Create fresh session for each request to avoid concurrent request errors
+            let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
 
             let result = try await session.respond(to: primer, generating: InlineSummary.self)
             let text = result.content.text
@@ -358,6 +369,17 @@ actor ArticleSummarizer {
         } catch {
             reelSession = nil
             rewarmSession(.reel)
+            print("Reel summary error: \(error)")
+
+            // Only show blocked message for guardrail violations
+            let errorDesc = String(describing: error).lowercased()
+            if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                let blockedText = "Summary blocked by Apple"
+                cache[key] = blockedText
+                Self.addToLookup(key)
+                saveCache()
+                return blockedText
+            }
         }
         #endif
 
@@ -662,6 +684,17 @@ actor ArticleSummarizer {
                 } catch {
                     self.summarySessionDetailed = nil
                     self.rewarmSession(.detailed)
+                    print("StreamSummaryFromText detailed error: \(error)")
+
+                    // Only show blocked message for guardrail violations
+                    let errorDesc = String(describing: error).lowercased()
+                    if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                        let blockedText = "Summary blocked by Apple"
+                        self.cache[key] = blockedText
+                        Self.addToLookup(key)
+                        self.saveCache()
+                        continuation.yield(blockedText)
+                    }
                     continuation.finish()
                     return
                 }
@@ -776,6 +809,16 @@ actor ArticleSummarizer {
                     } catch {
                         self.reelExpandedSession = nil
                         self.rewarmSession(.reelExpanded)
+                        print("StreamSummary reelExpanded error: \(error)")
+
+                        let errorDesc = String(describing: error).lowercased()
+                        if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                            let blockedText = "Summary blocked by Apple"
+                            self.cache[key] = blockedText
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            continuation.yield(blockedText)
+                        }
                         continuation.finish()
                         return
                     }
@@ -833,6 +876,16 @@ actor ArticleSummarizer {
                     } catch {
                         self.summarySessionShort = nil
                         self.rewarmSession(.short)
+                        print("StreamSummary short error: \(error)")
+
+                        let errorDesc = String(describing: error).lowercased()
+                        if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                            let blockedText = "Summary blocked by Apple"
+                            self.cache[key] = blockedText
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            continuation.yield(blockedText)
+                        }
                         continuation.finish()
                         return
                     }
@@ -890,6 +943,16 @@ actor ArticleSummarizer {
                     } catch {
                         self.summarySessionDetailed = nil
                         self.rewarmSession(.detailed)
+                        print("StreamSummary detailed error: \(error)")
+
+                        let errorDesc = String(describing: error).lowercased()
+                        if errorDesc.contains("guardrail") || errorDesc.contains("unsafe") || errorDesc.contains("sensitive") {
+                            let blockedText = "Summary blocked by Apple"
+                            self.cache[key] = blockedText
+                            Self.addToLookup(key)
+                            self.saveCache()
+                            continuation.yield(blockedText)
+                        }
                         continuation.finish()
                         return
                     }

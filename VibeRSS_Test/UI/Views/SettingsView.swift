@@ -184,6 +184,7 @@ struct SettingsView: View {
     @AppStorage("atAGlanceAutoExpand") private var atAGlanceAutoExpand: Bool = true
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
+    @AppStorage("newsReelHours") private var newsReelHours: Int = 24
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
     @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
@@ -297,6 +298,23 @@ struct SettingsView: View {
                     Text("At a Glance")
                 } footer: {
                     Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
+                }
+
+                // MARK: - News Reel Section
+                Section {
+                    Picker("Time Period", selection: $newsReelHours) {
+                        Text("2 hours").tag(2)
+                        Text("4 hours").tag(4)
+                        Text("6 hours").tag(6)
+                        Text("8 hours").tag(8)
+                        Text("12 hours").tag(12)
+                        Text("16 hours").tag(16)
+                        Text("24 hours").tag(24)
+                    }
+                } header: {
+                    Text("News Reel")
+                } footer: {
+                    Text("Show articles from the selected rolling time period in the News Reel.")
                 }
 
                 // MARK: - Reader Section

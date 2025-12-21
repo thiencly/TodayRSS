@@ -236,8 +236,10 @@ struct ArticleReaderView: View {
                     scale: 1.0
                 )
                 .allowsHitTesting(false)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeOut(duration: 0.3)))
             }
         }
+        .animation(.easeInOut(duration: 0.4), value: isGeneratingSummary)
     }
 
     // MARK: - Summarize Button Action
@@ -449,9 +451,9 @@ struct ArticleReaderView: View {
             return
         }
 
-        isGeneratingSummary = true
         summaryText = ""
         withAnimation(.easeInOut(duration: 0.3)) {
+            isGeneratingSummary = true
             showingSummary = true
         }
 
@@ -467,23 +469,23 @@ struct ArticleReaderView: View {
 
         var lastUpdateTime = Date.distantPast
         var latestText = ""
-        let throttleInterval: TimeInterval = 0.05  // 50ms = 20hz
+        let throttleInterval: TimeInterval = 0.1  // 100ms = 10hz (lower to avoid rate-limit with concurrent animations)
 
         for await partial in stream {
             latestText = partial
             let now = Date()
             if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
                 lastUpdateTime = now
-                await MainActor.run {
-                    summaryText = latestText
-                }
+                summaryText = latestText
             }
         }
 
         // Final update to ensure we have the complete text
         await MainActor.run {
             summaryText = latestText
-            isGeneratingSummary = false
+            withAnimation(.easeOut(duration: 0.4)) {
+                isGeneratingSummary = false
+            }
         }
     }
 

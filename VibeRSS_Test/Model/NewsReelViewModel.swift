@@ -37,6 +37,9 @@ final class NewsReelViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
 
+    /// Rolling hour period for filtering articles (from Settings)
+    @AppStorage("newsReelHours") private var newsReelHours: Int = 24
+
     /// All available sources (All + folders)
     @Published var sources: [ReelSource] = []
 
@@ -264,16 +267,15 @@ final class NewsReelViewModel: ObservableObject {
             }
         }
 
-        // Filter to only show articles from today
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
-        let todayArticles = allArticles.filter { article in
+        // Filter to only show articles from the rolling hour period
+        let cutoffDate = Date().addingTimeInterval(-Double(newsReelHours) * 3600)
+        let recentArticles = allArticles.filter { article in
             guard let pubDate = article.pubDate else { return false }
-            return pubDate >= startOfToday
+            return pubDate >= cutoffDate
         }
 
         // Sort by date (newest first)
-        let sorted = todayArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+        let sorted = recentArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
 
         return sorted
     }
