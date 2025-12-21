@@ -133,7 +133,9 @@ struct ReelsHorizontalPager<Content: View>: UIViewControllerRepresentable {
             guard index != lastReportedIndex else { return }
             lastReportedIndex = index
             DispatchQueue.main.async { [weak self] in
-                self?.parent.currentIndex = index
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    self?.parent.currentIndex = index
+                }
             }
         }
     }

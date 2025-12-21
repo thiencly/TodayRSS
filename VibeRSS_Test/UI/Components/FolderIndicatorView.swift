@@ -3,56 +3,119 @@
 //  VibeRSS_Test
 //
 //  Horizontal folder indicator pills for news reel
+//  Updated to match Apple's Liquid Glass segmented control pattern
 //
 
 import SwiftUI
 
-/// Horizontal scrollable folder indicator with pills
+/// Horizontal scrollable folder indicator with Apple's Liquid Glass segmented control style
 struct FolderIndicatorView: View {
     let sources: [ReelSource]
     @Binding var selectedIndex: Int
     var onSelect: ((Int) -> Void)?
 
-    @Namespace private var pillAnimation
+    @Namespace private var selectionAnimation
+    @State private var contentWidth: CGFloat = 0
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(sources.enumerated()), id: \.element.id) { index, source in
-                        FolderPill(
-                            name: source.displayName,
-                            isSelected: index == selectedIndex,
-                            namespace: pillAnimation
-                        ) {
-                            if let onSelect = onSelect {
-                                // Let the callback handle selection and haptics
-                                onSelect(index)
-                            } else {
-                                // Default behavior when no callback
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedIndex = index
+        GeometryReader { geometry in
+            // Max width for the glass panel (leaves margin on edges)
+            let maxPanelWidth = geometry.size.width - 32
+            // Use content width if it fits, otherwise cap at max
+            let panelWidth = min(contentWidth + 8, maxPanelWidth) // +8 for padding
+
+            HStack {
+                Spacer(minLength: 0)
+
+                ScrollViewReader { proxy in
+                    GlassEffectContainer {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(sources.enumerated()), id: \.element.id) { index, source in
+                                    TopicPill(
+                                        name: source.displayName,
+                                        isSelected: index == selectedIndex,
+                                        namespace: selectionAnimation
+                                    ) {
+                                        if let onSelect = onSelect {
+                                            onSelect(index)
+                                        } else {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                                selectedIndex = index
+                                            }
+                                            HapticManager.shared.click()
+                                        }
+                                    }
+                                    .id(index)
                                 }
-                                HapticManager.shared.click()
+                            }
+                            .background {
+                                GeometryReader { contentGeometry in
+                                    Color.clear
+                                        .onAppear {
+                                            contentWidth = contentGeometry.size.width
+                                        }
+                                        .onChange(of: sources.count) { _, _ in
+                                            contentWidth = contentGeometry.size.width
+                                        }
+                                }
                             }
                         }
-                        .id(index)
+                        .scrollEdgeEffectStyle(.soft, for: .horizontal)
+                        .onChange(of: selectedIndex) { _, newIndex in
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                proxy.scrollTo(newIndex, anchor: .center)
+                            }
+                        }
                     }
+                    .padding(4)
+                    .clipShape(Capsule())
+                    .mask {
+                        HStack(spacing: 0) {
+                            // Leading fade - stronger at edge
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: .clear, location: 0.3),
+                                    .init(color: .white, location: 1)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: 36)
+
+                            // Middle - fully visible
+                            Rectangle().fill(.white)
+
+                            // Trailing fade - stronger at edge
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white, location: 0),
+                                    .init(color: .clear, location: 0.7),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: 36)
+                        }
+                    }
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .frame(width: contentWidth > 0 ? panelWidth : nil)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: selectedIndex)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: contentWidth)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+
+                Spacer(minLength: 0)
             }
-            .onChange(of: selectedIndex) { _, newIndex in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    proxy.scrollTo(newIndex, anchor: .center)
-                }
-            }
+            .padding(.vertical, 8)
         }
+        .frame(height: 60)
     }
 }
 
-/// Individual folder pill with Liquid Glass UI
-struct FolderPill: View {
+/// Individual topic pill - text with sliding selection background
+struct TopicPill: View {
     let name: String
     let isSelected: Bool
     var namespace: Namespace.ID
@@ -67,27 +130,25 @@ struct FolderPill: View {
     var body: some View {
         Button(action: action) {
             Text(name)
-                .font(.system(.subheadline, design: .rounded, weight: .bold))
+                .font(.system(.subheadline, design: .rounded, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background {
                     if isSelected {
+                        // Sliding selection indicator - the "thumb" in Apple's pattern
                         Capsule()
-                            .fill(tintColor)
+                            .fill(tintColor.opacity(0.9))
+                            .matchedGeometryEffect(id: "selection", in: namespace)
                     }
                 }
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        // Use .clear glass for media-rich backgrounds - no adaptive light/dark flipping
-        // The .interactive() modifier enables native Liquid Glass press animation
-        .glassEffect(.clear.interactive())
-        .contentShape(Capsule())
     }
 }
 
-/// Compact version for when space is limited
+/// Compact version - dot indicators for limited space
 struct CompactFolderIndicatorView: View {
     let sources: [ReelSource]
     let selectedIndex: Int
