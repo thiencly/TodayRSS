@@ -3,6 +3,7 @@ import UIKit
 
 // MARK: - App Tint
 enum AppTint: String, CaseIterable {
+    case `default` = "default"
     case blue = "blue"
     case purple = "purple"
     case pink = "pink"
@@ -15,6 +16,7 @@ enum AppTint: String, CaseIterable {
 
     var displayName: String {
         switch self {
+        case .default: return "Default"
         case .blue: return "Blue"
         case .purple: return "Purple"
         case .pink: return "Pink"
@@ -27,8 +29,10 @@ enum AppTint: String, CaseIterable {
         }
     }
 
+    /// Color for new article indicators (dots, badges)
     var color: Color {
         switch self {
+        case .default: return .blue
         case .blue: return .blue
         case .purple: return .purple
         case .pink: return .pink
@@ -41,8 +45,42 @@ enum AppTint: String, CaseIterable {
         }
     }
 
+    /// UIColor for sidebar indicators
     var uiColor: UIColor {
         switch self {
+        case .default: return .systemBlue
+        case .blue: return .systemBlue
+        case .purple: return .systemPurple
+        case .pink: return .systemPink
+        case .red: return .systemRed
+        case .orange: return .systemOrange
+        case .yellow: return .systemYellow
+        case .green: return .systemGreen
+        case .teal: return .systemTeal
+        case .indigo: return .systemIndigo
+        }
+    }
+
+    /// Color for the news reel FAB button - nil for default (uses neutral gray)
+    var reelButtonColor: Color? {
+        switch self {
+        case .default: return nil
+        case .blue: return .blue
+        case .purple: return .purple
+        case .pink: return .pink
+        case .red: return .red
+        case .orange: return .orange
+        case .yellow: return .yellow
+        case .green: return .green
+        case .teal: return .teal
+        case .indigo: return .indigo
+        }
+    }
+
+    /// UIColor for sidebar chevrons - white for default
+    var chevronUIColor: UIColor {
+        switch self {
+        case .default: return .white
         case .blue: return .systemBlue
         case .purple: return .systemPurple
         case .pink: return .systemPink
@@ -132,7 +170,7 @@ struct SettingsView: View {
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
-    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
+    @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
     @AppStorage("readerFontSize") private var readerFontSize: Double = 18
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme

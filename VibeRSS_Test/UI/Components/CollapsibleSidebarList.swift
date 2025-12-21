@@ -100,6 +100,9 @@ final class SidebarCollectionVC: UIViewController {
     // App tint color for new article indicators
     var tintColor: UIColor = .systemBlue
 
+    // Chevron color (separate from tint for default theme)
+    var chevronColor: UIColor = .systemBlue
+
     // Fixed top inset for collapsed At a Glance card
     // Card overlays the list when expanded - list position stays static
     static let collapsedCardInset: CGFloat = 60
@@ -287,8 +290,8 @@ final class SidebarCollectionVC: UIViewController {
 
             cell.contentConfiguration = content
 
-            // Use outlineDisclosure for native rotating chevron animation with app tint
-            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .header, tintColor: self.tintColor)
+            // Use outlineDisclosure for native rotating chevron animation
+            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .header, tintColor: self.chevronColor)
             cell.accessories = [.outlineDisclosure(options: disclosureOptions)]
 
             // Header has NO background - only content items have grouped background
@@ -330,8 +333,9 @@ final class SidebarCollectionVC: UIViewController {
             guard let self = self else { return }
             guard case .folder(_, let name, let count, let hasNew) = item else { return }
 
-            var content = UIListContentConfiguration.sidebarCell()
+            var content = UIListContentConfiguration.cell()
             content.image = UIImage(systemName: "folder")
+            content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
 
             // Show dot next to name if has new articles
             if hasNew {
@@ -348,8 +352,8 @@ final class SidebarCollectionVC: UIViewController {
 
             cell.contentConfiguration = content
 
-            // Add outline disclosure for expand/collapse with app tint color
-            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell, tintColor: self.tintColor)
+            // Add outline disclosure for expand/collapse
+            let disclosureOptions = UICellAccessory.OutlineDisclosureOptions(style: .cell, tintColor: self.chevronColor)
             cell.accessories = [.outlineDisclosure(options: disclosureOptions)]
 
             // Apply corner-aware grouped background
@@ -681,6 +685,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     @Binding var sectionsExpanded: Bool
     @Binding var sourcesExpanded: Bool
     var tintColor: UIColor = .systemBlue
+    var chevronColor: UIColor = .systemBlue
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
@@ -706,6 +711,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.sectionsExpanded = sectionsExpanded
         vc.sourcesExpanded = sourcesExpanded
         vc.tintColor = tintColor
+        vc.chevronColor = chevronColor
 
         vc.onNavigate = onNavigate
 

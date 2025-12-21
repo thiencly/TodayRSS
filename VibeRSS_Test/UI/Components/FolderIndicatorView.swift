@@ -58,10 +58,10 @@ struct FolderPill: View {
     var namespace: Namespace.ID
     var action: () -> Void
 
-    @AppStorage("appTint") private var appTint: String = "blue"
+    @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
 
     private var tintColor: Color {
-        (AppTint(rawValue: appTint) ?? .blue).color
+        (AppTint(rawValue: appTint) ?? .default).color
     }
 
     var body: some View {

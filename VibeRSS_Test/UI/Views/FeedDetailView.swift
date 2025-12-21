@@ -16,7 +16,7 @@ struct FeedDetailView: View {
     @State private var currentDay: Date? = nil
     @State private var readURLs: Set<URL> = []
     @State private var seenURLs: Set<URL> = []
-    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
+    @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
 
     var body: some View {
         Group {

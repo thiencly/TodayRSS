@@ -301,7 +301,7 @@ struct ContentView: View {
     @AppStorage("areFoldersCollapsed") private var areFoldersCollapsed: Bool = false
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
-    @AppStorage("appTint") private var appTint: String = AppTint.blue.rawValue
+    @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
     @State private var showingSettings: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
@@ -1008,6 +1008,7 @@ struct ContentView: View {
                 set: { areSourcesCollapsed = !$0 }
             ),
             tintColor: AppTint(rawValue: appTint)?.uiColor ?? .systemBlue,
+            chevronColor: AppTint(rawValue: appTint)?.chevronUIColor ?? .systemBlue,
             onNavigate: { destination in
                 handleNavigation(destination)
             },
@@ -1040,7 +1041,7 @@ struct ContentView: View {
                         }
                     }
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -1102,7 +1103,8 @@ struct ContentView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                let tintColor = AppTint(rawValue: appTint)?.color ?? .blue
+                let appTintEnum = AppTint(rawValue: appTint)
+                let reelColor = appTintEnum?.reelButtonColor
 
                 Button {
                     HapticManager.shared.click()
@@ -1110,10 +1112,13 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "bolt.fill")
                         .font(.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(reelColor != nil ? .white : .primary)
                         .frame(width: 56, height: 56)
-                        .background(tintColor)
-                        .clipShape(Circle())
+                        .background {
+                            if let color = reelColor {
+                                Circle().fill(color)
+                            }
+                        }
                 }
                 .glassEffect(.regular.interactive(), in: .circle)
                 .padding(.trailing, 20)

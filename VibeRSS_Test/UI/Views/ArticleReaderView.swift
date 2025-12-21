@@ -419,7 +419,52 @@ struct ReeeederWebView: UIViewRepresentable {
                 text-transform: none !important;
                 font-weight: 500 !important;
             }
+            /* Hide Reeeed's automatic reader mode footer */
+            .__footer, .__reader-footer, [class*="footer"], .reader-footer {
+                display: none !important;
+            }
+            /* Hide any "View original" or "View normal page" buttons */
+            a[href*="original"], button[class*="original"],
+            a:contains("View"), button:contains("View"),
+            div:last-child:has(a[href]) {
+                display: none !important;
+            }
         </style>
+        <script>
+            // Remove any footer elements added by the reader library
+            document.addEventListener('DOMContentLoaded', function() {
+                // Find and remove elements containing "reader mode" or "view normal" text
+                var allElements = document.querySelectorAll('*');
+                allElements.forEach(function(el) {
+                    if (el.innerText && (
+                        el.innerText.toLowerCase().includes('reader mode') ||
+                        el.innerText.toLowerCase().includes('view normal') ||
+                        el.innerText.toLowerCase().includes('view original') ||
+                        el.innerText.toLowerCase().includes('automatically converted')
+                    )) {
+                        // Only hide if it's a small element (not the main content)
+                        if (el.innerText.length < 200) {
+                            el.style.display = 'none';
+                        }
+                    }
+                });
+
+                // Also check the last few children of body for footer-like content
+                var body = document.body;
+                if (body) {
+                    var children = body.children;
+                    for (var i = children.length - 1; i >= Math.max(0, children.length - 3); i--) {
+                        var child = children[i];
+                        if (child && child.innerText && child.innerText.length < 200 && (
+                            child.innerText.toLowerCase().includes('reader') ||
+                            child.innerText.toLowerCase().includes('view')
+                        )) {
+                            child.style.display = 'none';
+                        }
+                    }
+                }
+            });
+        </script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 // Hide the original subtitle
