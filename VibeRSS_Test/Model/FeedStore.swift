@@ -186,6 +186,11 @@ final class FeedStore: ObservableObject {
         folders[idx].name = newName
     }
 
+    func updateFolderIcon(_ folder: Folder, iconType: FolderIconType) {
+        guard let idx = folders.firstIndex(where: { $0.id == folder.id }) else { return }
+        folders[idx].iconType = iconType
+    }
+
     func sources(in folder: Folder?) -> [Feed] {
         guard let folder else { return feeds }
         return feeds.filter { $0.folderID == folder.id }

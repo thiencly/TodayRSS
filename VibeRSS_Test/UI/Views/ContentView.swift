@@ -322,6 +322,7 @@ struct ContentView: View {
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
+    @State private var editingIconFolder: Folder? = nil
 
     private let refreshService = FeedService()
 
@@ -927,6 +928,24 @@ struct ContentView: View {
     // MARK: - Context Menu Builders
 
     private func createFolderContextMenu(_ folder: Folder) -> UIMenu? {
+        // Change Icon action - opens emoji picker
+        let changeIconAction = UIAction(title: "Change Icon", image: UIImage(systemName: "face.smiling")) { _ in
+            editingIconFolder = folder
+        }
+
+        // Automatic Icon action - resets to auto-assigned icon
+        let automaticIconAction = UIAction(
+            title: "Automatic Icon",
+            image: UIImage(systemName: "wand.and.stars"),
+            state: folder.iconType == .automatic ? .on : .off
+        ) { _ in
+            store.updateFolderIcon(folder, iconType: .automatic)
+            sidebarRefreshTrigger = UUID()
+        }
+
+        // Icon submenu
+        let iconMenu = UIMenu(title: "Icon", image: UIImage(systemName: "sparkle"), children: [changeIconAction, automaticIconAction])
+
         let renameAction = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
             renameFolderText = folder.name
             renamingFolder = folder
@@ -936,7 +955,7 @@ struct ContentView: View {
             store.removeFolder(folder)
         }
 
-        return UIMenu(children: [renameAction, deleteAction])
+        return UIMenu(children: [iconMenu, renameAction, deleteAction])
     }
 
     private func createFeedContextMenu(_ feed: Feed) -> UIMenu? {
@@ -1141,6 +1160,16 @@ struct ContentView: View {
             }
             .sheet(item: $heroWebLink) { w in
                 ArticleReaderView(url: w.url, articleTitle: w.title, articleDate: w.date, thumbnailURL: w.thumbnailURL, sourceIconURL: w.sourceIconURL, sourceTitle: w.sourceTitle)
+            }
+            .sheet(item: $editingIconFolder) { folder in
+                EmojiPickerView(
+                    folderName: folder.name,
+                    currentIcon: folder.iconType
+                ) { newIconType in
+                    store.updateFolderIcon(folder, iconType: newIconType)
+                    sidebarRefreshTrigger = UUID()
+                }
+                .presentationDetents([.medium, .large])
             }
             .confirmationDialog("Move to Section", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in

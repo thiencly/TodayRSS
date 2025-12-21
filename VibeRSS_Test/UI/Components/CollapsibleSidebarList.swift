@@ -22,7 +22,7 @@ nonisolated enum SidebarItem: Hashable, @unchecked Sendable {
     case saved(count: Int)
 
     // Content items - store only Sendable primitives
-    case folder(id: UUID, name: String, feedCount: Int, hasNew: Bool)
+    case folder(id: UUID, name: String, feedCount: Int, hasNew: Bool, icon: String, isEmoji: Bool)
     case folderFeed(id: UUID, title: String, iconURL: URL?, hasNew: Bool)
     case feed(id: UUID, title: String, iconURL: URL?, hasNew: Bool)
 
@@ -33,7 +33,7 @@ nonisolated enum SidebarItem: Hashable, @unchecked Sendable {
         case .latest: return "fixed-latest"
         case .today: return "fixed-today"
         case .saved: return "fixed-saved"
-        case .folder(let id, _, _, _): return "folder-\(id)"
+        case .folder(let id, _, _, _, _, _): return "folder-\(id)"
         case .folderFeed(let id, _, _, _): return "folderFeed-\(id)"
         case .feed(let id, _, _, _): return "feed-\(id)"
         }
@@ -337,12 +337,34 @@ final class SidebarCollectionVC: UIViewController {
         // Folder cell
         let folderReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
             guard let self = self else { return }
-            guard case .folder(_, let name, let count, let hasNew) = item else { return }
+            guard case .folder(_, let name, let count, let hasNew, let icon, let isEmoji) = item else { return }
 
             var content = UIListContentConfiguration.cell()
-            content.image = UIImage(systemName: "folder")
-            content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
-            content.imageProperties.tintColor = self.iconColor
+
+            // Display either emoji or SF Symbol
+            if isEmoji {
+                // For emoji, use a custom view approach
+                content.image = nil
+                content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+
+                // Create emoji image from text
+                let emojiLabel = UILabel()
+                emojiLabel.text = icon
+                emojiLabel.font = .systemFont(ofSize: 20)
+                emojiLabel.sizeToFit()
+
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
+                let emojiImage = renderer.image { context in
+                    let rect = CGRect(x: 0, y: 0, width: 24, height: 24)
+                    emojiLabel.drawText(in: rect)
+                }
+                content.image = emojiImage
+                content.imageProperties.tintColor = nil
+            } else {
+                content.image = UIImage(systemName: icon)
+                content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
+                content.imageProperties.tintColor = self.iconColor
+            }
 
             // Show dot next to name if has new articles
             if hasNew {
@@ -519,7 +541,7 @@ final class SidebarCollectionVC: UIViewController {
         for folder in folders {
             let folderFeeds = feeds.filter { $0.folderID == folder.id }
             let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
-            folderItems.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew))
+            folderItems.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji))
         }
         topicsSnapshot.append(folderItems, to: sectionsHeader)
 
@@ -527,7 +549,7 @@ final class SidebarCollectionVC: UIViewController {
         for folder in folders {
             let folderFeeds = feeds.filter { $0.folderID == folder.id }
             let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
-            let folderItem = SidebarItem.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew)
+            let folderItem = SidebarItem.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji)
 
             var feedItems: [SidebarItem] = []
             for feed in folderFeeds {
@@ -652,7 +674,7 @@ extension SidebarCollectionVC: UICollectionViewDelegate {
         case .saved:
             onNavigate?(.saved)
 
-        case .folder(let id, _, _, _):
+        case .folder(let id, _, _, _, _, _):
             onNavigate?(.folder(id: id))
 
         case .folderFeed(let id, _, _, _):
@@ -667,7 +689,7 @@ extension SidebarCollectionVC: UICollectionViewDelegate {
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return nil }
 
         switch item {
-        case .folder(let id, _, _, _):
+        case .folder(let id, _, _, _, _, _):
             guard let folder = folders.first(where: { $0.id == id }) else { return nil }
             guard let menu = onFolderContextMenu?(folder) else { return nil }
             return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
