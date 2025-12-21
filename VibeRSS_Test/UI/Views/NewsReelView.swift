@@ -702,6 +702,9 @@ struct NewsReelView: View {
     @EnvironmentObject private var store: FeedStore
     @StateObject private var viewModel = NewsReelViewModel()
 
+    /// The pinned folder ID to start on (optional)
+    var pinnedFolderID: UUID? = nil
+
     // Sharing
     @State private var shareItem: URL?
     @State private var showingShareSheet: Bool = false
@@ -845,7 +848,9 @@ struct NewsReelView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            viewModel.initialize(folders: store.folders, feeds: store.feeds)
+            viewModel.initialize(folders: store.folders, feeds: store.feeds, pinnedFolderID: pinnedFolderID)
+            // Sync selectedSourceIndex to match viewModel's starting source
+            selectedSourceIndex = viewModel.currentSourceIndex
         }
         .onChange(of: selectedSourceIndex) { _, newIndex in
             viewModel.selectSource(at: newIndex)

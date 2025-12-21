@@ -141,13 +141,24 @@ final class NewsReelViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    func initialize(folders: [Folder], feeds: [Feed]) {
+    func initialize(folders: [Folder], feeds: [Feed], pinnedFolderID: UUID? = nil) {
         self.feeds = feeds
 
         // Build sources list: All + each folder
         var sourcesList: [ReelSource] = [.all]
         sourcesList.append(contentsOf: folders.map { .folder($0) })
         self.sources = sourcesList
+
+        // Start on pinned folder if one exists
+        if let pinnedID = pinnedFolderID,
+           let pinnedIndex = sourcesList.firstIndex(where: {
+               if case .folder(let folder) = $0 {
+                   return folder.id == pinnedID
+               }
+               return false
+           }) {
+            currentSourceIndex = pinnedIndex
+        }
 
         // Load articles for initial source
         Task {

@@ -22,7 +22,7 @@ nonisolated enum SidebarItem: Hashable, @unchecked Sendable {
     case saved(count: Int)
 
     // Content items - store only Sendable primitives
-    case folder(id: UUID, name: String, feedCount: Int, hasNew: Bool, icon: String, isEmoji: Bool)
+    case folder(id: UUID, name: String, feedCount: Int, hasNew: Bool, icon: String, isEmoji: Bool, isPinned: Bool)
     case folderFeed(id: UUID, title: String, iconURL: URL?, hasNew: Bool)
     case feed(id: UUID, title: String, iconURL: URL?, hasNew: Bool)
 
@@ -33,7 +33,7 @@ nonisolated enum SidebarItem: Hashable, @unchecked Sendable {
         case .latest: return "fixed-latest"
         case .today: return "fixed-today"
         case .saved: return "fixed-saved"
-        case .folder(let id, _, _, _, _, _): return "folder-\(id)"
+        case .folder(let id, _, _, _, _, _, _): return "folder-\(id)"
         case .folderFeed(let id, _, _, _): return "folderFeed-\(id)"
         case .feed(let id, _, _, _): return "feed-\(id)"
         }
@@ -105,6 +105,9 @@ final class SidebarCollectionVC: UIViewController {
 
     // Icon color for SF Symbols (adapts to light/dark for default)
     var iconColor: UIColor = .label
+
+    // Pinned folder ID for News Reel
+    var pinnedFolderID: UUID? = nil
 
     // Fixed top inset for collapsed At a Glance card
     // Card overlays the list when expanded - list position stays static
@@ -301,10 +304,22 @@ final class SidebarCollectionVC: UIViewController {
             cell.backgroundConfiguration = .clear()
         }
 
+        // Consistent cell layout values
+        let cellIconSize = CGSize(width: 24, height: 24)
+        let cellVerticalMargin: CGFloat = 12
+
         // Fixed items (Latest, Today, Saved)
         let fixedReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
             guard let self = self else { return }
             var content = UIListContentConfiguration.cell()
+
+            // Consistent vertical padding
+            content.directionalLayoutMargins.top = cellVerticalMargin
+            content.directionalLayoutMargins.bottom = cellVerticalMargin
+
+            // Consistent icon sizing across all cell types
+            content.imageProperties.maximumSize = cellIconSize
+            content.imageProperties.reservedLayoutSize = cellIconSize
 
             switch item {
             case .latest:
@@ -337,32 +352,43 @@ final class SidebarCollectionVC: UIViewController {
         // Folder cell
         let folderReg = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarItem> { [weak self] cell, indexPath, item in
             guard let self = self else { return }
-            guard case .folder(_, let name, let count, let hasNew, let icon, let isEmoji) = item else { return }
+            guard case .folder(_, let name, let count, let hasNew, let icon, let isEmoji, let isPinned) = item else { return }
 
             var content = UIListContentConfiguration.cell()
 
-            // Display either emoji or SF Symbol
+            // Slightly larger vertical padding to match feed cells (compensates for secondary text layout)
+            content.directionalLayoutMargins.top = cellVerticalMargin + 2
+            content.directionalLayoutMargins.bottom = cellVerticalMargin + 2
+
+            // Display either emoji or SF Symbol - use consistent size for both
+            content.imageProperties.maximumSize = cellIconSize
+            content.imageProperties.reservedLayoutSize = cellIconSize
+
             if isEmoji {
-                // For emoji, use a custom view approach
-                content.image = nil
-                content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
-
-                // Create emoji image from text
-                let emojiLabel = UILabel()
-                emojiLabel.text = icon
-                emojiLabel.font = .systemFont(ofSize: 20)
-                emojiLabel.sizeToFit()
-
-                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
+                // Create centered emoji image
+                let renderer = UIGraphicsImageRenderer(size: cellIconSize)
                 let emojiImage = renderer.image { context in
-                    let rect = CGRect(x: 0, y: 0, width: 24, height: 24)
-                    emojiLabel.drawText(in: rect)
+                    let paragraphStyle = NSMutableParagraphStyle()
+                    paragraphStyle.alignment = .center
+
+                    let attributes: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.systemFont(ofSize: 18),
+                        .paragraphStyle: paragraphStyle
+                    ]
+
+                    let textSize = (icon as NSString).size(withAttributes: attributes)
+                    let rect = CGRect(
+                        x: (cellIconSize.width - textSize.width) / 2,
+                        y: (cellIconSize.height - textSize.height) / 2,
+                        width: textSize.width,
+                        height: textSize.height
+                    )
+                    (icon as NSString).draw(in: rect, withAttributes: attributes)
                 }
                 content.image = emojiImage
                 content.imageProperties.tintColor = nil
             } else {
                 content.image = UIImage(systemName: icon)
-                content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
                 content.imageProperties.tintColor = self.iconColor
             }
 
@@ -373,8 +399,18 @@ final class SidebarCollectionVC: UIViewController {
                 content.text = name
             }
 
-            // Use secondary text for count - more reliable than custom accessory
-            content.secondaryText = "\(count)"
+            // Use secondary text for pin icon + count
+            if isPinned {
+                // Create attributed string with pin icon before count
+                let pinAttachment = NSTextAttachment()
+                let pinConfig = UIImage.SymbolConfiguration(pointSize: 10, weight: .medium)
+                pinAttachment.image = UIImage(systemName: "pin.fill", withConfiguration: pinConfig)?.withTintColor(self.tintColor, renderingMode: .alwaysOriginal)
+                let pinString = NSMutableAttributedString(attachment: pinAttachment)
+                pinString.append(NSAttributedString(string: " \(count)"))
+                content.secondaryAttributedText = pinString
+            } else {
+                content.secondaryText = "\(count)"
+            }
             content.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
             content.secondaryTextProperties.color = .secondaryLabel
             content.prefersSideBySideTextAndSecondaryText = true
@@ -396,8 +432,14 @@ final class SidebarCollectionVC: UIViewController {
             guard case .folderFeed(_, let title, let iconURL, let hasNew) = item else { return }
 
             var content = UIListContentConfiguration.cell()
+
+            // Consistent vertical padding and icon sizing
+            content.directionalLayoutMargins.top = cellVerticalMargin
+            content.directionalLayoutMargins.bottom = cellVerticalMargin
+            content.imageProperties.maximumSize = cellIconSize
+            content.imageProperties.reservedLayoutSize = cellIconSize
+
             content.image = UIImage(systemName: "doc.text")
-            content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
             content.imageProperties.tintColor = self.iconColor
 
             // Show dot next to name if has new articles
@@ -437,8 +479,14 @@ final class SidebarCollectionVC: UIViewController {
             guard case .feed(_, let title, let iconURL, let hasNew) = item else { return }
 
             var content = UIListContentConfiguration.cell()
+
+            // Consistent vertical padding and icon sizing
+            content.directionalLayoutMargins.top = cellVerticalMargin
+            content.directionalLayoutMargins.bottom = cellVerticalMargin
+            content.imageProperties.maximumSize = cellIconSize
+            content.imageProperties.reservedLayoutSize = cellIconSize
+
             content.image = UIImage(systemName: "doc.text")
-            content.imageProperties.maximumSize = CGSize(width: 24, height: 24)
             content.imageProperties.tintColor = self.iconColor
 
             // Show dot next to name if has new articles
@@ -541,7 +589,8 @@ final class SidebarCollectionVC: UIViewController {
         for folder in folders {
             let folderFeeds = feeds.filter { $0.folderID == folder.id }
             let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
-            folderItems.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji))
+            let isPinned = pinnedFolderID == folder.id
+            folderItems.append(.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji, isPinned: isPinned))
         }
         topicsSnapshot.append(folderItems, to: sectionsHeader)
 
@@ -549,7 +598,8 @@ final class SidebarCollectionVC: UIViewController {
         for folder in folders {
             let folderFeeds = feeds.filter { $0.folderID == folder.id }
             let hasNew = folderFeeds.contains { ArticleReadStateManager.sourceHasNewArticlesSync($0.id) }
-            let folderItem = SidebarItem.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji)
+            let isPinned = pinnedFolderID == folder.id
+            let folderItem = SidebarItem.folder(id: folder.id, name: folder.name, feedCount: folderFeeds.count, hasNew: hasNew, icon: folder.displayIcon, isEmoji: folder.isEmoji, isPinned: isPinned)
 
             var feedItems: [SidebarItem] = []
             for feed in folderFeeds {
@@ -674,7 +724,7 @@ extension SidebarCollectionVC: UICollectionViewDelegate {
         case .saved:
             onNavigate?(.saved)
 
-        case .folder(let id, _, _, _, _, _):
+        case .folder(let id, _, _, _, _, _, _):
             onNavigate?(.folder(id: id))
 
         case .folderFeed(let id, _, _, _):
@@ -689,7 +739,7 @@ extension SidebarCollectionVC: UICollectionViewDelegate {
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return nil }
 
         switch item {
-        case .folder(let id, _, _, _, _, _):
+        case .folder(let id, _, _, _, _, _, _):
             guard let folder = folders.first(where: { $0.id == id }) else { return nil }
             guard let menu = onFolderContextMenu?(folder) else { return nil }
             return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
@@ -718,6 +768,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     var tintColor: UIColor = .systemBlue
     var chevronColor: UIColor = .systemBlue
     var iconColor: UIColor = .label
+    var pinnedFolderID: UUID? = nil
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
@@ -745,6 +796,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.tintColor = tintColor
         vc.chevronColor = chevronColor
         vc.iconColor = iconColor
+        vc.pinnedFolderID = pinnedFolderID
 
         vc.onNavigate = onNavigate
 

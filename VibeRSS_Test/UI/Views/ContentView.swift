@@ -323,6 +323,7 @@ struct ContentView: View {
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
     @State private var editingIconFolder: Folder? = nil
+    @AppStorage("pinnedFolderID") private var pinnedFolderID: String = ""
 
     private let refreshService = FeedService()
 
@@ -773,23 +774,27 @@ struct ContentView: View {
         // Sort entries by date
         newEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
 
-        // Update heroEntries
-        heroEntries = newEntries
-        isLoadingHero = false
-        lastHeroUpdateDate = Date()
+        // Update heroEntries - only if we have new valid entries, otherwise keep existing
+        if !newEntries.isEmpty {
+            heroEntries = newEntries
 
-        // Handle reveal and expand based on context
-        if !newEntries.isEmpty && !isInitialLoad {
-            // Only expand if card is collapsed and auto-expand is on
-            if isHeroCollapsed && atAGlanceAutoExpand {
-                HapticManager.shared.success()
-                withAnimation(.snappy(duration: 0.3)) {
-                    isHeroCollapsed = false
+            // Handle reveal and expand based on context
+            if !isInitialLoad {
+                // Only expand if card is collapsed and auto-expand is on
+                if isHeroCollapsed && atAGlanceAutoExpand {
+                    HapticManager.shared.success()
+                    withAnimation(.snappy(duration: 0.3)) {
+                        isHeroCollapsed = false
+                    }
                 }
             }
-        }
 
-        saveHeroEntriesToCache()
+            saveHeroEntriesToCache()
+        }
+        // If newEntries is empty (all summaries failed), keep existing heroEntries
+
+        isLoadingHero = false
+        lastHeroUpdateDate = Date()
         isInitialLoad = false
 
         // If a refresh was requested while loading, run again
@@ -928,6 +933,22 @@ struct ContentView: View {
     // MARK: - Context Menu Builders
 
     private func createFolderContextMenu(_ folder: Folder) -> UIMenu? {
+        let isPinned = pinnedFolderID == folder.id.uuidString
+
+        // Pin/Unpin action for News Reel
+        let pinAction: UIAction
+        if isPinned {
+            pinAction = UIAction(title: "Unpin from News Reel", image: UIImage(systemName: "pin.slash")) { _ in
+                pinnedFolderID = ""
+                sidebarRefreshTrigger = UUID()
+            }
+        } else {
+            pinAction = UIAction(title: "Pin to News Reel", image: UIImage(systemName: "pin")) { _ in
+                pinnedFolderID = folder.id.uuidString
+                sidebarRefreshTrigger = UUID()
+            }
+        }
+
         // Change Icon action - opens emoji picker
         let changeIconAction = UIAction(title: "Change Icon", image: UIImage(systemName: "face.smiling")) { _ in
             editingIconFolder = folder
@@ -955,7 +976,7 @@ struct ContentView: View {
             store.removeFolder(folder)
         }
 
-        return UIMenu(children: [iconMenu, renameAction, deleteAction])
+        return UIMenu(children: [pinAction, iconMenu, renameAction, deleteAction])
     }
 
     private func createFeedContextMenu(_ feed: Feed) -> UIMenu? {
@@ -1029,6 +1050,7 @@ struct ContentView: View {
             tintColor: AppTint(rawValue: appTint)?.uiColor ?? .systemBlue,
             chevronColor: AppTint(rawValue: appTint)?.chevronUIColor ?? .label,
             iconColor: AppTint(rawValue: appTint)?.iconUIColor ?? .label,
+            pinnedFolderID: UUID(uuidString: pinnedFolderID),
             onNavigate: { destination in
                 handleNavigation(destination)
             },
@@ -1255,7 +1277,7 @@ struct ContentView: View {
                 .presentationDetents([.large])
         }
         .fullScreenCover(isPresented: $showingNewsReel) {
-            NewsReelView()
+            NewsReelView(pinnedFolderID: UUID(uuidString: pinnedFolderID))
                 .environmentObject(store)
         }
     }
