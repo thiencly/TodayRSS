@@ -56,7 +56,7 @@ final class NewsReelViewModel: ObservableObject {
     @Published private(set) var loadedSourceIDs: Set<String> = []
 
     /// Saved article positions for each source (to restore when switching back)
-    private var savedArticlePositions: [Int: Int] = []
+    private var savedArticlePositions: [Int: Int] = [:]
 
     // MARK: - Private Properties
 
