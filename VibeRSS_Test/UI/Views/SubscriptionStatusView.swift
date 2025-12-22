@@ -3,13 +3,14 @@ import SwiftUI
 // MARK: - Subscription Status View
 
 struct SubscriptionStatusView: View {
-    @State private var subscriptionManager = SubscriptionManager.shared
-    @State private var showingPaywall = false
+    @Binding var showingPaywall: Bool
     @State private var isRestoring = false
+
+    private var subscriptionManager: SubscriptionManager { .shared }
 
     var body: some View {
         Section {
-            if subscriptionManager.isPremium {
+            if SubscriptionManager.shared.isPremium {
                 premiumActiveRow
                 subscriptionDetailsRow
                 manageSubscriptionButton
@@ -20,9 +21,6 @@ struct SubscriptionStatusView: View {
             }
         } header: {
             Text("Subscription")
-        }
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView(trigger: .settings)
         }
     }
 
@@ -179,6 +177,6 @@ struct SubscriptionStatusView: View {
 
 #Preview {
     List {
-        SubscriptionStatusView()
+        SubscriptionStatusView(showingPaywall: .constant(false))
     }
 }

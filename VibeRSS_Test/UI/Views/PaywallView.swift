@@ -53,11 +53,12 @@ struct PaywallView: View {
 
     let trigger: PaywallTrigger
 
-    @State private var subscriptionManager = SubscriptionManager.shared
     @State private var selectedProduct: Product?
     @State private var isPurchasing = false
     @State private var errorMessage: String?
     @State private var showError = false
+
+    private var subscriptionManager: SubscriptionManager { .shared }
 
     var body: some View {
         NavigationStack {
@@ -224,7 +225,20 @@ struct PaywallView: View {
 
     @ViewBuilder
     private var legalSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
+            // Redeem Code button
+            Button {
+                Task {
+                    await subscriptionManager.presentOfferCodeRedeemSheet()
+                    if subscriptionManager.isPremium {
+                        dismiss()
+                    }
+                }
+            } label: {
+                Label("Redeem Code", systemImage: "giftcard")
+                    .font(.subheadline)
+            }
+
             Text("Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. You can manage subscriptions in your Apple ID settings.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)

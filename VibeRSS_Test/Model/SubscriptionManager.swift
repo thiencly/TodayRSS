@@ -1,12 +1,13 @@
 import Foundation
 import StoreKit
+import UIKit
 
 // MARK: - Product Identifiers
 
 enum ProductID: String, CaseIterable {
-    case monthly = "com.todayrss.premium.monthly"
-    case yearly = "com.todayrss.premium.yearly"
-    case lifetime = "com.todayrss.premium.lifetime"
+    case monthly = "com.IDKN.TodayRSS.premium.monthly"
+    case yearly = "com.IDKN.TodayRSS.premium.yearly"
+    case lifetime = "com.IDKN.TodayRSS.premium.lifetime"
 
     static var subscriptionIDs: [String] {
         [ProductID.monthly.rawValue, ProductID.yearly.rawValue]
@@ -186,6 +187,27 @@ final class SubscriptionManager {
         await verifyEntitlements()
 
         print("✓ SubscriptionManager: Purchases restored")
+    }
+
+    // MARK: - Offer Code Redemption
+
+    @MainActor
+    func presentOfferCodeRedeemSheet() async {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first else {
+            print("✗ SubscriptionManager: No window scene available")
+            return
+        }
+
+        do {
+            try await AppStore.presentOfferCodeRedeemSheet(in: windowScene)
+            // After redemption, verify entitlements
+            await verifyEntitlements()
+            print("✓ SubscriptionManager: Offer code redeemed")
+        } catch {
+            print("✗ SubscriptionManager: Offer code redemption failed - \(error)")
+        }
     }
 
     // MARK: - Transaction Listener

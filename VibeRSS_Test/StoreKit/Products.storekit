@@ -15,7 +15,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.todayrss.premium.lifetime",
+      "productID" : "com.IDKN.TodayRSS.premium.lifetime",
       "referenceName" : "Lifetime Premium",
       "type" : "NonConsumable"
     }
@@ -111,7 +111,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.todayrss.premium.monthly",
+          "productID" : "com.IDKN.TodayRSS.premium.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Monthly Premium",
           "subscriptionGroupID" : "premium",
@@ -142,7 +142,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.todayrss.premium.yearly",
+          "productID" : "com.IDKN.TodayRSS.premium.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Yearly Premium",
           "subscriptionGroupID" : "premium",

@@ -193,6 +193,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
+    @State private var showingPaywall = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
 
     var body: some View {
@@ -255,7 +256,7 @@ struct SettingsView: View {
                 // MARK: - SUBSCRIPTION
                 // ============================================================
 
-                SubscriptionStatusView()
+                SubscriptionStatusView(showingPaywall: $showingPaywall)
 
                 // ============================================================
                 // MARK: - CONTENT GROUP
@@ -492,6 +493,9 @@ struct SettingsView: View {
             }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView(isPresented: $showOnboarding)
+            }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView(trigger: .settings)
             }
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
