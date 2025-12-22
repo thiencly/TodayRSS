@@ -53,5 +53,32 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>IconLight</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconLight-iPad</string>
+				</array>
+			</dict>
+			<key>IconDark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconDark-iPad</string>
+				</array>
+			</dict>
+			<key>IconDarkColor</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>IconDarkColor-iPad</string>
+				</array>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

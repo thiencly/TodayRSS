@@ -8,6 +8,30 @@
 
 /* Begin PBXBuildFile section */
 		11B437F12EF3CFD90088C572 /* Reeeed in Frameworks */ = {isa = PBXBuildFile; productRef = 11B437F02EF3CFD90088C572 /* Reeeed */; };
+		11B438462EF92BB70088C572 /* IconDark-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383A2EF92BB70088C572 /* IconDark-iPad@2x.png */; };
+		11B438472EF92BB70088C572 /* IconDark@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383B2EF92BB70088C572 /* IconDark@2x.png */; };
+		11B438482EF92BB70088C572 /* IconDark.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438392EF92BB70088C572 /* IconDark.png */; };
+		11B438492EF92BB70088C572 /* IconLight-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438422EF92BB70088C572 /* IconLight-iPad@2x.png */; };
+		11B4384A2EF92BB70088C572 /* IconDarkColor.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383D2EF92BB70088C572 /* IconDarkColor.png */; };
+		11B4384B2EF92BB70088C572 /* IconDarkColor@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438402EF92BB70088C572 /* IconDarkColor@3x.png */; };
+		11B4384C2EF92BB70088C572 /* IconDarkColor@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383F2EF92BB70088C572 /* IconDarkColor@2x.png */; };
+		11B4384D2EF92BB70088C572 /* IconLight@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438442EF92BB70088C572 /* IconLight@3x.png */; };
+		11B4384E2EF92BB70088C572 /* IconLight@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438432EF92BB70088C572 /* IconLight@2x.png */; };
+		11B4384F2EF92BB70088C572 /* IconDarkColor-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383E2EF92BB70088C572 /* IconDarkColor-iPad@2x.png */; };
+		11B438502EF92BB70088C572 /* IconLight.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438412EF92BB70088C572 /* IconLight.png */; };
+		11B438512EF92BB70088C572 /* IconDark@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383C2EF92BB70088C572 /* IconDark@3x.png */; };
+		11B438522EF92BB70088C572 /* IconDark-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383A2EF92BB70088C572 /* IconDark-iPad@2x.png */; };
+		11B438532EF92BB70088C572 /* IconDark@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383B2EF92BB70088C572 /* IconDark@2x.png */; };
+		11B438542EF92BB70088C572 /* IconDark.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438392EF92BB70088C572 /* IconDark.png */; };
+		11B438552EF92BB70088C572 /* IconLight-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438422EF92BB70088C572 /* IconLight-iPad@2x.png */; };
+		11B438562EF92BB70088C572 /* IconDarkColor.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383D2EF92BB70088C572 /* IconDarkColor.png */; };
+		11B438572EF92BB70088C572 /* IconDarkColor@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438402EF92BB70088C572 /* IconDarkColor@3x.png */; };
+		11B438582EF92BB70088C572 /* IconDarkColor@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383F2EF92BB70088C572 /* IconDarkColor@2x.png */; };
+		11B438592EF92BB70088C572 /* IconLight@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438442EF92BB70088C572 /* IconLight@3x.png */; };
+		11B4385A2EF92BB70088C572 /* IconLight@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438432EF92BB70088C572 /* IconLight@2x.png */; };
+		11B4385B2EF92BB70088C572 /* IconDarkColor-iPad@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383E2EF92BB70088C572 /* IconDarkColor-iPad@2x.png */; };
+		11B4385C2EF92BB70088C572 /* IconLight.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B438412EF92BB70088C572 /* IconLight.png */; };
+		11B4385D2EF92BB70088C572 /* IconDark@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11B4383C2EF92BB70088C572 /* IconDark@3x.png */; };
 		WIDGET004000000000000001 /* TodayRSSWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -54,6 +78,18 @@
 		1191FA032E934A3900738217 /* VibeRSS_Test.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VibeRSS_Test.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1191FA122E934A3B00738217 /* VibeRSS_TestTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibeRSS_TestTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1191FA1C2E934A3B00738217 /* VibeRSS_TestUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibeRSS_TestUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		11B438392EF92BB70088C572 /* IconDark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IconDark.png; sourceTree = "<group>"; };
+		11B4383A2EF92BB70088C572 /* IconDark-iPad@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDark-iPad@2x.png"; sourceTree = "<group>"; };
+		11B4383B2EF92BB70088C572 /* IconDark@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDark@2x.png"; sourceTree = "<group>"; };
+		11B4383C2EF92BB70088C572 /* IconDark@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDark@3x.png"; sourceTree = "<group>"; };
+		11B4383D2EF92BB70088C572 /* IconDarkColor.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IconDarkColor.png; sourceTree = "<group>"; };
+		11B4383E2EF92BB70088C572 /* IconDarkColor-iPad@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDarkColor-iPad@2x.png"; sourceTree = "<group>"; };
+		11B4383F2EF92BB70088C572 /* IconDarkColor@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDarkColor@2x.png"; sourceTree = "<group>"; };
+		11B438402EF92BB70088C572 /* IconDarkColor@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconDarkColor@3x.png"; sourceTree = "<group>"; };
+		11B438412EF92BB70088C572 /* IconLight.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IconLight.png; sourceTree = "<group>"; };
+		11B438422EF92BB70088C572 /* IconLight-iPad@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconLight-iPad@2x.png"; sourceTree = "<group>"; };
+		11B438432EF92BB70088C572 /* IconLight@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconLight@2x.png"; sourceTree = "<group>"; };
+		11B438442EF92BB70088C572 /* IconLight@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconLight@3x.png"; sourceTree = "<group>"; };
 		WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TodayRSSWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -124,6 +160,7 @@
 		1191F9FA2E934A3900738217 = {
 			isa = PBXGroup;
 			children = (
+				11B438452EF92BB70088C572 /* AlternateIcons */,
 				1148D6D12EE38DB400557356 /* TodayRSSWidgetExtensionRelease.entitlements */,
 				1191FA052E934A3900738217 /* VibeRSS_Test */,
 				WIDGET007000000000000001 /* Shared */,
@@ -141,6 +178,26 @@
 				WIDGET005000000000000001 /* TodayRSSWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		11B438452EF92BB70088C572 /* AlternateIcons */ = {
+			isa = PBXGroup;
+			children = (
+				11B438392EF92BB70088C572 /* IconDark.png */,
+				11B4383A2EF92BB70088C572 /* IconDark-iPad@2x.png */,
+				11B4383B2EF92BB70088C572 /* IconDark@2x.png */,
+				11B4383C2EF92BB70088C572 /* IconDark@3x.png */,
+				11B4383D2EF92BB70088C572 /* IconDarkColor.png */,
+				11B4383E2EF92BB70088C572 /* IconDarkColor-iPad@2x.png */,
+				11B4383F2EF92BB70088C572 /* IconDarkColor@2x.png */,
+				11B438402EF92BB70088C572 /* IconDarkColor@3x.png */,
+				11B438412EF92BB70088C572 /* IconLight.png */,
+				11B438422EF92BB70088C572 /* IconLight-iPad@2x.png */,
+				11B438432EF92BB70088C572 /* IconLight@2x.png */,
+				11B438442EF92BB70088C572 /* IconLight@3x.png */,
+			);
+			name = AlternateIcons;
+			path = VibeRSS_Test/AlternateIcons;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -288,6 +345,18 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11B438462EF92BB70088C572 /* IconDark-iPad@2x.png in Resources */,
+				11B438472EF92BB70088C572 /* IconDark@2x.png in Resources */,
+				11B438482EF92BB70088C572 /* IconDark.png in Resources */,
+				11B438492EF92BB70088C572 /* IconLight-iPad@2x.png in Resources */,
+				11B4384A2EF92BB70088C572 /* IconDarkColor.png in Resources */,
+				11B4384B2EF92BB70088C572 /* IconDarkColor@3x.png in Resources */,
+				11B4384C2EF92BB70088C572 /* IconDarkColor@2x.png in Resources */,
+				11B4384D2EF92BB70088C572 /* IconLight@3x.png in Resources */,
+				11B4384E2EF92BB70088C572 /* IconLight@2x.png in Resources */,
+				11B4384F2EF92BB70088C572 /* IconDarkColor-iPad@2x.png in Resources */,
+				11B438502EF92BB70088C572 /* IconLight.png in Resources */,
+				11B438512EF92BB70088C572 /* IconDark@3x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -309,6 +378,18 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11B438522EF92BB70088C572 /* IconDark-iPad@2x.png in Resources */,
+				11B438532EF92BB70088C572 /* IconDark@2x.png in Resources */,
+				11B438542EF92BB70088C572 /* IconDark.png in Resources */,
+				11B438552EF92BB70088C572 /* IconLight-iPad@2x.png in Resources */,
+				11B438562EF92BB70088C572 /* IconDarkColor.png in Resources */,
+				11B438572EF92BB70088C572 /* IconDarkColor@3x.png in Resources */,
+				11B438582EF92BB70088C572 /* IconDarkColor@2x.png in Resources */,
+				11B438592EF92BB70088C572 /* IconLight@3x.png in Resources */,
+				11B4385A2EF92BB70088C572 /* IconLight@2x.png in Resources */,
+				11B4385B2EF92BB70088C572 /* IconDarkColor-iPad@2x.png in Resources */,
+				11B4385C2EF92BB70088C572 /* IconLight.png in Resources */,
+				11B4385D2EF92BB70088C572 /* IconDark@3x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -492,7 +573,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VibeRSS_Test/VibeRSS_Test.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = T3X4LD9H4Q;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -527,7 +608,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = VibeRSS_Test/VibeRSS_Test.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = T3X4LD9H4Q;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
