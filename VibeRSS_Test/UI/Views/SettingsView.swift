@@ -77,10 +77,10 @@ enum AppTint: String, CaseIterable {
         }
     }
 
-    /// UIColor for sidebar chevrons - white for default
+    /// UIColor for sidebar chevrons - adapts to light/dark for default
     var chevronUIColor: UIColor {
         switch self {
-        case .default: return .white
+        case .default: return .label
         case .blue: return .systemBlue
         case .purple: return .systemPurple
         case .pink: return .systemPink

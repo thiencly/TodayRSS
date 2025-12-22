@@ -56,6 +56,7 @@ struct VibeRSSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .background(Color(.systemGroupedBackground).ignoresSafeArea())
                 .preferredColorScheme(preferredColorScheme)
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)

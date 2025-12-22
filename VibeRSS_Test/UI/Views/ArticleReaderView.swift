@@ -151,11 +151,11 @@ struct ArticleReaderView: View {
                 Group {
                     if isGeneratingSummary {
                         ProgressView()
-                            .tint(.white)
+                            .tint(.primary)
                     } else {
                         Image(systemName: showingSummary ? "doc.text" : "sparkles")
                             .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                     }
                 }
                 .frame(width: 44, height: 44)
@@ -171,7 +171,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: isSaved ? "heart.fill" : "heart")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(isSaved ? .red : .white)
+                    .foregroundStyle(isSaved ? .red : .primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -184,7 +184,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "textformat.size")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -196,7 +196,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "safari")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -206,7 +206,7 @@ struct ArticleReaderView: View {
             ShareLink(item: url) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -218,7 +218,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.primary.opacity(0.8))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -352,7 +352,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "textformat.size.smaller")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -360,7 +360,7 @@ struct ArticleReaderView: View {
 
             Text("\(Int(fontSize))")
                 .font(.system(.title2, design: .rounded, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 50)
 
             Button {
@@ -372,14 +372,14 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "textformat.size.larger")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(GlassToolbarButtonStyle())
 
             Rectangle()
-                .fill(Color.white.opacity(0.3))
+                .fill(Color.primary.opacity(0.3))
                 .frame(width: 1, height: 24)
                 .padding(.horizontal, 8)
 
@@ -388,7 +388,7 @@ struct ArticleReaderView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

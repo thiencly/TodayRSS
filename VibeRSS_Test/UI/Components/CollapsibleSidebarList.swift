@@ -142,7 +142,7 @@ final class SidebarCollectionVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
+        view.backgroundColor = .systemGroupedBackground
 
         // Allow content to extend under navigation bar
         edgesForExtendedLayout = .all
