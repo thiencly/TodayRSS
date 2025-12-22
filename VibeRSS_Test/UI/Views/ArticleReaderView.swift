@@ -8,6 +8,7 @@
 import SwiftUI
 import WebKit
 import Reeeed
+import SafariServices
 
 // MARK: - WebView Font Size Manager
 final class ReaderWebViewManager {
@@ -78,6 +79,7 @@ struct ArticleReaderView: View {
     @State private var isGeneratingSummary = false
     @State private var summaryText: String = ""
     @State private var showingSummary = false  // Toggle between article and summary view
+    @State private var showSafariView = false
     @AppStorage("readerFontSize") private var fontSize: Double = 18
 
     // Format date as relative time string
@@ -138,6 +140,10 @@ struct ArticleReaderView: View {
         .onAppear {
             isSaved = SavedArticlesManager.shared.isSaved(url: url)
         }
+        .fullScreenCover(isPresented: $showSafariView) {
+            SafariReaderView(url: url)
+                .ignoresSafeArea()
+        }
     }
 
     // MARK: - Floating Toolbar
@@ -192,7 +198,7 @@ struct ArticleReaderView: View {
 
             // Safari button
             Button {
-                UIApplication.shared.open(url)
+                showSafariView = true
             } label: {
                 Image(systemName: "safari")
                     .font(.system(size: 17, weight: .medium))
@@ -845,6 +851,26 @@ struct AnimatedGradientSparkle: View {
                     animateGradient = true
                 }
             }
+    }
+}
+
+// MARK: - Safari Reader View
+
+struct SafariReaderView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = true
+        config.barCollapsingEnabled = true
+
+        let safariVC = SFSafariViewController(url: url, configuration: config)
+        safariVC.preferredControlTintColor = .systemBlue
+        return safariVC
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
+        // No updates needed
     }
 }
 
