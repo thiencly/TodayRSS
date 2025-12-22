@@ -9,10 +9,10 @@ struct AddFolderView: View {
         NavigationStack {
             Form {
                 Section("Details") {
-                    TextField("Section name", text: $name)
+                    TextField("Topic name", text: $name)
                 }
             }
-            .navigationTitle("Add Section")
+            .navigationTitle("New Topic")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .navigationBarTrailing) {

@@ -15,7 +15,7 @@ struct OnboardingView: View {
         OnboardingPage(
             type: .welcome,
             title: "Welcome to\nTodayRSS",
-            subtitle: "Your personal news reader with AI-powered summaries, beautiful widgets, and seamless sync across all your devices",
+            subtitle: "Your personal RSS feed with no algorithm, AI-powered summaries, and swipeable News Reel.",
             features: []
         ),
         OnboardingPage(

@@ -844,7 +844,7 @@ struct ContentView: View {
                 .environmentObject(store)
         } label: {
             HStack {
-                Label(folder.name, systemImage: "folder")
+                Label(folder.name, systemImage: folder.displayIcon)
                 if hasNewArticles {
                     Circle()
                         .fill(Color.blue)
@@ -909,7 +909,7 @@ struct ContentView: View {
             Button {
                 store.assign(source, to: nil)
             } label: {
-                Label("Remove from Section", systemImage: "folder.badge.minus")
+                Label("Remove from Topic", systemImage: "rectangle.stack.badge.minus")
             }
             Button(role: .destructive) {
                 if let idx = store.feeds.firstIndex(where: { $0.id == source.id }) {
@@ -993,13 +993,13 @@ struct ContentView: View {
         }
         actions.append(renameAction)
 
-        // Move to Section submenu
+        // Move to Topic submenu
         var moveActions: [UIAction] = []
         for folder in store.folders {
             let isCurrentFolder = feed.folderID == folder.id
             let action = UIAction(
                 title: folder.name,
-                image: UIImage(systemName: isCurrentFolder ? "checkmark" : "folder")
+                image: UIImage(systemName: isCurrentFolder ? "checkmark" : "rectangle.stack")
             ) { _ in
                 store.assign(feed, to: folder)
             }
@@ -1007,14 +1007,14 @@ struct ContentView: View {
         }
 
         if feed.folderID != nil {
-            let removeAction = UIAction(title: "Remove from Section", image: UIImage(systemName: "folder.badge.minus")) { _ in
+            let removeAction = UIAction(title: "Remove from Topic", image: UIImage(systemName: "rectangle.stack.badge.minus")) { _ in
                 store.assign(feed, to: nil)
             }
             moveActions.append(removeAction)
         }
 
         if !moveActions.isEmpty {
-            let moveMenu = UIMenu(title: "Move to Section", image: UIImage(systemName: "folder.badge.plus"), children: moveActions)
+            let moveMenu = UIMenu(title: "Move to Topic", image: UIImage(systemName: "rectangle.stack.badge.plus"), children: moveActions)
             actions.append(moveMenu)
         }
 
@@ -1113,7 +1113,7 @@ struct ContentView: View {
 
                         Menu {
                             Button { showingAddFolder = true } label: {
-                                Label("New Section", systemImage: "folder.badge.plus")
+                                Label("New Topic", systemImage: "rectangle.stack.badge.plus")
                             }
 
                             Divider()
@@ -1203,7 +1203,7 @@ struct ContentView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            .confirmationDialog("Move to Section", isPresented: $showingMoveDialog, presenting: movingSource) { source in
+            .confirmationDialog("Move to Topic", isPresented: $showingMoveDialog, presenting: movingSource) { source in
                 ForEach(store.folders) { folder in
                     let isCurrentFolder = source.folderID == folder.id
                     Button(isCurrentFolder ? "\(folder.name) ✓" : folder.name) {
@@ -1211,13 +1211,13 @@ struct ContentView: View {
                     }
                 }
                 if source.folderID != nil {
-                    Button("Remove from Section", role: .destructive) {
+                    Button("Remove from Topic", role: .destructive) {
                         store.assign(source, to: nil)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { source in
-                Text("Choose a section for \(source.title)")
+                Text("Choose a topic for \(source.title)")
             }
             .alert("Rename Source", isPresented: Binding(
                 get: { renamingSource != nil },
@@ -1237,7 +1237,7 @@ struct ContentView: View {
             } message: {
                 Text("Enter a new name for this source")
             }
-            .alert("Rename Section", isPresented: Binding(
+            .alert("Rename Topic", isPresented: Binding(
                 get: { renamingFolder != nil },
                 set: { if !$0 { renamingFolder = nil } }
             )) {
@@ -1255,7 +1255,7 @@ struct ContentView: View {
                     renamingFolder = nil
                 }
             } message: {
-                Text("Enter a new name for this section")
+                Text("Enter a new name for this topic")
             }
         .overlay(alignment: .bottom) {
             // Refresh progress overlay at bottom

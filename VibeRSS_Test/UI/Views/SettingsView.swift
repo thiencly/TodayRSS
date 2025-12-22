@@ -453,7 +453,7 @@ struct SettingsView: View {
                 } header: {
                     Text("iCloud")
                 } footer: {
-                    Text("Your feeds, sections, and highlight sources are automatically synced across all your devices using iCloud.")
+                    Text("Your feeds, topics, and settings are automatically synced across all your devices using iCloud.")
                 }
 
                 // ============================================================

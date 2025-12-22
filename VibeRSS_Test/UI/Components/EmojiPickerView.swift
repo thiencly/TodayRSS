@@ -78,9 +78,9 @@ struct EmojiPickerView: View {
                 } else {
                     let iconName = currentIcon == .automatic
                         ? FolderIconMapper.suggestedIcon(for: folderName)
-                        : (currentIcon == .automatic ? "folder" : {
+                        : (currentIcon == .automatic ? "rectangle.stack" : {
                             if case .sfSymbol(let name) = currentIcon { return name }
-                            return "folder"
+                            return "rectangle.stack"
                         }())
                     Image(systemName: iconName)
                         .font(.system(size: 36))

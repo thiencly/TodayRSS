@@ -296,8 +296,8 @@ struct FolderIconMapper {
             return "tray"
         }
 
-        // Default folder icon
-        return "folder"
+        // Default topic icon
+        return "rectangle.stack"
     }
 
     /// Helper to check if name contains any of the keywords
