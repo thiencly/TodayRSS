@@ -137,6 +137,16 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
         ]
     }
 
+    // Idle glow opacity - higher in light mode to show through glass
+    private var idleOpacity: Double {
+        colorScheme == .dark ? 0.6 : 0.9
+    }
+
+    // Saturation boost for light mode
+    private var idleSaturation: Double {
+        colorScheme == .dark ? 1.2 : 1.6
+    }
+
     var body: some View {
         ZStack {
             // Idle glow - single layer for scroll performance (was 3 layers)
@@ -149,10 +159,11 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
                             startAngle: .degrees(0),
                             endAngle: .degrees(360)
                         ),
-                        lineWidth: 3 * scale
+                        lineWidth: 4 * scale
                     )
-                    .blur(radius: 4 * scale)
-                    .opacity(0.6 * idleIntensity)
+                    .blur(radius: 6 * scale)
+                    .saturation(idleSaturation)
+                    .opacity(idleOpacity * idleIntensity)
                     .transition(.opacity)
             }
 
@@ -217,9 +228,14 @@ struct PriorityNotificationGlow: View {
         let phaseOffset: Double
     }
 
-    // Reduce intensity by 20% in dark mode
+    // Higher intensity in light mode to show through glass effect
     private var glowOpacity: Double {
-        colorScheme == .dark ? 0.4 : 0.5
+        colorScheme == .dark ? 0.5 : 0.75
+    }
+
+    // Use more saturated colors in light mode
+    private var saturationBoost: Double {
+        colorScheme == .dark ? 1.2 : 1.5
     }
 
     var body: some View {
@@ -236,7 +252,8 @@ struct PriorityNotificationGlow: View {
                     startPoint: UnitPoint(x: wave - 0.3, y: 0.2),
                     endPoint: UnitPoint(x: wave + 0.7, y: 0.8)
                 )
-                .blur(radius: 30)
+                .blur(radius: 25)
+                .saturation(saturationBoost)
                 .opacity(glowOpacity)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .drawingGroup()

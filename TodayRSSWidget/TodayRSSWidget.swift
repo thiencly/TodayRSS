@@ -10,6 +10,38 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 
+// MARK: - Apple Intelligence Colors for Widget
+private enum WidgetAIColors {
+    static let colors: [Color] = [
+        Color(red: 0.74, green: 0.51, blue: 0.95),  // Purple #BC82F3
+        Color(red: 0.96, green: 0.73, blue: 0.92),  // Pink #F5B9EA
+        Color(red: 0.55, green: 0.62, blue: 1.0),   // Blue #8D9FFF
+        Color(red: 1.0, green: 0.40, blue: 0.47),   // Coral #FF6778
+        Color(red: 1.0, green: 0.73, blue: 0.44),   // Orange #FFBA71
+        Color(red: 0.67, green: 0.43, blue: 0.93),  // Violet #AA6EEE
+        Color(red: 0.78, green: 0.53, blue: 1.0),   // Light Purple #C686FF
+    ]
+}
+
+/// Static glow background matching the News Reel style
+private struct WidgetGlowBackground: View {
+    var body: some View {
+        ZStack {
+            // Dark base
+            Color.black
+
+            // Soft gradient glow layer - mimics NewsReelGlow
+            LinearGradient(
+                colors: WidgetAIColors.colors,
+                startPoint: UnitPoint(x: 0.2, y: 0.3),
+                endPoint: UnitPoint(x: 0.8, y: 0.7)
+            )
+            .blur(radius: 30)
+            .opacity(0.6)
+        }
+    }
+}
+
 // MARK: - Shared Helpers
 
 /// Get articles for a specific source entity
@@ -97,11 +129,7 @@ struct CachedWidgetImage: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            LinearGradient(
-                colors: [Color(.systemGray4), Color(.systemGray5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            WidgetGlowBackground()
         }
     }
 }
@@ -373,11 +401,7 @@ struct SmallWidgetView: View {
     private func smallWidgetTextOnly(article: WidgetArticle) -> some View {
         GeometryReader { geo in
             ZStack {
-                LinearGradient(
-                    colors: [Color(.systemGray4), Color(.systemGray6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                WidgetGlowBackground()
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
@@ -401,7 +425,8 @@ struct SmallWidgetView: View {
                                 .font(.system(size: 10, weight: .medium))
                         }
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
 
                     Spacer()
 
@@ -411,7 +436,8 @@ struct SmallWidgetView: View {
                         .minimumScaleFactor(0.7)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
 
                     Spacer()
                 }
@@ -785,11 +811,7 @@ struct MediumWidgetView: View {
     private func articleCardTextOnly(article: WidgetArticle, width: CGFloat, height: CGFloat) -> some View {
         Link(destination: article.deepLinkURL ?? article.linkURL ?? URL(string: "todayrss://")!) {
             ZStack {
-                LinearGradient(
-                    colors: [Color(.systemGray4), Color(.systemGray6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                WidgetGlowBackground()
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 3) {
@@ -813,7 +835,8 @@ struct MediumWidgetView: View {
                                 .font(.system(size: 9, weight: .medium))
                         }
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
 
                     Spacer()
 
@@ -823,7 +846,8 @@ struct MediumWidgetView: View {
                         .minimumScaleFactor(0.7)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
 
                     Spacer()
                 }
