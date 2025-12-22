@@ -1059,6 +1059,16 @@ struct ContentView: View {
             },
             onFeedContextMenu: { feed in
                 createFeedContextMenu(feed)
+            },
+            onHideLatest: {
+                withAnimation {
+                    showLatestView = false
+                }
+            },
+            onHideToday: {
+                withAnimation {
+                    showTodayView = false
+                }
             }
         )
         .ignoresSafeArea()

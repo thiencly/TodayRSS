@@ -194,11 +194,153 @@ struct SettingsView: View {
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
-    @State private var showAIRevealDemo = false
 
     var body: some View {
         NavigationStack {
             List {
+                // ============================================================
+                // MARK: - APPEARANCE GROUP
+                // ============================================================
+
+                // MARK: - Appearance Section
+                Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { AppearanceMode(rawValue: appearanceMode) ?? .auto },
+                        set: { appearanceMode = $0.rawValue }
+                    )) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            Label(mode.displayName, systemImage: mode.iconName)
+                                .tag(mode)
+                        }
+                    }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Choose between light mode, dark mode, or auto to follow your device's setting.")
+                }
+
+                // MARK: - App Tint Section
+                Section {
+                    AppTintSelectionView(
+                        selectedTint: Binding(
+                            get: { AppTint(rawValue: appTint) ?? .blue },
+                            set: { appTint = $0.rawValue }
+                        )
+                    )
+                } header: {
+                    Text("App Tint")
+                } footer: {
+                    Text("Choose the accent color used throughout the app.")
+                }
+
+                // MARK: - App Icon Section
+                Section {
+                    AppIconSelectionView(
+                        selectedIcon: Binding(
+                            get: { AppIconOption(rawValue: selectedAppIcon) ?? .auto },
+                            set: { newValue in
+                                selectedAppIcon = newValue.rawValue
+                                updateAppIcon(to: newValue)
+                            }
+                        ),
+                        colorScheme: colorScheme
+                    )
+                } header: {
+                    Text("App Icon")
+                } footer: {
+                    Text("Auto changes the icon based on your device's light or dark mode setting.")
+                }
+
+                // ============================================================
+                // MARK: - CONTENT GROUP
+                // ============================================================
+
+                // MARK: - At a Glance Section
+                Section {
+                    Picker("Articles to Show", selection: $atAGlanceCount) {
+                        ForEach(1...4, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+
+                    Toggle("Auto-expand on New Articles", isOn: $atAGlanceAutoExpand)
+                } header: {
+                    Text("At a Glance")
+                } footer: {
+                    Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
+                }
+
+                // MARK: - News Reel Section
+                Section {
+                    Picker("Time Period", selection: $newsReelHours) {
+                        Text("2 hours").tag(2)
+                        Text("4 hours").tag(4)
+                        Text("6 hours").tag(6)
+                        Text("8 hours").tag(8)
+                        Text("12 hours").tag(12)
+                        Text("16 hours").tag(16)
+                        Text("24 hours").tag(24)
+                    }
+                } header: {
+                    Text("News Reel")
+                } footer: {
+                    Text("Show articles from the selected rolling time period in the News Reel.")
+                }
+
+                // MARK: - Sidebar Section
+                Section {
+                    Toggle("Show Latest", isOn: $showLatestView)
+                    Toggle("Show Today", isOn: $showTodayView)
+                } header: {
+                    Text("Sidebar")
+                } footer: {
+                    Text("Choose which views appear in the sidebar. Latest shows the newest article from each source. Today shows all articles from the past 24 hours.")
+                }
+
+                // ============================================================
+                // MARK: - READING GROUP
+                // ============================================================
+
+                // MARK: - Reader Section
+                Section {
+                    HStack {
+                        Text("Font Size")
+                        Spacer()
+                        HStack(spacing: 16) {
+                            Button {
+                                if readerFontSize > 14 { readerFontSize -= 2 }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+
+                            Text("\(Int(readerFontSize))")
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.medium)
+                                .frame(width: 30)
+
+                            Button {
+                                if readerFontSize < 28 { readerFontSize += 2 }
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } header: {
+                    Text("Reader")
+                } footer: {
+                    Text("Adjust the text size for the article reader view.")
+                }
+
+                // ============================================================
+                // MARK: - SYNC & DATA GROUP
+                // ============================================================
+
                 // MARK: - Background Refresh Warning
                 if backgroundRefreshStatus != .available {
                     Section {
@@ -285,133 +427,6 @@ struct SettingsView: View {
                     Text("Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.")
                 }
 
-                // MARK: - At a Glance Section
-                Section {
-                    Picker("Articles to Show", selection: $atAGlanceCount) {
-                        ForEach(1...4, id: \.self) { count in
-                            Text("\(count)").tag(count)
-                        }
-                    }
-
-                    Toggle("Auto-expand on New Articles", isOn: $atAGlanceAutoExpand)
-                } header: {
-                    Text("At a Glance")
-                } footer: {
-                    Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
-                }
-
-                // MARK: - News Reel Section
-                Section {
-                    Picker("Time Period", selection: $newsReelHours) {
-                        Text("2 hours").tag(2)
-                        Text("4 hours").tag(4)
-                        Text("6 hours").tag(6)
-                        Text("8 hours").tag(8)
-                        Text("12 hours").tag(12)
-                        Text("16 hours").tag(16)
-                        Text("24 hours").tag(24)
-                    }
-                } header: {
-                    Text("News Reel")
-                } footer: {
-                    Text("Show articles from the selected rolling time period in the News Reel.")
-                }
-
-                // MARK: - Reader Section
-                Section {
-                    HStack {
-                        Text("Font Size")
-                        Spacer()
-                        HStack(spacing: 16) {
-                            Button {
-                                if readerFontSize > 14 { readerFontSize -= 2 }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-
-                            Text("\(Int(readerFontSize))")
-                                .font(.system(.body, design: .rounded))
-                                .fontWeight(.medium)
-                                .frame(width: 30)
-
-                            Button {
-                                if readerFontSize < 28 { readerFontSize += 2 }
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                } header: {
-                    Text("Reader")
-                } footer: {
-                    Text("Adjust the text size for the article reader view.")
-                }
-
-                // MARK: - Appearance Section
-                Section {
-                    Picker("Appearance", selection: Binding(
-                        get: { AppearanceMode(rawValue: appearanceMode) ?? .auto },
-                        set: { appearanceMode = $0.rawValue }
-                    )) {
-                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                            Label(mode.displayName, systemImage: mode.iconName)
-                                .tag(mode)
-                        }
-                    }
-                } header: {
-                    Text("Appearance")
-                } footer: {
-                    Text("Choose between light mode, dark mode, or auto to follow your device's setting.")
-                }
-
-                // MARK: - App Tint Section
-                Section {
-                    AppTintSelectionView(
-                        selectedTint: Binding(
-                            get: { AppTint(rawValue: appTint) ?? .blue },
-                            set: { appTint = $0.rawValue }
-                        )
-                    )
-                } header: {
-                    Text("App Tint")
-                } footer: {
-                    Text("Choose the accent color used throughout the app.")
-                }
-
-                // MARK: - Sidebar Section
-                Section {
-                    Toggle("Show Latest", isOn: $showLatestView)
-                    Toggle("Show Today", isOn: $showTodayView)
-                } header: {
-                    Text("Sidebar")
-                } footer: {
-                    Text("Choose which views appear in the sidebar. Latest shows the newest article from each source. Today shows all articles from the past 24 hours.")
-                }
-
-                // MARK: - App Icon Section
-                Section {
-                    AppIconSelectionView(
-                        selectedIcon: Binding(
-                            get: { AppIconOption(rawValue: selectedAppIcon) ?? .auto },
-                            set: { newValue in
-                                selectedAppIcon = newValue.rawValue
-                                updateAppIcon(to: newValue)
-                            }
-                        ),
-                        colorScheme: colorScheme
-                    )
-                } header: {
-                    Text("App Icon")
-                } footer: {
-                    Text("Auto changes the icon based on your device's light or dark mode setting.")
-                }
-
                 // MARK: - iCloud Sync Section
                 Section {
                     HStack {
@@ -441,6 +456,10 @@ struct SettingsView: View {
                     Text("Your feeds, sections, and highlight sources are automatically synced across all your devices using iCloud.")
                 }
 
+                // ============================================================
+                // MARK: - ABOUT GROUP
+                // ============================================================
+
                 // MARK: - About Section
                 Section {
                     Button {
@@ -460,32 +479,9 @@ struct SettingsView: View {
                 } footer: {
                     Text("View the welcome tutorial again.")
                 }
-
-                // MARK: - Developer Section
-                Section {
-                    Button {
-                        showAIRevealDemo = true
-                    } label: {
-                        HStack {
-                            Label("Test AI Reveal Effect", systemImage: "sparkles")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                } header: {
-                    Text("Developer")
-                } footer: {
-                    Text("Test the Apple Mail-style AI summary reveal animation.")
-                }
             }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView(isPresented: $showOnboarding)
-            }
-            .sheet(isPresented: $showAIRevealDemo) {
-                AIRevealDemoView()
             }
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus

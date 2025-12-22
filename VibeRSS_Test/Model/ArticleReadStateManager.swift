@@ -24,6 +24,8 @@ actor ArticleReadStateManager {
 
     private init() {
         loadFromDefaults()
+        // Auto cleanup on init to prevent unbounded growth
+        Task { await cleanup() }
     }
 
     // MARK: - Seen State (for blue dot "new" indicator)

@@ -67,12 +67,18 @@ class WidgetDataManager {
     private let configKey = "widgetSourceConfig"
     private let articlesKey = "widgetArticles"
 
+    // Storage limits
+    private let maxArticlesPerFeed = 10
+    private let maxArticleAgeDays = 7
+
     init() {
         userDefaults = UserDefaults(suiteName: appGroupIdentifier)
         if userDefaults == nil {
             print("⚠️ WidgetDataManager: Failed to access App Group '\(appGroupIdentifier)'")
         } else {
             print("✓ WidgetDataManager: App Group accessible")
+            // Auto cleanup on init
+            pruneArticles()
         }
     }
 
@@ -186,5 +192,43 @@ class WidgetDataManager {
     func clearAllData() {
         userDefaults?.removeObject(forKey: configKey)
         userDefaults?.removeObject(forKey: articlesKey)
+    }
+
+    // MARK: - Cleanup
+
+    /// Prune old articles and limit articles per feed
+    private func pruneArticles() {
+        var articles = loadArticles()
+        guard !articles.isEmpty else { return }
+
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxArticleAgeDays, to: Date()) ?? Date.distantPast
+        var didPrune = false
+
+        for (feedID, feedArticles) in articles {
+            // Filter out articles older than max age
+            var filtered = feedArticles.filter { article in
+                guard let pubDate = article.pubDate else { return true }
+                return pubDate > cutoffDate
+            }
+
+            // Sort by date and keep only max articles per feed
+            filtered.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            if filtered.count > maxArticlesPerFeed {
+                filtered = Array(filtered.prefix(maxArticlesPerFeed))
+            }
+
+            if filtered.count != feedArticles.count {
+                articles[feedID] = filtered
+                didPrune = true
+            }
+        }
+
+        // Remove empty feeds
+        articles = articles.filter { !$0.value.isEmpty }
+
+        if didPrune {
+            saveArticles(articles)
+            print("✓ WidgetDataManager: Pruned old articles")
+        }
     }
 }

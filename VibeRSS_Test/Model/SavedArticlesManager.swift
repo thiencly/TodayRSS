@@ -46,9 +46,12 @@ final class SavedArticlesManager {
     private(set) var savedArticles: [SavedArticle] = []
     private let saveKey = "savedArticles"
     private let userDefaults = UserDefaults.standard
+    private let maxSavedArticles = 50
 
     private init() {
         loadSavedArticles()
+        // Auto cleanup on init if over limit
+        pruneIfNeeded()
     }
 
     // MARK: - Public Methods
@@ -113,11 +116,24 @@ final class SavedArticlesManager {
     }
 
     private func persistSavedArticles() {
+        // Enforce limit before saving
+        pruneIfNeeded()
         do {
             let data = try JSONEncoder().encode(savedArticles)
             userDefaults.set(data, forKey: saveKey)
         } catch {
             print("Failed to save articles: \(error)")
         }
+    }
+
+    // MARK: - Cleanup
+
+    /// Remove oldest saved articles if over limit
+    private func pruneIfNeeded() {
+        guard savedArticles.count > maxSavedArticles else { return }
+        // Articles are sorted newest first (inserted at index 0)
+        // So we keep the first maxSavedArticles
+        savedArticles = Array(savedArticles.prefix(maxSavedArticles))
+        print("✓ SavedArticlesManager: Pruned to \(maxSavedArticles) articles")
     }
 }

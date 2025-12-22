@@ -139,6 +139,8 @@ final class SidebarCollectionVC: UIViewController {
     var onToggleSources: ((Bool) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
+    var onHideLatest: (() -> Void)?
+    var onHideToday: (() -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -739,6 +741,22 @@ extension SidebarCollectionVC: UICollectionViewDelegate {
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return nil }
 
         switch item {
+        case .latest:
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                let hideAction = UIAction(title: "Hide from Sidebar", image: UIImage(systemName: "eye.slash"), attributes: .destructive) { _ in
+                    self?.onHideLatest?()
+                }
+                return UIMenu(title: "", children: [hideAction])
+            }
+
+        case .today:
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                let hideAction = UIAction(title: "Hide from Sidebar", image: UIImage(systemName: "eye.slash"), attributes: .destructive) { _ in
+                    self?.onHideToday?()
+                }
+                return UIMenu(title: "", children: [hideAction])
+            }
+
         case .folder(let id, _, _, _, _, _, _):
             guard let folder = folders.first(where: { $0.id == id }) else { return nil }
             guard let menu = onFolderContextMenu?(folder) else { return nil }
@@ -772,6 +790,8 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     var onNavigate: ((SidebarDestination) -> Void)?
     var onFolderContextMenu: ((Folder) -> UIMenu?)?
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
+    var onHideLatest: (() -> Void)?
+    var onHideToday: (() -> Void)?
 
     func makeUIViewController(context: Context) -> SidebarCollectionVC {
         let vc = SidebarCollectionVC()
@@ -810,6 +830,8 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
 
         vc.onFolderContextMenu = onFolderContextMenu
         vc.onFeedContextMenu = onFeedContextMenu
+        vc.onHideLatest = onHideLatest
+        vc.onHideToday = onHideToday
     }
 }
 
