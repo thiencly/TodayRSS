@@ -1,0 +1,158 @@
+{
+  "identifier" : "Products",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "49.99",
+      "familyShareable" : true,
+      "internalID" : "lifetime",
+      "localizations" : [
+        {
+          "description" : "Unlock all premium features forever with a single purchase",
+          "displayName" : "Lifetime Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.todayrss.premium.lifetime",
+      "referenceName" : "Lifetime Premium",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "todayrss",
+    "_developerTeamID" : "TEAM_ID",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "premium",
+      "localizations" : [
+        {
+          "description" : "Premium subscription for VibeRSS",
+          "displayName" : "Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "monthly",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "monthly_trial",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Unlock all premium features with a monthly subscription",
+              "displayName" : "Monthly Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.todayrss.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Monthly Premium",
+          "subscriptionGroupID" : "premium",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "19.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "yearly",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "yearly_trial",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Unlock all premium features with an annual subscription and save 44%",
+              "displayName" : "Yearly Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.todayrss.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Yearly Premium",
+          "subscriptionGroupID" : "premium",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

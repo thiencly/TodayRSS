@@ -252,13 +252,19 @@ struct SettingsView: View {
                 }
 
                 // ============================================================
+                // MARK: - SUBSCRIPTION
+                // ============================================================
+
+                SubscriptionStatusView()
+
+                // ============================================================
                 // MARK: - CONTENT GROUP
                 // ============================================================
 
                 // MARK: - At a Glance Section
                 Section {
                     Picker("Articles to Show", selection: $atAGlanceCount) {
-                        ForEach(1...4, id: \.self) { count in
+                        ForEach(1...EntitlementManager.shared.atAGlanceLimit, id: \.self) { count in
                             Text("\(count)").tag(count)
                         }
                     }
@@ -267,7 +273,11 @@ struct SettingsView: View {
                 } header: {
                     Text("At a Glance")
                 } footer: {
-                    Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
+                    if EntitlementManager.shared.isPremium {
+                        Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
+                    } else {
+                        Text("At a Glance shows the latest articles from all your sources. Upgrade to Premium to show up to 4 articles.")
+                    }
                 }
 
                 // MARK: - News Reel Section

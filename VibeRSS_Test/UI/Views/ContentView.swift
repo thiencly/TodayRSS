@@ -682,8 +682,9 @@ struct ContentView: View {
             if !previouslySeenLinks.contains(article.link) && !seenNewLinks.contains(article.link) {
                 newArticles.append((feed, article))
                 seenNewLinks.insert(article.link)
-                // Limit to atAGlanceCount
-                if newArticles.count >= atAGlanceCount {
+                // Limit to entitlement-aware at-a-glance count
+                let effectiveLimit = min(atAGlanceCount, EntitlementManager.shared.atAGlanceLimit)
+                if newArticles.count >= effectiveLimit {
                     break
                 }
             }

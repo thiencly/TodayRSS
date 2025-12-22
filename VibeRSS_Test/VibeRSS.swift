@@ -51,6 +51,9 @@ struct VibeRSSApp: App {
 
         // Schedule initial background refresh
         BackgroundSyncManager.shared.scheduleBackgroundRefresh()
+
+        // Initialize subscription manager to start listening for transactions
+        _ = SubscriptionManager.shared
     }
 
     var body: some Scene {

@@ -18,6 +18,7 @@ struct AddFeedView: View {
     @State private var manualError: String?
 
     @State private var addingFeedID: String?
+    @State private var showPaywall = false
 
     private let searchService = FeedSearchService()
     private let faviconService = FaviconService()
@@ -135,6 +136,9 @@ struct AddFeedView: View {
             }
             .onChange(of: searchQuery) { _, newValue in
                 debounceSearch(query: newValue)
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(trigger: .feeds)
             }
         }
     }
@@ -284,6 +288,12 @@ struct AddFeedView: View {
     // MARK: - Add Feed Logic
 
     private func addSearchResult(_ result: FeedSearchResult) {
+        // Check feed limit
+        guard EntitlementManager.shared.canAddFeed(currentCount: store.feeds.count) else {
+            showPaywall = true
+            return
+        }
+
         HapticManager.shared.click()
         addingFeedID = result.id
 
@@ -311,6 +321,12 @@ struct AddFeedView: View {
     }
 
     private func addManualFeed() {
+        // Check feed limit
+        guard EntitlementManager.shared.canAddFeed(currentCount: store.feeds.count) else {
+            showPaywall = true
+            return
+        }
+
         guard let url = URL(string: manualURL) else {
             manualError = "Invalid URL"
             return

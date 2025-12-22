@@ -46,7 +46,10 @@ final class SavedArticlesManager {
     private(set) var savedArticles: [SavedArticle] = []
     private let saveKey = "savedArticles"
     private let userDefaults = UserDefaults.standard
-    private let maxSavedArticles = 50
+
+    private var maxSavedArticles: Int {
+        EntitlementManager.shared.savedArticlesLimit
+    }
 
     private init() {
         loadSavedArticles()
@@ -60,18 +63,31 @@ final class SavedArticlesManager {
         savedArticles.contains { $0.url == url }
     }
 
-    func save(article: SavedArticle) {
-        guard !isSaved(url: article.url) else { return }
+    /// Returns true if saved successfully, false if limit reached
+    @discardableResult
+    func save(article: SavedArticle) -> Bool {
+        guard !isSaved(url: article.url) else { return true }
+
+        // Check entitlement limit
+        guard EntitlementManager.shared.canSaveArticle(currentCount: savedArticles.count) else {
+            return false
+        }
+
         savedArticles.insert(article, at: 0)
         persistSavedArticles()
+        return true
     }
 
-    func save(from article: Article) {
+    /// Returns true if saved successfully, false if limit reached
+    @discardableResult
+    func save(from article: Article) -> Bool {
         let savedArticle = SavedArticle(from: article)
-        save(article: savedArticle)
+        return save(article: savedArticle)
     }
 
-    func save(url: URL, title: String, pubDate: Date?, thumbnailURL: URL?, sourceIconURL: URL?, sourceTitle: String?) {
+    /// Returns true if saved successfully, false if limit reached
+    @discardableResult
+    func save(url: URL, title: String, pubDate: Date?, thumbnailURL: URL?, sourceIconURL: URL?, sourceTitle: String?) -> Bool {
         let savedArticle = SavedArticle(
             url: url,
             title: title,
@@ -80,7 +96,7 @@ final class SavedArticlesManager {
             sourceIconURL: sourceIconURL,
             sourceTitle: sourceTitle
         )
-        save(article: savedArticle)
+        return save(article: savedArticle)
     }
 
     func unsave(url: URL) {
@@ -88,19 +104,25 @@ final class SavedArticlesManager {
         persistSavedArticles()
     }
 
-    func toggleSaved(article: Article) {
+    /// Returns true if operation succeeded, false if save limit reached
+    @discardableResult
+    func toggleSaved(article: Article) -> Bool {
         if isSaved(url: article.link) {
             unsave(url: article.link)
+            return true
         } else {
-            save(from: article)
+            return save(from: article)
         }
     }
 
-    func toggleSaved(url: URL, title: String, pubDate: Date?, thumbnailURL: URL?, sourceIconURL: URL?, sourceTitle: String?) {
+    /// Returns true if operation succeeded, false if save limit reached
+    @discardableResult
+    func toggleSaved(url: URL, title: String, pubDate: Date?, thumbnailURL: URL?, sourceIconURL: URL?, sourceTitle: String?) -> Bool {
         if isSaved(url: url) {
             unsave(url: url)
+            return true
         } else {
-            save(url: url, title: title, pubDate: pubDate, thumbnailURL: thumbnailURL, sourceIconURL: sourceIconURL, sourceTitle: sourceTitle)
+            return save(url: url, title: title, pubDate: pubDate, thumbnailURL: thumbnailURL, sourceIconURL: sourceIconURL, sourceTitle: sourceTitle)
         }
     }
 

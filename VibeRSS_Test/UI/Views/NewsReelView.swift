@@ -1113,6 +1113,8 @@ struct SourcePageView: View {
     let onSummaryRetry: (Article) -> Void
 
     @State private var currentArticleIndex: Int
+    @State private var showPaywall = false
+    @State private var previousArticleIndex: Int = 0
 
     init(viewModel: NewsReelViewModel, sourceIndex: Int, onArticleTap: @escaping (Article) -> Void, onSummaryRetry: @escaping (Article) -> Void) {
         self.viewModel = viewModel
@@ -1170,6 +1172,17 @@ struct SourcePageView: View {
         }
         .ignoresSafeArea()
         .onChange(of: currentArticleIndex) { _, newIndex in
+            // Track swipe for free users (only count actual swipes, not initial load)
+            if previousArticleIndex != newIndex {
+                UsageTracker.shared.recordSwipe()
+                previousArticleIndex = newIndex
+
+                // Check if limit reached
+                if UsageTracker.shared.hasReachedSwipeLimit {
+                    showPaywall = true
+                }
+            }
+
             if sourceIndex == viewModel.currentSourceIndex {
                 viewModel.currentArticleIndex = newIndex
             }
@@ -1199,6 +1212,9 @@ struct SourcePageView: View {
                     await viewModel.generateReelSummary(for: article)
                 }
             }
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(trigger: .newsReel)
         }
     }
 
