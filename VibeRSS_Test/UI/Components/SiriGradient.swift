@@ -124,6 +124,8 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
     var idleIntensity: Double = 1.0  // Multiplier for idle glow opacity
     var scale: CGFloat = 1.0  // Scale factor for glow size (0.5 = half size)
 
+    @Environment(\.colorScheme) private var colorScheme
+
     // Layer configuration for active state: (lineWidth, blurRadius)
     private var activeLayers: [(CGFloat, CGFloat)] {
         [
@@ -163,7 +165,9 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
                     ZStack {
                         ForEach(activeLayers.indices.reversed(), id: \.self) { index in
                             let (lineWidth, blur) = activeLayers[index]
-                            let layerOpacity = 0.6 * (0.6 + 0.1 * Double(index))  // Reduced for better color distinction
+                            // Higher opacity for light mode since we can't use additive blend modes
+                            let baseOpacity = colorScheme == .dark ? 0.6 : 0.85
+                            let layerOpacity = baseOpacity * (0.6 + 0.1 * Double(index))
 
                             shape
                                 .stroke(
@@ -178,7 +182,8 @@ struct AppleIntelligenceGlow<S: InsettableShape>: View {
                                 .blur(radius: blur)
                                 .saturation(1.5)
                                 .opacity(layerOpacity)
-                                .blendMode(index == 0 ? .plusLighter : .screen)
+                                // Use additive blend modes only in dark mode; normal blend in light mode
+                                .blendMode(colorScheme == .dark ? (index == 0 ? .plusLighter : .screen) : .normal)
                         }
                     }
                 }

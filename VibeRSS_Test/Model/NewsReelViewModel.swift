@@ -52,8 +52,11 @@ final class NewsReelViewModel: ObservableObject {
     /// Loading state for summaries
     @Published private(set) var loadingSummaryURLs: Set<URL> = []
 
+    /// Track which sources have finished loading (to distinguish loading from empty)
+    @Published private(set) var loadedSourceIDs: Set<String> = []
+
     /// Saved article positions for each source (to restore when switching back)
-    private var savedArticlePositions: [Int: Int] = [:]
+    private var savedArticlePositions: [Int: Int] = []
 
     // MARK: - Private Properties
 
@@ -99,6 +102,34 @@ final class NewsReelViewModel: ObservableObject {
         currentSourceIndex > 0
     }
 
+    /// The current time period setting in hours
+    var timePeriodHours: Int {
+        newsReelHours
+    }
+
+    /// Check if a source has any feeds assigned to it
+    func hasFeeds(forSourceAt index: Int) -> Bool {
+        guard index >= 0 && index < sources.count else { return false }
+        let source = sources[index]
+        return feedCount(for: source) > 0
+    }
+
+    /// Get the number of feeds for a source
+    private func feedCount(for source: ReelSource) -> Int {
+        switch source {
+        case .all:
+            return feeds.count
+        case .folder(let folder):
+            return feeds.filter { $0.folderID == folder.id }.count
+        }
+    }
+
+    /// Check if a source has finished loading
+    func hasLoaded(sourceAt index: Int) -> Bool {
+        guard index >= 0 && index < sources.count else { return false }
+        return loadedSourceIDs.contains(sources[index].id)
+    }
+
     /// Get articles for a specific source index (used for rendering adjacent sources during transitions)
     func articles(forSourceAt index: Int) -> [Article] {
         guard index >= 0 && index < sources.count else { return [] }
@@ -121,20 +152,22 @@ final class NewsReelViewModel: ObservableObject {
         // Preload previous source
         if hasPreviousSource {
             let prevSource = sources[currentSourceIndex - 1]
-            if articlesBySource[prevSource.id] == nil {
+            if !loadedSourceIDs.contains(prevSource.id) {
                 if let articles = try? await loadArticles(for: prevSource) {
                     articlesBySource[prevSource.id] = articles
                 }
+                loadedSourceIDs.insert(prevSource.id)
             }
         }
 
         // Preload next source
         if hasNextSource {
             let nextSource = sources[currentSourceIndex + 1]
-            if articlesBySource[nextSource.id] == nil {
+            if !loadedSourceIDs.contains(nextSource.id) {
                 if let articles = try? await loadArticles(for: nextSource) {
                     articlesBySource[nextSource.id] = articles
                 }
+                loadedSourceIDs.insert(nextSource.id)
             }
         }
     }
@@ -221,7 +254,7 @@ final class NewsReelViewModel: ObservableObject {
         guard let source = currentSource else { return }
 
         // Check if already loaded
-        if let existing = articlesBySource[source.id], !existing.isEmpty {
+        if loadedSourceIDs.contains(source.id) {
             prefetchAdjacentSummaries()
             return
         }
@@ -232,9 +265,11 @@ final class NewsReelViewModel: ObservableObject {
         do {
             let articles = try await loadArticles(for: source)
             articlesBySource[source.id] = articles
+            loadedSourceIDs.insert(source.id)
             prefetchAdjacentSummaries()
         } catch {
             errorMessage = "Failed to load articles"
+            loadedSourceIDs.insert(source.id)  // Mark as loaded even on error
         }
 
         isLoading = false
@@ -399,8 +434,9 @@ final class NewsReelViewModel: ObservableObject {
     func refresh() async {
         guard let source = currentSource else { return }
 
-        // Clear cached articles for this source
+        // Clear cached articles and loaded status for this source
         articlesBySource[source.id] = nil
+        loadedSourceIDs.remove(source.id)
         currentArticleIndex = 0
 
         await loadArticlesForCurrentSource()

@@ -1129,20 +1129,36 @@ struct SourcePageView: View {
         viewModel.articles(forSourceAt: sourceIndex)
     }
 
+    private var hasLoaded: Bool {
+        viewModel.hasLoaded(sourceAt: sourceIndex)
+    }
+
+    private var hasFeeds: Bool {
+        viewModel.hasFeeds(forSourceAt: sourceIndex)
+    }
+
     var body: some View {
         Group {
             if articles.isEmpty {
-                // Show loading while articles are being fetched
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.2)
-                    Text("Loading articles...")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.7))
+                if !hasLoaded {
+                    // Still loading
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.2)
+                        Text("Loading articles...")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                } else if !hasFeeds {
+                    // No sources assigned to this topic
+                    emptyStateNoSources
+                } else {
+                    // Has sources but no articles in time period
+                    emptyStateNoArticles
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
             } else {
                 ReelsVerticalPager(
                     items: articles.map { $0.id as AnyHashable },
@@ -1202,6 +1218,48 @@ struct SourcePageView: View {
         } else {
             Color.black
         }
+    }
+
+    // MARK: - Empty States
+
+    private var emptyStateNoSources: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 56))
+                .foregroundStyle(.white.opacity(0.5))
+
+            Text("No Sources in This Topic")
+                .font(.system(.title2, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("Add some feeds to this topic to see articles here.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+    }
+
+    private var emptyStateNoArticles: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "clock.badge.exclamationmark")
+                .font(.system(size: 56))
+                .foregroundStyle(.white.opacity(0.5))
+
+            Text("No Recent Articles")
+                .font(.system(.title2, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("No articles found in the last \(viewModel.timePeriodHours) hours. Try adjusting the time period in Settings.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
     }
 }
 
