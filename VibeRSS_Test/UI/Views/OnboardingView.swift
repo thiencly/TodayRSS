@@ -15,106 +15,68 @@ struct OnboardingView: View {
         OnboardingPage(
             type: .welcome,
             title: "Welcome to\nTodayRSS",
-            subtitle: "Your personal news reader with AI-powered summaries",
+            subtitle: "Your personal news reader with AI-powered summaries, beautiful widgets, and seamless sync across all your devices",
             features: []
         ),
         OnboardingPage(
             type: .features,
-            title: "Add Your Sources",
-            subtitle: "Subscribe to your favorite websites and blogs",
-            features: [
-                OnboardingFeature(
-                    icon: "plus.circle.fill",
-                    iconColor: .blue,
-                    title: "Add RSS Feeds",
-                    description: "Tap the + button to add news sources, blogs, and podcasts"
-                ),
-                OnboardingFeature(
-                    icon: "globe",
-                    iconColor: .cyan,
-                    title: "Discover Content",
-                    description: "Paste any website URL and we'll find the RSS feed for you"
-                ),
-                OnboardingFeature(
-                    icon: "arrow.triangle.2.circlepath",
-                    iconColor: .green,
-                    title: "Stay Updated",
-                    description: "Your feeds sync automatically in the background"
-                )
-            ]
-        ),
-        OnboardingPage(
-            type: .features,
-            title: "Organize Your Way",
-            subtitle: "Keep your feeds neat and tidy",
-            features: [
-                OnboardingFeature(
-                    icon: "folder.fill",
-                    iconColor: .orange,
-                    title: "Create Sections",
-                    description: "Group related sources into sections for easy access"
-                ),
-                OnboardingFeature(
-                    icon: "hand.draw.fill",
-                    iconColor: .purple,
-                    title: "Drag & Drop",
-                    description: "Long press and drag sources to organize them"
-                ),
-                OnboardingFeature(
-                    icon: "star.fill",
-                    iconColor: .yellow,
-                    title: "Pin Favorites",
-                    description: "Add sources to Today for quick highlights"
-                )
-            ]
-        ),
-        OnboardingPage(
-            type: .features,
-            title: "AI Summaries",
-            subtitle: "Get the key points instantly",
+            title: "Smart Reading",
+            subtitle: "Powerful ways to consume your news",
             features: [
                 OnboardingFeature(
                     icon: "sparkles",
                     iconColor: .purple,
-                    title: "Quick Summaries",
-                    description: "Tap the Summary button on any article for an AI-generated overview"
+                    title: "AI Summaries",
+                    description: "Get instant summaries of any article, powered by on-device AI for complete privacy"
                 ),
                 OnboardingFeature(
-                    icon: "brain.head.profile",
+                    icon: "rectangle.stack.fill",
                     iconColor: .pink,
-                    title: "On-Device AI",
-                    description: "Summaries are generated privately on your device"
+                    title: "News Reel",
+                    description: "Swipe through articles with auto-generated summaries, like a news feed made just for you"
                 ),
                 OnboardingFeature(
-                    icon: "slider.horizontal.3",
-                    iconColor: .indigo,
-                    title: "Adjustable Length",
-                    description: "Choose between short or detailed summaries"
+                    icon: "square.text.square.fill",
+                    iconColor: .blue,
+                    title: "At a Glance",
+                    description: "See the latest headlines from all your sources in one expandable card"
+                ),
+                OnboardingFeature(
+                    icon: "heart.fill",
+                    iconColor: .red,
+                    title: "Save for Later",
+                    description: "Bookmark articles to read when you have more time"
                 )
             ]
         ),
         OnboardingPage(
             type: .features,
-            title: "At a Glance",
-            subtitle: "Your personalized news summary",
+            title: "Stay Organized",
+            subtitle: "Your news, your way",
             features: [
                 OnboardingFeature(
-                    icon: "rectangle.stack.fill",
-                    iconColor: .blue,
-                    title: "Priority Sources",
-                    description: "See the latest from your favorite sources front and center"
+                    icon: "folder.fill",
+                    iconColor: .orange,
+                    title: "Topics & Folders",
+                    description: "Group your sources into topics and pin your favorites for the News Reel"
                 ),
                 OnboardingFeature(
-                    icon: "widget.small",
+                    icon: "widget.medium",
                     iconColor: .teal,
                     title: "Home Screen Widgets",
-                    description: "Add widgets to see headlines without opening the app"
+                    description: "Add beautiful widgets to see headlines without opening the app"
                 ),
                 OnboardingFeature(
-                    icon: "bell.badge.fill",
-                    iconColor: .red,
-                    title: "New Article Badges",
-                    description: "Blue dots show you what's new since your last visit"
+                    icon: "icloud.fill",
+                    iconColor: .cyan,
+                    title: "iCloud Sync",
+                    description: "Your feeds and settings sync automatically across all your Apple devices"
+                ),
+                OnboardingFeature(
+                    icon: "arrow.triangle.2.circlepath",
+                    iconColor: .green,
+                    title: "Background Updates",
+                    description: "Feeds refresh automatically so you always have the latest news"
                 )
             ]
         )
@@ -304,23 +266,23 @@ struct OnboardingPageView: View {
     private var featuresContent: some View {
         VStack(spacing: 0) {
             Spacer()
-                .frame(height: 60)
+                .frame(height: 40)
 
             // Title
             Text(page.title)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 8)
+                .padding(.bottom, 6)
 
             // Subtitle
             Text(page.subtitle)
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 40)
+                .padding(.bottom, 28)
 
-            // Features
-            VStack(spacing: 24) {
+            // Features - compact spacing for 4 items
+            VStack(spacing: 18) {
                 ForEach(page.features.indices, id: \.self) { index in
                     FeatureRow(feature: page.features[index])
                 }
@@ -337,25 +299,25 @@ struct FeatureRow: View {
     let feature: OnboardingFeature
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 14) {
             // Icon with background
             ZStack {
                 Circle()
                     .fill(feature.iconColor.opacity(0.15))
-                    .frame(width: 50, height: 50)
+                    .frame(width: 44, height: 44)
 
                 Image(systemName: feature.icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(feature.iconColor)
             }
 
             // Text content
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
-                    .font(.roundedHeadline)
+                    .font(.subheadline.weight(.semibold))
 
                 Text(feature.description)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
