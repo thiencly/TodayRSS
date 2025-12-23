@@ -178,14 +178,16 @@ class WidgetDataManager {
         return allArticles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
     }
 
-    // Get feed by ID
+    // Get feed by ID (case-insensitive for UUID strings)
     func feed(for id: String) -> WidgetFeed? {
-        loadSourceConfig().feeds.first { $0.id == id }
+        let normalizedID = id.uppercased()
+        return loadSourceConfig().feeds.first { $0.id.uppercased() == normalizedID }
     }
 
-    // Get folder by ID
+    // Get folder by ID (case-insensitive for UUID strings)
     func folder(for id: String) -> WidgetFolder? {
-        loadSourceConfig().folders.first { $0.id == id }
+        let normalizedID = id.uppercased()
+        return loadSourceConfig().folders.first { $0.id.uppercased() == normalizedID }
     }
 
     // Clear all widget data

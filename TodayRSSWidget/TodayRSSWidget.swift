@@ -182,9 +182,12 @@ struct SourceQuery: EntityQuery {
         var results: [SourceEntity] = []
 
         for id in identifiers {
-            if let feed = config.feeds.first(where: { $0.id == id }) {
+            // Use case-insensitive comparison for UUID strings
+            let normalizedID = id.uppercased()
+
+            if let feed = config.feeds.first(where: { $0.id.uppercased() == normalizedID }) {
                 results.append(SourceEntity(id: feed.id, displayName: feed.title, isFolder: false))
-            } else if let folder = config.folders.first(where: { $0.id == id }) {
+            } else if let folder = config.folders.first(where: { $0.id.uppercased() == normalizedID }) {
                 results.append(SourceEntity(id: folder.id, displayName: folder.name, isFolder: true))
             } else {
                 // Entity not found in config - this can happen if:
@@ -194,7 +197,7 @@ struct SourceQuery: EntityQuery {
                 // and allow the widget to retry when config is synced
                 //
                 // Try to determine if this was a folder by checking if any feeds reference it
-                let isFolderID = config.feeds.contains { $0.folderID == id }
+                let isFolderID = config.feeds.contains { $0.folderID?.uppercased() == normalizedID }
                 if isFolderID {
                     // This ID is referenced as a folderID, so it's a folder
                     results.append(SourceEntity(id: id, displayName: "📁 Folder", isFolder: true))

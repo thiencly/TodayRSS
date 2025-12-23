@@ -13,8 +13,44 @@ import Foundation
 import FoundationModels
 #endif
 
+// MARK: - Cached Regex Patterns
+private enum CachedRegex {
+    // Pre-compiled regex patterns for performance (compiled once, reused forever)
+    static let multipleNewlines = try! NSRegularExpression(pattern: "\\n{2,}", options: [])
+    static let whitespace = try! NSRegularExpression(pattern: "\\s+", options: [])
+    static let htmlComments = try! NSRegularExpression(pattern: "<!--[\\s\\S]*?-->", options: [])
+    static let articleTag = try! NSRegularExpression(pattern: "<article[\\n\\r\\s\\S]*?</article>", options: [])
+    static let scriptTag = try! NSRegularExpression(pattern: "<script[\\n\\r\\s\\S]*?</script>", options: [.caseInsensitive])
+    static let styleTag = try! NSRegularExpression(pattern: "<style[\\n\\r\\s\\S]*?</style>", options: [.caseInsensitive])
+    static let anyHtmlTag = try! NSRegularExpression(pattern: "<[^>]+>", options: [])
+    static let navTag = try! NSRegularExpression(pattern: "<nav[\\n\\r\\s\\S]*?</nav>", options: [.caseInsensitive])
+    static let headerTag = try! NSRegularExpression(pattern: "<header[\\n\\r\\s\\S]*?</header>", options: [.caseInsensitive])
+    static let footerTag = try! NSRegularExpression(pattern: "<footer[\\n\\r\\s\\S]*?</footer>", options: [.caseInsensitive])
+    static let asideTag = try! NSRegularExpression(pattern: "<aside[\\n\\r\\s\\S]*?</aside>", options: [.caseInsensitive])
+
+    // Cache for dynamic patterns (rarely used)
+    private static var dynamicCache: [String: NSRegularExpression] = [:]
+    private static let cacheLock = NSLock()
+
+    static func get(pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression? {
+        let key = "\(pattern)_\(options.rawValue)"
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+
+        if let cached = dynamicCache[key] {
+            return cached
+        }
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
+            return nil
+        }
+        dynamicCache[key] = regex
+        return regex
+    }
+}
+
 private func regexReplace(_ string: String, pattern: String, template: String) -> String {
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return string }
+    guard let regex = CachedRegex.get(pattern: pattern) else { return string }
     let ns = string as NSString
     let range = NSRange(location: 0, length: ns.length)
     return regex.stringByReplacingMatches(in: string, options: [], range: range, withTemplate: template)
@@ -142,6 +178,43 @@ actor ArticleSummarizer {
     private var summarySessionShort: LanguageModelSession?
     private var summarySessionDetailed: LanguageModelSession?
 
+    // Session pool for concurrent requests (hero cards load 4 articles in parallel)
+    private var heroSessionPool: [LanguageModelSession] = []
+    private var reelSessionPool: [LanguageModelSession] = []
+    private let poolSize = 4 // Matches typical concurrent hero card requests
+
+    /// Get a session from the pool, or create a new one if pool is empty
+    private func getHeroSession() -> LanguageModelSession {
+        if let session = heroSessionPool.popLast() {
+            return session
+        }
+        // Pool empty, create new session
+        return LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
+    }
+
+    /// Return a session to the pool (if pool isn't full)
+    private func returnHeroSession(_ session: LanguageModelSession) {
+        if heroSessionPool.count < poolSize {
+            heroSessionPool.append(session)
+        }
+        // If pool is full, session is discarded (will be garbage collected)
+    }
+
+    /// Get a reel session from the pool
+    private func getReelSession() -> LanguageModelSession {
+        if let session = reelSessionPool.popLast() {
+            return session
+        }
+        return LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
+    }
+
+    /// Return a reel session to the pool
+    private func returnReelSession(_ session: LanguageModelSession) {
+        if reelSessionPool.count < poolSize {
+            reelSessionPool.append(session)
+        }
+    }
+
     /// Reset all cached sessions - call when sessions become stale
     private func resetSessions() {
         heroSession = nil
@@ -149,6 +222,8 @@ actor ArticleSummarizer {
         reelExpandedSession = nil
         summarySessionShort = nil
         summarySessionDetailed = nil
+        heroSessionPool.removeAll()
+        reelSessionPool.removeAll()
     }
 
     /// Re-warm a specific session type in the background after reset
@@ -208,13 +283,21 @@ actor ArticleSummarizer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return }
 
-        // Create and cache a session for hero card summaries
-        let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
-        heroSession = session
+        // Pre-populate hero session pool for concurrent requests
+        let heroInstructions = "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail."
+        for _ in 0..<poolSize {
+            heroSessionPool.append(LanguageModelSession(instructions: heroInstructions))
+        }
 
-        // Pre-create reel session for news reel summaries (~50 words)
-        let reelInstructions = "Summarize in 2-3 sentences, about 50 words. Cover the main point and one key detail. Make it engaging and informative. No lists, no emojis."
-        reelSession = LanguageModelSession(instructions: reelInstructions)
+        // Pre-populate reel session pool
+        let reelInstructions = "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis."
+        for _ in 0..<poolSize {
+            reelSessionPool.append(LanguageModelSession(instructions: reelInstructions))
+        }
+
+        // Keep single sessions for streaming summaries (not concurrent)
+        heroSession = heroSessionPool.first
+        reelSession = reelSessionPool.first
 
         // Pre-create reel expanded session for expanded news reel view (~100-120 words)
         let reelExpandedInstructions = "Summarize in 4-5 sentences (100-120 words). Cover the main point, key facts, and important context. Make it informative and complete. No lists, no emojis."
@@ -224,19 +307,36 @@ actor ArticleSummarizer {
         let shortInstructions = "Summarize in 2-3 sentences (60-80 words). Cover the main point and key facts. Make it concise and informative. No lists, no emojis."
         summarySessionShort = LanguageModelSession(instructions: shortInstructions)
 
-        // Run a tiny prompt to trigger model loading
-        do {
-            _ = try await session.respond(to: "Hi", generating: InlineSummary.self)
-        } catch {
-            // Warm-up failed, but that's okay - model will load on first real request
+        // Run a tiny prompt to trigger model loading (use first pooled session)
+        if let session = heroSessionPool.first {
+            do {
+                _ = try await session.respond(to: "Hi", generating: InlineSummary.self)
+            } catch {
+                // Warm-up failed, but that's okay - model will load on first real request
+            }
         }
         #endif
+    }
+
+    /// Minimum character count for RSS description to be considered substantial enough for summarization
+    private let minDescriptionLength = 200
+
+    /// Clean HTML tags from RSS description text
+    nonisolated private func cleanDescription(_ text: String) -> String {
+        var cleaned = text
+        // Remove HTML tags
+        let range = NSRange(location: 0, length: (cleaned as NSString).length)
+        cleaned = CachedRegex.anyHtmlTag.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: " ")
+        // Collapse whitespace
+        let cleanedRange = NSRange(location: 0, length: (cleaned as NSString).length)
+        cleaned = CachedRegex.whitespace.stringByReplacingMatches(in: cleaned, options: [], range: cleanedRange, withTemplate: " ")
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Fast summary for hero cards - optimized for speed
     /// - Parameters:
     ///   - url: Article URL
-    ///   - fallbackText: RSS description to use if full article fetch fails (optional fallback)
+    ///   - fallbackText: RSS description to use (preferred if substantial, fallback otherwise)
     func fastHeroSummary(url: URL, articleText fallbackText: String?) async -> String? {
         let key = makeCacheKey(url: url, length: .quick)
         if let cached = cache[key], !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -251,26 +351,33 @@ actor ArticleSummarizer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return nil }
 
-        // Priority: 1) Cached full article, 2) Fetch HTML, 3) RSS description fallback
+        // Clean the RSS description first
+        let cleanedDescription = fallbackText.map { cleanDescription($0) }
+        let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLength
+
+        // Priority: 1) Cached full article, 2) Substantial RSS description (skip network!), 3) Fetch HTML, 4) Short RSS description
         let baseText: String
         if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
             // Best: use cached full article text
             baseText = cachedText
-        } else if let html = try? await fetchHTML(url: url) {
-            // Good: fetch and extract full article
+        } else if hasSubstantialDescription, let description = cleanedDescription {
+            // Good: RSS description is substantial enough - skip HTML fetch entirely for speed
+            baseText = description
+        } else if let html = try? await fetchHTMLWithAdaptiveTimeout(url: url) {
+            // Fetch HTML only if description was too short
             let extracted = extractReadableText(from: String(html.prefix(100_000)))
             if !extracted.isEmpty {
                 baseText = extracted
                 await ArticleTextCache.shared.storeText(extracted, for: url)
-            } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                // HTML extraction failed, use RSS description
-                baseText = fallback
+            } else if let description = cleanedDescription, !description.isEmpty {
+                // HTML extraction failed, use whatever RSS description we have
+                baseText = description
             } else {
                 return nil
             }
-        } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // Network failed, use RSS description as fallback
-            baseText = fallback
+        } else if let description = cleanedDescription, !description.isEmpty {
+            // Network failed, use whatever RSS description we have
+            baseText = description
         } else {
             return nil
         }
@@ -279,13 +386,17 @@ actor ArticleSummarizer {
         let primer = selectStructureAwareSlice(from: baseText, targetChars: 1000)
         if primer.isEmpty { return nil }
 
-        do {
-            // Create fresh session for each request to avoid concurrent request errors
-            let session = LanguageModelSession(instructions: "Summarize in 1-2 sentences, about 25 words. Focus on the key point and one important detail.")
+        // Get session from pool (reuse pre-warmed sessions)
+        let session = getHeroSession()
 
+        do {
             // Use respond() instead of streamResponse() - no streaming delays
             let result = try await session.respond(to: primer, generating: InlineSummary.self)
             let text = result.content.text
+
+            // Return session to pool for reuse
+            returnHeroSession(session)
+
             if !text.isEmpty {
                 cache[key] = text
                 Self.addToLookup(key)
@@ -293,9 +404,7 @@ actor ArticleSummarizer {
                 return text
             }
         } catch {
-            // Reset session on error and rewarm in background
-            heroSession = nil
-            rewarmSession(.quick)
+            // Don't return failed session to pool - it may be in bad state
             print("Hero summary error: \(error)")
 
             // Only show blocked message for guardrail violations, not for concurrent request errors
@@ -330,22 +439,29 @@ actor ArticleSummarizer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return nil }
 
-        // Priority: 1) Cached full article, 2) Fetch HTML, 3) RSS description fallback
+        // Clean the RSS description first
+        let cleanedDescription = fallbackText.map { cleanDescription($0) }
+        let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLength
+
+        // Priority: 1) Cached full article, 2) Substantial RSS description, 3) Fetch HTML, 4) Short RSS description
         let baseText: String
         if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
             baseText = cachedText
-        } else if let html = try? await fetchHTML(url: url) {
+        } else if hasSubstantialDescription, let description = cleanedDescription {
+            // RSS description is substantial enough - skip HTML fetch for speed
+            baseText = description
+        } else if let html = try? await fetchHTMLWithAdaptiveTimeout(url: url) {
             let extracted = extractReadableText(from: String(html.prefix(100_000)))
             if !extracted.isEmpty {
                 baseText = extracted
                 await ArticleTextCache.shared.storeText(extracted, for: url)
-            } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                baseText = fallback
+            } else if let description = cleanedDescription, !description.isEmpty {
+                baseText = description
             } else {
                 return nil
             }
-        } else if let fallback = fallbackText, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            baseText = fallback
+        } else if let description = cleanedDescription, !description.isEmpty {
+            baseText = description
         } else {
             return nil
         }
@@ -354,12 +470,16 @@ actor ArticleSummarizer {
         let primer = selectStructureAwareSlice(from: baseText, targetChars: 2500)
         if primer.isEmpty { return nil }
 
-        do {
-            // Create fresh session for each request to avoid concurrent request errors
-            let session = LanguageModelSession(instructions: "Summarize in 2-3 sentences, about 50-60 words. Cover the main point and key facts. Make it engaging and informative. No lists, no emojis.")
+        // Get session from pool (reuse pre-warmed sessions)
+        let session = getReelSession()
 
+        do {
             let result = try await session.respond(to: primer, generating: InlineSummary.self)
             let text = result.content.text
+
+            // Return session to pool for reuse
+            returnReelSession(session)
+
             if !text.isEmpty {
                 cache[key] = text
                 Self.addToLookup(key)
@@ -367,8 +487,7 @@ actor ArticleSummarizer {
                 return text
             }
         } catch {
-            reelSession = nil
-            rewarmSession(.reel)
+            // Don't return failed session to pool
             print("Reel summary error: \(error)")
 
             // Only show blocked message for guardrail violations
@@ -976,47 +1095,68 @@ actor ArticleSummarizer {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Fetch HTML with adaptive timeout - starts aggressive (5s), fails fast for slow sites
+    /// This prevents one slow site from blocking all hero card generation
+    func fetchHTMLWithAdaptiveTimeout(url: URL) async throws -> String {
+        try Task.checkCancellation()
+
+        // Use shorter timeout (5s) for hero cards - we have RSS description as fallback
+        // This is faster than the standard 10s timeout
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 5)
+        let (data, _) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
+        return String(decoding: data, as: UTF8.self)
+    }
+
     nonisolated func extractReadableText(from html: String) -> String {
         if html.isEmpty { return "" }
         if Task.isCancelled { return "" }
         var s = String(html.prefix(200_000))
         if Task.isCancelled { return "" }
-        s = regexReplace(s, pattern: "<!--[\\s\\S]*?-->", template: " ")
 
-        if let articleRegex = try? NSRegularExpression(pattern: "<article[\\n\\r\\s\\S]*?</article>", options: []) {
-            let ns = s as NSString
-            let fullRange = NSRange(location: 0, length: ns.length)
-            if let match = articleRegex.firstMatch(in: s, options: [], range: fullRange) {
-                let r = Range(match.range, in: s)!
-                s = String(s[r])
-            }
+        // Use pre-compiled cached regex patterns for performance
+        let ns = s as NSString
+        var range = NSRange(location: 0, length: ns.length)
+
+        // Remove HTML comments
+        s = CachedRegex.htmlComments.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
+
+        // Try to extract just the article content
+        range = NSRange(location: 0, length: (s as NSString).length)
+        if let match = CachedRegex.articleTag.firstMatch(in: s, options: [], range: range) {
+            let r = Range(match.range, in: s)!
+            s = String(s[r])
         }
         if Task.isCancelled { return "" }
 
-        let blocks = ["nav", "header", "footer", "aside"]
-        for tag in blocks {
-            if let regex = try? NSRegularExpression(pattern: "<" + tag + "[\\n\\r\\s\\S]*?</" + tag + ">", options: [.caseInsensitive]) {
-                s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
-            }
-        }
+        // Remove structural blocks using cached regex
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.navTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.headerTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.footerTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.asideTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
 
-        if let regex = try? NSRegularExpression(pattern: "<script[\\n\\r\\s\\S]*?</script>", options: [.caseInsensitive]) {
-            s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
-        }
+        // Remove script and style tags
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.scriptTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
         if Task.isCancelled { return "" }
-        if let regex = try? NSRegularExpression(pattern: "<style[\\n\\r\\s\\S]*?</style>", options: [.caseInsensitive]) {
-            s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
-        }
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.styleTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
 
-        if let regex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) {
-            s = regex.stringByReplacingMatches(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length), withTemplate: " ")
-        }
+        // Strip all remaining HTML tags
+        range = NSRange(location: 0, length: (s as NSString).length)
+        s = CachedRegex.anyHtmlTag.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: " ")
         if Task.isCancelled { return "" }
 
         let attr = try? AttributedString(markdown: s)
         let plain = attr?.description ?? s
 
-        let collapsed = regexReplace(plain, pattern: "\\s+", template: " ")
+        // Collapse whitespace using cached regex
+        let nsPlain = plain as NSString
+        let collapsed = CachedRegex.whitespace.stringByReplacingMatches(in: plain, options: [], range: NSRange(location: 0, length: nsPlain.length), withTemplate: " ")
         if Task.isCancelled { return "" }
         return collapsed.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
     }
