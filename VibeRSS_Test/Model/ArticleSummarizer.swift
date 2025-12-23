@@ -321,6 +321,31 @@ actor ArticleSummarizer {
     /// Minimum character count for RSS description to be considered substantial enough for summarization
     private let minDescriptionLength = 200
 
+    /// Maximum word count for hero summaries (truncate if AI exceeds this)
+    private let maxHeroWords = 28
+
+    /// Truncate text to a maximum word count, ending at a sentence boundary if possible
+    nonisolated private func truncateToWordLimit(_ text: String, maxWords: Int) -> String {
+        let words = text.split(separator: " ")
+        guard words.count > maxWords else { return text }
+
+        // Take maxWords and join them
+        let truncated = words.prefix(maxWords).joined(separator: " ")
+
+        // Try to end at a sentence boundary (. ! ?)
+        if let lastSentenceEnd = truncated.lastIndex(where: { $0 == "." || $0 == "!" || $0 == "?" }) {
+            let endIndex = truncated.index(after: lastSentenceEnd)
+            let atSentence = String(truncated[..<endIndex])
+            // Only use sentence boundary if we keep at least 60% of the words
+            if atSentence.split(separator: " ").count >= maxWords * 6 / 10 {
+                return atSentence
+            }
+        }
+
+        // No good sentence boundary, just truncate and add ellipsis
+        return truncated + "…"
+    }
+
     /// Clean HTML tags from RSS description text
     nonisolated private func cleanDescription(_ text: String) -> String {
         var cleaned = text
@@ -392,12 +417,15 @@ actor ArticleSummarizer {
         do {
             // Use respond() instead of streamResponse() - no streaming delays
             let result = try await session.respond(to: primer, generating: InlineSummary.self)
-            let text = result.content.text
+            var text = result.content.text
 
             // Return session to pool for reuse
             returnHeroSession(session)
 
             if !text.isEmpty {
+                // Enforce word limit - AI sometimes exceeds the 25 word target
+                text = truncateToWordLimit(text, maxWords: maxHeroWords)
+
                 cache[key] = text
                 Self.addToLookup(key)
                 saveCache()
