@@ -313,7 +313,7 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
-    @AppStorage("isHeroCollapsed") private var isHeroCollapsed: Bool = true
+    @State private var isHeroCollapsed: Bool = UserDefaults.standard.bool(forKey: "isHeroCollapsed")
     @State private var lastHeroUpdateDate: Date? = nil
     private let heroUpdateCooldown: TimeInterval = 300 // 5 minutes
     private let heroCacheKey = "viberss.heroEntries"
@@ -795,6 +795,7 @@ struct ContentView: View {
                     withAnimation(.snappy(duration: 0.3)) {
                         isHeroCollapsed = false
                     }
+                    UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
                 }
             }
 
@@ -1100,6 +1101,7 @@ struct ContentView: View {
                         withAnimation(.snappy(duration: 0.3)) {
                             isHeroCollapsed.toggle()
                         }
+                        UserDefaults.standard.set(isHeroCollapsed, forKey: "isHeroCollapsed")
                     }
                 )
                 .padding(.horizontal, 20)
@@ -1410,6 +1412,7 @@ struct ContentView: View {
                 // Collapse card when app goes to background
                 // So it's already collapsed on hot start (no animation visible to user)
                 isHeroCollapsed = true
+                UserDefaults.standard.set(true, forKey: "isHeroCollapsed")
                 // Mark all current hero entries as "seen" when app goes to background
                 // This clears blue dots on next launch if no new articles
                 markAllHeroEntriesAsSeen()
