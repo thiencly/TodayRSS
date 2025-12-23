@@ -185,6 +185,7 @@ struct SettingsView: View {
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("newsReelHours") private var newsReelHours: Int = 24
+    @AppStorage("articleAgeDays") private var articleAgeDays: Int = 0  // 0 = show all
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
     @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
@@ -296,6 +297,24 @@ struct SettingsView: View {
                     Text("News Reel")
                 } footer: {
                     Text("Show articles from the selected rolling time period in the News Reel.")
+                }
+
+                // MARK: - Article Age Section
+                Section {
+                    Picker("Show Articles From", selection: $articleAgeDays) {
+                        Text("All Time").tag(0)
+                        Text("Last 1 Day").tag(1)
+                        Text("Last 2 Days").tag(2)
+                        Text("Last 3 Days").tag(3)
+                        Text("Last 4 Days").tag(4)
+                        Text("Last 5 Days").tag(5)
+                        Text("Last 6 Days").tag(6)
+                        Text("Last 7 Days").tag(7)
+                    }
+                } header: {
+                    Text("Article List")
+                } footer: {
+                    Text("Automatically hide older articles in feed and folder views. Saved articles are not affected.")
                 }
 
                 // MARK: - Sidebar Section

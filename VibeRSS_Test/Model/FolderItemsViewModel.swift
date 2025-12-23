@@ -12,6 +12,18 @@ final class FolderItemsViewModel: ObservableObject {
     private var previousArticleIDs: Set<UUID> = []
     private var lastLoadedArticlesByFeed: [UUID: [FeedItem]] = [:]
 
+    /// Filter articles by age based on user setting (0 = no filter)
+    private func filterByAge(_ articles: [Article]) -> [Article] {
+        let ageDays = UserDefaults.standard.integer(forKey: "articleAgeDays")
+        guard ageDays > 0 else { return articles }
+
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -ageDays, to: Date()) ?? Date.distantPast
+        return articles.filter { article in
+            guard let pubDate = article.pubDate else { return true } // Keep articles without dates
+            return pubDate >= cutoffDate
+        }
+    }
+
     private func updateNewArticles(from articles: [Article]) {
         let currentIDs = Set(articles.map { $0.id })
         if previousArticleIDs.isEmpty {
@@ -60,8 +72,9 @@ final class FolderItemsViewModel: ObservableObject {
         }
 
         let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-        updateNewArticles(from: sorted)
-        items = sorted
+        let filtered = filterByAge(sorted)
+        updateNewArticles(from: filtered)
+        items = filtered
         isLoading = false
     }
 
