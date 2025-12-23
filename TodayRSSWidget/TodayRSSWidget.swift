@@ -249,10 +249,24 @@ struct SmallWidgetIntent: WidgetConfigurationIntent {
 
 // MARK: - Small Widget Provider
 struct SmallWidgetProvider: AppIntentTimelineProvider {
-    /// Interval between timeline entries (15 minutes)
-    private let entryInterval: TimeInterval = 15 * 60
-    /// Maximum number of timeline entries to create
-    private let maxEntries = 6
+    /// Interval between timeline entries for home screen widgets (15 minutes)
+    private let homeScreenEntryInterval: TimeInterval = 15 * 60
+    /// Interval between timeline entries for lock screen widgets (30 minutes)
+    private let lockScreenEntryInterval: TimeInterval = 30 * 60
+    /// Maximum number of timeline entries for home screen widgets
+    private let homeScreenMaxEntries = 6
+    /// Maximum number of timeline entries for lock screen widgets (conserve refresh budget)
+    private let lockScreenMaxEntries = 2
+
+    /// Check if this is a lock screen widget family
+    private func isLockScreenWidget(_ family: WidgetFamily) -> Bool {
+        switch family {
+        case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+            return true
+        default:
+            return false
+        }
+    }
 
     func placeholder(in context: Context) -> SmallWidgetEntry {
         SmallWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
@@ -275,10 +289,16 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
             articles = sampleArticles
         }
 
-        // Create multiple timeline entries to cycle through articles
-        // This allows the widget to show different articles without consuming refresh budget
-        var entries: [SmallWidgetEntry] = []
         let now = Date()
+        let isLockScreen = isLockScreenWidget(context.family)
+
+        // Lock screen widgets have stricter refresh budgets from iOS
+        // Use fewer entries and longer intervals to conserve budget
+        let maxEntries = isLockScreen ? lockScreenMaxEntries : homeScreenMaxEntries
+        let entryInterval = isLockScreen ? lockScreenEntryInterval : homeScreenEntryInterval
+
+        // Create timeline entries to cycle through articles
+        var entries: [SmallWidgetEntry] = []
         let articleCount = min(articles.count, maxEntries)
 
         for i in 0..<articleCount {
@@ -301,9 +321,17 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
             ))
         }
 
-        // Use .atEnd policy - after all entries are displayed, system will request new timeline
-        // Combined with multiple entries, this provides automatic article rotation with minimal budget use
-        return Timeline(entries: entries, policy: .atEnd)
+        // For lock screen widgets, use a longer refresh interval to conserve budget
+        // For home screen widgets, use .atEnd to refresh after all entries displayed
+        let refreshPolicy: TimelineReloadPolicy
+        if isLockScreen {
+            // Refresh lock screen widgets every 2 hours to conserve budget
+            refreshPolicy = .after(now.addingTimeInterval(2 * 60 * 60))
+        } else {
+            refreshPolicy = .atEnd
+        }
+
+        return Timeline(entries: entries, policy: refreshPolicy)
     }
 }
 

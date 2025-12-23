@@ -313,7 +313,7 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
-    @State private var isHeroCollapsed: Bool = true
+    @AppStorage("isHeroCollapsed") private var isHeroCollapsed: Bool = true
     @State private var lastHeroUpdateDate: Date? = nil
     private let heroUpdateCooldown: TimeInterval = 300 // 5 minutes
     private let heroCacheKey = "viberss.heroEntries"
@@ -636,6 +636,14 @@ struct ContentView: View {
         // Show loading indicator (glow will appear on collapsed card)
         isLoadingHero = true
         pendingHeroRefresh = false
+
+        // Collapse the card while loading/generating
+        // This ensures consistent behavior whether cold or hot start
+        if !isHeroCollapsed {
+            withAnimation(.snappy(duration: 0.25)) {
+                isHeroCollapsed = true
+            }
+        }
 
         // Fetch from ALL sources
         let feeds = store.feeds
