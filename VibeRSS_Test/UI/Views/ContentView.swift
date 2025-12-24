@@ -1294,7 +1294,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView()
+            SettingsView(store: store)
                 .presentationDetents([.large])
         }
         .fullScreenCover(isPresented: $showingNewsReel) {

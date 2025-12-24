@@ -180,6 +180,8 @@ enum AppIconOption: String, CaseIterable {
 }
 
 struct SettingsView: View {
+    @ObservedObject var store: FeedStore
+
     @AppStorage("atAGlanceCount") private var atAGlanceCount: Int = 3
     @AppStorage("atAGlanceAutoExpand") private var atAGlanceAutoExpand: Bool = true
     @AppStorage("showLatestView") private var showLatestView: Bool = true
@@ -195,6 +197,7 @@ struct SettingsView: View {
     @Bindable private var syncManager = BackgroundSyncManager.shared
     @State private var showOnboarding = false
     @State private var showingPaywall = false
+    @State private var showingSuggestedSources = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
 
     var body: some View {
@@ -493,6 +496,19 @@ struct SettingsView: View {
                 // MARK: - About Section
                 Section {
                     Button {
+                        showingSuggestedSources = true
+                    } label: {
+                        HStack {
+                            Label("Add Suggested Sources", systemImage: "plus.rectangle.on.folder.fill")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+
+                    Button {
                         showOnboarding = true
                     } label: {
                         HStack {
@@ -507,11 +523,18 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 } footer: {
-                    Text("View the welcome tutorial again.")
+                    Text("Add popular RSS sources organized by topic, or view the welcome tutorial again.")
                 }
             }
             .fullScreenCover(isPresented: $showOnboarding) {
-                OnboardingView(isPresented: $showOnboarding)
+                OnboardingView(isPresented: $showOnboarding, store: store)
+            }
+            .sheet(isPresented: $showingSuggestedSources) {
+                DefaultSourcesPickerView(
+                    store: store,
+                    isPresented: $showingSuggestedSources,
+                    isOnboarding: false
+                )
             }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView(trigger: .settings)

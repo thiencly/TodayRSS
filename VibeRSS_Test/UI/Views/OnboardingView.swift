@@ -9,7 +9,15 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Binding var isPresented: Bool
+    @ObservedObject var store: FeedStore
     @State private var currentPage = 0
+    @State private var selectedCategories: Set<UUID> = []
+    @State private var isAddingSources = false
+
+    init(isPresented: Binding<Bool>, store: FeedStore? = nil) {
+        self._isPresented = isPresented
+        self.store = store ?? FeedStore()
+    }
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -79,6 +87,12 @@ struct OnboardingView: View {
                     description: "Feeds refresh automatically so you always have the latest news"
                 )
             ]
+        ),
+        OnboardingPage(
+            type: .sources,
+            title: "Add Sources",
+            subtitle: "Select topics to get started with popular sources",
+            features: []
         )
     ]
 
@@ -92,8 +106,11 @@ struct OnboardingView: View {
                 // Page content
                 TabView(selection: $currentPage) {
                     ForEach(pages.indices, id: \.self) { index in
-                        OnboardingPageView(page: pages[index])
-                            .tag(index)
+                        OnboardingPageView(
+                            page: pages[index],
+                            selectedCategories: pages[index].type == .sources ? $selectedCategories : nil
+                        )
+                        .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -160,6 +177,39 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
+        // Add selected sources to the store, organized by topic
+        for categoryID in selectedCategories {
+            if let category = DefaultSources.categories.first(where: { $0.id == categoryID }) {
+                // Find or create folder for this category
+                let folder: Folder
+                if let existingFolder = store.folders.first(where: { $0.name.lowercased() == category.name.lowercased() }) {
+                    folder = existingFolder
+                } else {
+                    // Create new folder with the category's icon
+                    let newFolder = Folder(
+                        name: category.name,
+                        iconType: .sfSymbol(category.icon)
+                    )
+                    store.folders.append(newFolder)
+                    folder = newFolder
+                }
+
+                // Add sources to this folder
+                for source in category.sources {
+                    let alreadyExists = store.feeds.contains { $0.url == source.url }
+                    if !alreadyExists {
+                        var feed = Feed(
+                            title: source.title,
+                            url: source.url,
+                            iconURL: source.iconURL
+                        )
+                        feed.folderID = folder.id
+                        store.feeds.append(feed)
+                    }
+                }
+            }
+        }
+
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         withAnimation(.easeOut(duration: 0.3)) {
             isPresented = false
@@ -173,6 +223,7 @@ struct OnboardingPage {
     enum PageType {
         case welcome
         case features
+        case sources
     }
 
     let type: PageType
@@ -192,13 +243,19 @@ struct OnboardingFeature {
 
 struct OnboardingPageView: View {
     let page: OnboardingPage
+    var selectedCategories: Binding<Set<UUID>>?
 
     var body: some View {
         VStack(spacing: 0) {
-            if page.type == .welcome {
+            switch page.type {
+            case .welcome:
                 welcomeContent
-            } else {
+            case .features:
                 featuresContent
+            case .sources:
+                if let binding = selectedCategories {
+                    sourcesContent(selectedCategories: binding)
+                }
             }
         }
         .padding(.horizontal, 24)
@@ -290,6 +347,102 @@ struct OnboardingPageView: View {
 
             Spacer()
         }
+    }
+
+    @ViewBuilder
+    private func sourcesContent(selectedCategories: Binding<Set<UUID>>) -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+                .frame(height: 20)
+
+            // Title
+            Text(page.title)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 6)
+
+            // Subtitle
+            Text(page.subtitle)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 20)
+
+            // Category picker
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(DefaultSources.categories) { category in
+                        SourceCategoryRow(
+                            category: category,
+                            isSelected: selectedCategories.wrappedValue.contains(category.id)
+                        ) {
+                            HapticManager.shared.click()
+                            if selectedCategories.wrappedValue.contains(category.id) {
+                                selectedCategories.wrappedValue.remove(category.id)
+                            } else {
+                                selectedCategories.wrappedValue.insert(category.id)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+                .frame(height: 20)
+        }
+    }
+}
+
+// MARK: - Source Category Row (for Onboarding)
+
+private struct SourceCategoryRow: View {
+    let category: SourceCategory
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(category.iconColor.opacity(0.15))
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: category.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(category.iconColor)
+                }
+
+                // Text
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(category.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(category.sources.count) sources")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Checkmark
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Color.blue : Color.secondary.opacity(0.4))
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
