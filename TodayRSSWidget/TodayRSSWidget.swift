@@ -250,6 +250,22 @@ struct SmallWidgetIntent: WidgetConfigurationIntent {
     var source: SourceEntity?
 }
 
+// MARK: - Widget Configuration Sync
+/// Saves widget configurations to App Group so main app knows which feeds to sync
+private func saveWidgetConfiguration(sourceIDs: [String]) {
+    guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) else { return }
+
+    // Get existing configurations
+    var allSourceIDs = Set(sharedDefaults.stringArray(forKey: "widgetConfiguredSourceIDs") ?? [])
+
+    // Add new source IDs
+    for id in sourceIDs {
+        allSourceIDs.insert(id)
+    }
+
+    sharedDefaults.set(Array(allSourceIDs), forKey: "widgetConfiguredSourceIDs")
+}
+
 // MARK: - Small Widget Provider
 struct SmallWidgetProvider: AppIntentTimelineProvider {
     /// Interval between timeline entries for home screen widgets (15 minutes)
@@ -285,6 +301,13 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SmallWidgetIntent, in context: Context) async -> Timeline<SmallWidgetEntry> {
+        // Save configuration to App Group so main app knows which feeds to sync
+        if let source = configuration.source {
+            saveWidgetConfiguration(sourceIDs: [source.id])
+        } else {
+            saveWidgetConfiguration(sourceIDs: ["all"])
+        }
+
         var articles = getArticles(for: configuration.source)
         let sourceName = configuration.source?.displayName ?? "All Sources"
 
@@ -645,6 +668,20 @@ struct MediumWidgetProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: MediumWidgetIntent, in context: Context) async -> Timeline<MediumWidgetEntry> {
+        // Save configuration to App Group so main app knows which feeds to sync
+        var sourceIDs: [String] = []
+        if let left = configuration.leftSource {
+            sourceIDs.append(left.id)
+        } else {
+            sourceIDs.append("all")
+        }
+        if let right = configuration.rightSource {
+            sourceIDs.append(right.id)
+        } else {
+            sourceIDs.append("all")
+        }
+        saveWidgetConfiguration(sourceIDs: sourceIDs)
+
         // Create multiple timeline entries to cycle through article pairs
         // This allows the widget to show different articles without consuming refresh budget
         var entries: [MediumWidgetEntry] = []

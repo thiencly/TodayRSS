@@ -187,7 +187,7 @@ struct SettingsView: View {
     @AppStorage("showLatestView") private var showLatestView: Bool = true
     @AppStorage("showTodayView") private var showTodayView: Bool = true
     @AppStorage("newsReelHours") private var newsReelHours: Int = 24
-    @AppStorage("articleAgeDays") private var articleAgeDays: Int = 0  // 0 = show all
+    @AppStorage("cacheRetentionDays") private var cacheRetentionDays: Int = 7  // Default 7 days
     @AppStorage("selectedAppIcon") private var selectedAppIcon: String = AppIconOption.auto.rawValue
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.auto.rawValue
     @AppStorage("appTint") private var appTint: String = AppTint.default.rawValue
@@ -199,6 +199,7 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var showingSuggestedSources = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
+    @State private var cacheStats: (count: Int, sizeBytes: Int) = (0, 0)
 
     var body: some View {
         NavigationStack {
@@ -302,22 +303,42 @@ struct SettingsView: View {
                     Text("Show articles from the selected rolling time period in the News Reel.")
                 }
 
-                // MARK: - Article Age Section
+                // MARK: - Offline Reading Section
                 Section {
-                    Picker("Show Articles From", selection: $articleAgeDays) {
-                        Text("All Time").tag(0)
-                        Text("Last 1 Day").tag(1)
-                        Text("Last 2 Days").tag(2)
-                        Text("Last 3 Days").tag(3)
-                        Text("Last 4 Days").tag(4)
-                        Text("Last 5 Days").tag(5)
-                        Text("Last 6 Days").tag(6)
-                        Text("Last 7 Days").tag(7)
+                    Picker("Keep Articles For", selection: $cacheRetentionDays) {
+                        Text("1 Day").tag(1)
+                        Text("3 Days").tag(3)
+                        Text("7 Days").tag(7)
+                        Text("14 Days").tag(14)
+                        Text("30 Days").tag(30)
+                    }
+
+                    HStack {
+                        Text("Cached Articles")
+                        Spacer()
+                        Text("\(cacheStats.count)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Cache Size")
+                        Spacer()
+                        Text(formatBytes(cacheStats.sizeBytes))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button(role: .destructive) {
+                        Task {
+                            await ArticleTextCache.shared.clear()
+                            cacheStats = await ArticleTextCache.shared.statistics()
+                        }
+                    } label: {
+                        Text("Clear Cache")
                     }
                 } header: {
-                    Text("Article List")
+                    Text("Offline Reading")
                 } footer: {
-                    Text("Automatically hide older articles in feed and folder views. Saved articles are not affected.")
+                    Text("Articles are cached for offline reading. Older articles are automatically removed based on this setting.")
                 }
 
                 // MARK: - Sidebar Section
@@ -399,9 +420,9 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: - Background Sync Section
+                // MARK: - Background Refresh Section
                 Section {
-                    Picker("Sync Interval", selection: $syncManager.syncInterval) {
+                    Picker("Refresh Interval", selection: $syncManager.syncInterval) {
                         ForEach(BackgroundSyncManager.SyncInterval.allCases, id: \.self) { interval in
                             Text(interval.displayName).tag(interval)
                         }
@@ -409,7 +430,7 @@ struct SettingsView: View {
 
                     if let lastSync = syncManager.lastSyncDate {
                         HStack {
-                            Text("Last Synced")
+                            Text("Last Refreshed")
                             Spacer()
                             Text(lastSync, style: .relative)
                                 .foregroundStyle(.secondary)
@@ -422,7 +443,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         HStack {
-                            Text("Sync Now")
+                            Text("Refresh Now")
                             Spacer()
                             if syncManager.isSyncing {
                                 ProgressView()
@@ -455,9 +476,9 @@ struct SettingsView: View {
                     }
                     .disabled(syncManager.isSyncing)
                 } header: {
-                    Text("Background Sync")
+                    Text("Background Refresh")
                 } footer: {
-                    Text("Background sync keeps your feeds and widgets updated automatically. Use 'Reset Widget Data' if widgets show incorrect articles.")
+                    Text("Keeps widgets and At a Glance updated with the latest articles.")
                 }
 
                 // MARK: - iCloud Sync Section
@@ -542,6 +563,9 @@ struct SettingsView: View {
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
             }
+            .task {
+                cacheStats = await ArticleTextCache.shared.statistics()
+            }
             .onChange(of: colorScheme) { _, newScheme in
                 // Update icon when system appearance changes (only if Auto is selected)
                 if AppIconOption(rawValue: selectedAppIcon) == .auto {
@@ -578,6 +602,12 @@ struct SettingsView: View {
                 print("Failed to set alternate icon: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 }
 

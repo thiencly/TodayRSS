@@ -10,6 +10,8 @@ import Foundation
 import BackgroundTasks
 import WidgetKit
 import Observation
+import Reeeed
+import UIKit
 
 @MainActor
 @Observable
@@ -157,6 +159,10 @@ final class BackgroundSyncManager {
 
     // MARK: - Sync Logic
 
+    // Widget storage limits
+    private let maxArticlesPerFeedForWidget = 5
+    private let maxTotalWidgetArticles = 20
+
     /// Perform a full sync of all feeds
     func performSync() async {
         guard !isSyncing else { return }
@@ -176,12 +182,35 @@ final class BackgroundSyncManager {
 
         guard !feeds.isEmpty else { return }
 
+        // Get widget sync info - which feeds do widgets need?
+        let widgetInfo = await getWidgetSyncInfo(allFeeds: feeds, allFolders: folders)
+
+        // Determine articles per feed:
+        // - Widget feeds: 5 articles (for widget display)
+        // - Non-widget feeds: 1 article (for At a Glance only)
+        // - All feeds if "All Sources" widget or no widgets
+        let widgetFeedIDs: Set<UUID> = widgetInfo.feedIDsToSync ?? Set(feeds.map { $0.id })
+
+        if widgetInfo.hasWidgets {
+            if widgetInfo.hasAllSourcesWidget {
+                print("Background sync: All Sources widget - 5 articles per feed")
+            } else {
+                print("Background sync: Widget feeds (\(widgetFeedIDs.count)) get 5 articles, others get 1 for At a Glance")
+            }
+        } else {
+            print("Background sync: No widgets - 1 article per feed for At a Glance")
+        }
+
         let feedService = FeedService()
         var articlesByFeed: [UUID: [FeedItem]] = [:]
 
-        // Fetch articles from all feeds concurrently
+        // Fetch articles from ALL feeds concurrently
+        // Widget feeds get 5 articles, non-widget feeds get 1 (for At a Glance)
         await withTaskGroup(of: (UUID, [FeedItem])?.self) { group in
             for feed in feeds {
+                let isWidgetFeed = widgetFeedIDs.contains(feed.id)
+                let articlesPerFeed = (widgetInfo.hasWidgets && isWidgetFeed) ? 5 : 1
+
                 group.addTask {
                     do {
                         var items = try await feedService.loadItems(from: feed.url)
@@ -191,14 +220,17 @@ final class BackgroundSyncManager {
                             items[i].sourceTitle = feed.title
                             items[i].sourceIconURL = feed.iconURL
                         }
-                        // Keep only recent items based on user's retention setting
-                        let retentionDays = UserDefaults.standard.integer(forKey: "articleRetentionDays")
-                        let days = retentionDays > 0 ? retentionDays : 3 // Default to 3 days
+                        // Sort by date and take only what we need
+                        items.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+                        // Keep only recent items based on user's cache retention setting
+                        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
+                        let days = retentionDays > 0 ? retentionDays : 7 // Default to 7 days
                         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
                         items = items.filter { item in
                             if let d = item.pubDate { return d >= cutoff } else { return true }
                         }
-                        return (feed.id, Array(items.prefix(20)))
+                        return (feed.id, Array(items.prefix(articlesPerFeed)))
                     } catch {
                         print("Failed to fetch feed \(feed.title): \(error)")
                         return nil
@@ -213,118 +245,124 @@ final class BackgroundSyncManager {
             }
         }
 
-        // Save to widget storage FIRST (so data is available when timeline reloads)
-        if !articlesByFeed.isEmpty {
-            await WidgetUpdater.shared.updateArticlesImmediately(articlesByFeed: articlesByFeed)
+        // Widget sync: Only if widgets are installed
+        if widgetInfo.hasWidgets && !articlesByFeed.isEmpty {
+            // Prepare limited articles for widget (only widget-configured feeds)
+            var widgetArticlesByFeed: [UUID: [FeedItem]] = [:]
+            var allWidgetArticles: [FeedItem] = []
+
+            for (feedID, articles) in articlesByFeed {
+                // Only include feeds that widgets are configured to show
+                guard widgetFeedIDs.contains(feedID) else { continue }
+
+                let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+                let limited = Array(sorted.prefix(maxArticlesPerFeedForWidget))
+                widgetArticlesByFeed[feedID] = limited
+                allWidgetArticles.append(contentsOf: limited)
+            }
+
+            // Sort all and cap at total limit
+            allWidgetArticles.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            let cappedArticles = Array(allWidgetArticles.prefix(maxTotalWidgetArticles))
+
+            // Save to widget storage
+            await WidgetUpdater.shared.updateArticlesImmediately(articlesByFeed: widgetArticlesByFeed)
+
+            // Download thumbnails for widget articles (within background time budget)
+            await downloadWidgetThumbnails(articles: cappedArticles)
+
+            print("Widget sync: \(widgetArticlesByFeed.count) feeds, \(cappedArticles.count) articles with thumbnails")
         }
 
-        // Pre-download thumbnails for widget (top 5 articles per feed)
-        await downloadThumbnailsForWidget(articlesByFeed: articlesByFeed)
+        // Pre-fetch newest articles for At a Glance summaries
+        await prefetchArticleContent(articlesByFeed: articlesByFeed)
 
-        // Pre-cache article text for hero sources (enables fast hero summaries)
-        await cacheArticleTextForHeroSources(articlesByFeed: articlesByFeed)
+        // Purge expired cached articles based on retention setting
+        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
+        let days = retentionDays > 0 ? retentionDays : 7
+        await ArticleTextCache.shared.purgeExpiredEntries(retentionDays: days)
 
         // Update last sync date
         lastSyncDate = Date()
         UserDefaults.standard.set(lastSyncDate, forKey: lastSyncKey)
 
         // Reload widget timelines AFTER thumbnails are downloaded
-        // Explicitly reload both kinds to ensure lock screen widgets update
-        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+        if widgetInfo.hasWidgets {
+            WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+        }
 
-        // Notify that sync completed (so hero card can refresh with cached data)
+        // Notify that sync completed (so At a Glance can refresh with cached data)
         NotificationCenter.default.post(name: .backgroundSyncCompleted, object: nil)
 
-        print("Background sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")
+        print("Sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")
     }
 
-    /// Download thumbnails and favicons to shared cache for widget access
-    private func downloadThumbnailsForWidget(articlesByFeed: [UUID: [FeedItem]]) async {
-        // Collect thumbnail URLs to download (top 5 newest per feed for widget display)
-        var thumbnailURLs: [URL] = []
-        var faviconURLs: Set<URL> = [] // Use Set to avoid duplicates
+    /// Pre-fetch only the globally newest articles for At a Glance summaries
+    /// At a Glance shows max 4 articles, so we only cache the 4-6 newest globally
+    private func prefetchArticleContent(articlesByFeed: [UUID: [FeedItem]]) async {
+        // Check if offline caching is enabled (default: enabled)
+        let offlineCachingEnabled = UserDefaults.standard.object(forKey: "offlineCachingEnabled") as? Bool ?? true
+        guard offlineCachingEnabled else { return }
 
-        for (_, articles) in articlesByFeed {
-            // Sort by date to get newest articles first
-            let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            for article in sorted.prefix(5) {
-                if let url = article.thumbnailURL {
-                    thumbnailURLs.append(url)
-                }
-                // Collect source favicon URLs
-                if let iconURL = article.sourceIconURL {
-                    faviconURLs.insert(iconURL)
-                }
+        // Get ALL newest articles, then take the globally newest 6
+        // (At a Glance shows max 4, but cache a couple extra as buffer)
+        let allNewestArticles = articlesByFeed.values
+            .compactMap { articles in
+                articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }.first
+            }
+            .sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            .prefix(6) // Only the 6 globally newest
+
+        guard !allNewestArticles.isEmpty else { return }
+
+        // Filter out already cached articles
+        var uncachedArticles: [FeedItem] = []
+        for article in allNewestArticles {
+            if await !ArticleTextCache.shared.isCached(url: article.link) {
+                uncachedArticles.append(article)
             }
         }
 
-        // Download thumbnails concurrently (increased limit from 20 to 40)
-        if !thumbnailURLs.isEmpty {
-            await withTaskGroup(of: Void.self) { group in
-                for url in thumbnailURLs.prefix(40) {
-                    group.addTask {
-                        _ = await WidgetImageCache.shared.downloadAndCache(from: url)
-                    }
-                }
-            }
-            print("Downloaded \(min(thumbnailURLs.count, 40)) thumbnails for widget")
-        }
-
-        // Download favicons concurrently
-        if !faviconURLs.isEmpty {
-            await withTaskGroup(of: Void.self) { group in
-                for url in faviconURLs {
-                    group.addTask {
-                        _ = await WidgetImageCache.shared.downloadAndCache(from: url)
-                    }
-                }
-            }
-            print("Downloaded \(faviconURLs.count) favicons for widget")
-        }
-    }
-
-    /// Pre-cache article text for hero card sources so summaries generate instantly
-    private func cacheArticleTextForHeroSources(articlesByFeed: [UUID: [FeedItem]]) async {
-        // Load hero source IDs (same key as ContentView)
-        guard let heroData = UserDefaults.standard.data(forKey: "heroSourceIDs"),
-              let heroSourceIDs = try? JSONDecoder().decode(Set<UUID>.self, from: heroData),
-              !heroSourceIDs.isEmpty else {
+        guard !uncachedArticles.isEmpty else {
+            print("All At a Glance articles already cached")
             return
         }
 
-        // Get latest article from each hero source
-        var heroArticles: [FeedItem] = []
-        for sourceID in heroSourceIDs {
-            if let articles = articlesByFeed[sourceID],
-               let latest = articles.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first {
-                heroArticles.append(latest)
-            }
-        }
+        var cachedCount = 0
 
-        guard !heroArticles.isEmpty else { return }
-
-        // Fetch and cache article text concurrently (limit to hero sources only)
-        await withTaskGroup(of: Void.self) { group in
-            for article in heroArticles {
+        // Fetch concurrently (max 6 articles, very fast)
+        await withTaskGroup(of: Bool.self) { group in
+            for article in uncachedArticles {
                 group.addTask {
-                    // Skip if already cached
-                    if await ArticleTextCache.shared.cachedText(for: article.link) != nil {
-                        return
-                    }
-
                     do {
                         let html = try await ArticleSummarizer.shared.fetchHTML(url: article.link)
                         let text = ArticleSummarizer.shared.extractReadableText(from: String(html.prefix(100_000)))
+
                         if !text.isEmpty {
-                            await ArticleTextCache.shared.storeText(text, for: article.link)
-                            print("Cached article text for hero source: \(article.sourceTitle ?? "unknown")")
+                            await ArticleTextCache.shared.storeText(
+                                text,
+                                for: article.link,
+                                title: article.title,
+                                sourceTitle: article.sourceTitle,
+                                pubDate: article.pubDate
+                            )
+                            return true
                         }
+                        return false
                     } catch {
-                        print("Failed to cache article text: \(error.localizedDescription)")
+                        return false
                     }
                 }
             }
+
+            for await success in group {
+                if success { cachedCount += 1 }
+            }
+        }
+
+        if cachedCount > 0 {
+            print("Background: Cached \(cachedCount) articles for At a Glance")
         }
     }
 
@@ -348,6 +386,109 @@ final class BackgroundSyncManager {
             print("Failed to load folders: \(error)")
             return []
         }
+    }
+
+    /// Widget sync result containing which feeds to sync and whether widgets exist
+    private struct WidgetSyncInfo {
+        let hasWidgets: Bool
+        let feedIDsToSync: Set<UUID>?  // nil means sync all feeds, empty means none
+        let hasAllSourcesWidget: Bool
+    }
+
+    /// Get information about installed widgets and which feeds they need
+    private func getWidgetSyncInfo(allFeeds: [Feed], allFolders: [Folder]) async -> WidgetSyncInfo {
+        // Read widget configurations from App Group (set by widget when configured)
+        guard let sharedDefaults = UserDefaults(suiteName: "group.IDKN.TodayRSS") else {
+            return WidgetSyncInfo(hasWidgets: false, feedIDsToSync: Set(), hasAllSourcesWidget: false)
+        }
+
+        // Check if widgets are installed
+        do {
+            let configurations = try await WidgetCenter.shared.currentConfigurations()
+            guard !configurations.isEmpty else {
+                return WidgetSyncInfo(hasWidgets: false, feedIDsToSync: Set(), hasAllSourcesWidget: false)
+            }
+        } catch {
+            // On error, assume no widgets
+            return WidgetSyncInfo(hasWidgets: false, feedIDsToSync: Set(), hasAllSourcesWidget: false)
+        }
+
+        // Read configured source IDs from App Group
+        // Widget saves these when user configures it
+        let configuredSourceIDs = sharedDefaults.stringArray(forKey: "widgetConfiguredSourceIDs") ?? []
+
+        // If no specific sources configured, widgets use "All Sources"
+        if configuredSourceIDs.isEmpty {
+            return WidgetSyncInfo(hasWidgets: true, feedIDsToSync: nil, hasAllSourcesWidget: true)
+        }
+
+        // Determine which feeds are needed
+        var neededFeedIDs = Set<UUID>()
+        var hasAllSources = false
+
+        for sourceID in configuredSourceIDs {
+            if sourceID == "all" {
+                hasAllSources = true
+                continue
+            }
+
+            let normalizedID = sourceID.uppercased()
+
+            // Check if it's a feed
+            if let feed = allFeeds.first(where: { $0.id.uuidString.uppercased() == normalizedID }) {
+                neededFeedIDs.insert(feed.id)
+                continue
+            }
+
+            // Check if it's a folder - add all feeds in that folder
+            if let folderUUID = UUID(uuidString: sourceID),
+               allFolders.contains(where: { $0.id == folderUUID }) {
+                let folderFeeds = allFeeds.filter { $0.folderID == folderUUID }
+                for feed in folderFeeds {
+                    neededFeedIDs.insert(feed.id)
+                }
+            }
+        }
+
+        // If any widget uses "All Sources", sync all
+        if hasAllSources {
+            return WidgetSyncInfo(hasWidgets: true, feedIDsToSync: nil, hasAllSourcesWidget: true)
+        }
+
+        return WidgetSyncInfo(hasWidgets: true, feedIDsToSync: neededFeedIDs, hasAllSourcesWidget: false)
+    }
+
+    /// Download thumbnails and favicons for widget articles
+    private func downloadWidgetThumbnails(articles: [FeedItem]) async {
+        var thumbnailURLs: [URL] = []
+        var faviconURLs: Set<URL> = []
+
+        for article in articles {
+            if let url = article.thumbnailURL {
+                thumbnailURLs.append(url)
+            }
+            if let iconURL = article.sourceIconURL {
+                faviconURLs.insert(iconURL)
+            }
+        }
+
+        guard !thumbnailURLs.isEmpty || !faviconURLs.isEmpty else { return }
+
+        // Download in parallel
+        await withTaskGroup(of: Void.self) { group in
+            for url in thumbnailURLs {
+                group.addTask {
+                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                }
+            }
+            for url in faviconURLs {
+                group.addTask {
+                    _ = await WidgetImageCache.shared.downloadAndCache(from: url)
+                }
+            }
+        }
+
+        print("Background sync: Downloaded \(thumbnailURLs.count) thumbnails, \(faviconURLs.count) favicons")
     }
 
     private func saveSyncInterval() {
@@ -374,6 +515,11 @@ final class BackgroundSyncManager {
 
     /// Call when app becomes active - sync if needed
     func handleBecomeActive() async {
+        // Purge expired cached articles on app launch
+        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
+        let days = retentionDays > 0 ? retentionDays : 7
+        await ArticleTextCache.shared.purgeExpiredEntries(retentionDays: days)
+
         // Always sync on app launch if never synced before
         guard let lastSync = lastSyncDate else {
             await performSync()

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Reeeed
 
 // MARK: - Saved Article Model
 
@@ -75,7 +76,51 @@ final class SavedArticlesManager {
 
         savedArticles.insert(article, at: 0)
         persistSavedArticles()
+
+        // Cache article for offline reading in the background
+        Task {
+            await cacheArticleForOffline(article)
+        }
+
         return true
+    }
+
+    /// Cache a saved article for offline reading
+    private func cacheArticleForOffline(_ article: SavedArticle) async {
+        // Skip if already cached
+        if await ArticleContentCache.shared.cachedContent(for: article.url) != nil {
+            return
+        }
+
+        do {
+            // Fetch and cache full styled HTML using Reeeed
+            let result = try await Reeeed.fetchAndExtractContent(fromURL: article.url)
+
+            // Cache the styled HTML
+            let cached = CachedArticleContent(
+                styledHTML: result.styledHTML,
+                baseURL: result.baseURL,
+                title: result.extracted.title,
+                timestamp: Date()
+            )
+            await ArticleContentCache.shared.storeContent(cached, for: article.url)
+
+            // Also cache extracted text for summaries
+            let text = ArticleSummarizer.shared.extractReadableText(from: result.styledHTML)
+            if !text.isEmpty {
+                await ArticleTextCache.shared.storeText(
+                    text,
+                    for: article.url,
+                    title: article.title,
+                    sourceTitle: article.sourceTitle,
+                    pubDate: article.pubDate
+                )
+            }
+
+            print("Cached saved article for offline: \(article.title)")
+        } catch {
+            print("Failed to cache saved article: \(error.localizedDescription)")
+        }
     }
 
     /// Returns true if saved successfully, false if limit reached

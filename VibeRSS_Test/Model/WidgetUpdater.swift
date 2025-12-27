@@ -140,14 +140,15 @@ class WidgetUpdater {
     }
 
     /// Update articles immediately without debounce (for background sync)
+    /// Note: BackgroundSyncManager pre-limits articles before calling this
     func updateArticlesImmediately(articlesByFeed: [UUID: [FeedItem]]) async {
         // Load existing articles and merge (don't wipe feeds that failed to load)
         var widgetArticles = WidgetDataManager.shared.loadArticles()
 
         for (feedID, articles) in articlesByFeed {
-            // Sort by date (newest first) before taking top 10
+            // Sort by date (newest first) - already limited by caller
             let sorted = articles.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            let converted = sorted.prefix(10).map { article in
+            let converted = sorted.map { article in
                 WidgetArticle(
                     id: article.id.uuidString,
                     title: article.title,
@@ -166,9 +167,7 @@ class WidgetUpdater {
         WidgetDataManager.shared.saveArticles(widgetArticles)
         widgetLogger.info("💾 Saved \(articlesByFeed.count) feeds to widget storage (immediate)")
 
-        // Refresh widget cache and reload timelines
-        await refreshInstalledWidgets()
-        reloadInstalledWidgets()
+        // Don't reload widgets here - caller will do it after thumbnail download
     }
 
     /// Sync a single feed's articles to widgets (with thumbnail caching)

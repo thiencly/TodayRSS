@@ -72,6 +72,10 @@ struct ArticleReaderView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var extractedContent: Reeeed.FetchAndExtractionResult?
+    @State private var cachedStyledHTML: String?  // For offline cached HTML content
+    @State private var cachedBaseURL: URL?
+    @State private var cachedPlainText: String?   // For offline text-only content
+    @State private var isOfflineMode: Bool = false
     @State private var isLoading = true
     @State private var error: String?
     @State private var showSettings = false
@@ -102,8 +106,14 @@ struct ArticleReaderView: View {
                 } else if showingSummary {
                     // Show summary view
                     summaryContentView
+                } else if isOfflineMode, let plainText = cachedPlainText {
+                    // Display text-only cached content (offline mode)
+                    textOnlyArticleView(text: plainText)
                 } else if let content = extractedContent {
                     articleWebView(content)
+                } else if let styledHTML = cachedStyledHTML {
+                    // Display cached HTML content (offline mode)
+                    cachedArticleWebView(styledHTML: styledHTML, baseURL: cachedBaseURL)
                 }
             }
             .navigationTitle(sourceTitle ?? url.host ?? "Article")
@@ -169,7 +179,7 @@ struct ArticleReaderView: View {
             }
             .buttonStyle(GlassToolbarButtonStyle())
             .contentTransition(.symbolEffect(.replace))
-            .disabled(extractedContent == nil)
+            .disabled(extractedContent == nil && cachedStyledHTML == nil && cachedPlainText == nil)
 
             // Save button
             Button {
@@ -347,6 +357,86 @@ struct ArticleReaderView: View {
         .ignoresSafeArea()
     }
 
+    /// Display cached article content (for offline reading)
+    private func cachedArticleWebView(styledHTML: String, baseURL: URL?) -> some View {
+        ReeeederWebView(
+            styledHTML: styledHTML,
+            baseURL: baseURL,
+            fontSize: $fontSize,
+            colorScheme: colorScheme,
+            relativeDate: relativeDate
+        )
+        .ignoresSafeArea()
+    }
+
+    /// Display text-only cached content (for offline reading when HTML cache unavailable)
+    private func textOnlyArticleView(text: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Offline indicator
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption)
+                    Text("Offline Mode")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.15))
+                .clipShape(Capsule())
+
+                // Article title
+                if let title = articleTitle {
+                    Text(title)
+                        .font(.system(.title, design: .serif, weight: .bold))
+                        .foregroundStyle(colorScheme == .dark ? .white : .black)
+                }
+
+                // Source badge and date
+                HStack(spacing: 8) {
+                    if let iconURL = sourceIconURL {
+                        AsyncImage(url: iconURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fit)
+                        } placeholder: {
+                            Color.gray.opacity(0.3)
+                        }
+                        .frame(width: 18, height: 18)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+
+                    if let source = sourceTitle {
+                        Text(source.uppercased())
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(secondaryTextColor)
+                    }
+
+                    if let date = relativeDate {
+                        Text("·")
+                            .foregroundStyle(secondaryTextColor.opacity(0.5))
+                        Text(date)
+                            .font(.caption)
+                            .foregroundStyle(secondaryTextColor)
+                    }
+                }
+
+                Divider()
+                    .padding(.vertical, 8)
+
+                // Article text
+                Text(text)
+                    .font(.system(size: fontSize))
+                    .lineSpacing(6)
+                    .foregroundStyle(colorScheme == .dark ? .white : .black)
+
+                Spacer(minLength: 100)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+        }
+        .background(backgroundColor)
+    }
+
     private var fontSizeOverlay: some View {
         HStack(spacing: 0) {
             Button {
@@ -446,7 +536,17 @@ struct ArticleReaderView: View {
     }
 
     private func generateSummary() async {
-        guard let content = extractedContent else { return }
+        // Get article text from either live content, HTML cache, or text cache
+        let articleText: String
+        if let content = extractedContent {
+            articleText = await ArticleSummarizer.shared.extractReadableText(from: content.styledHTML)
+        } else if let cached = cachedStyledHTML {
+            articleText = await ArticleSummarizer.shared.extractReadableText(from: cached)
+        } else if let plainText = cachedPlainText {
+            articleText = plainText
+        } else {
+            return
+        }
 
         // Check for cached summary first
         if let cached = await ArticleSummarizer.shared.cachedSummary(for: url, length: .detailed) {
@@ -462,9 +562,6 @@ struct ArticleReaderView: View {
             isGeneratingSummary = true
             showingSummary = true
         }
-
-        // Extract readable text from the styled HTML
-        let articleText = await ArticleSummarizer.shared.extractReadableText(from: content.styledHTML)
 
         // Stream the summary with throttled UI updates (max ~20hz to stay under 32hz limit)
         let stream = await ArticleSummarizer.shared.streamSummaryFromText(
@@ -500,23 +597,91 @@ struct ArticleReaderView: View {
     private func loadArticle() async {
         isLoading = true
         error = nil
+        isOfflineMode = false
 
+        // Check for cached HTML content first (for offline reading)
+        if let cached = await ArticleContentCache.shared.cachedContent(for: url) {
+            // Try to fetch fresh content first
+            do {
+                let theme = createTheme()
+                let result = try await Reeeed.fetchAndExtractContent(fromURL: url, theme: theme)
+
+                await MainActor.run {
+                    self.extractedContent = result
+                    self.isLoading = false
+                }
+
+                // Update HTML cache with fresh content
+                let updatedCache = CachedArticleContent(
+                    styledHTML: result.styledHTML,
+                    baseURL: result.baseURL,
+                    title: result.extracted.title,
+                    timestamp: Date()
+                )
+                await ArticleContentCache.shared.storeContent(updatedCache, for: url)
+
+                // Also cache extracted text for offline reading
+                await cacheArticleText(from: result.styledHTML)
+            } catch {
+                // Network failed - use cached HTML content
+                await MainActor.run {
+                    self.cachedStyledHTML = cached.styledHTML
+                    self.cachedBaseURL = cached.baseURL
+                    self.isLoading = false
+                }
+            }
+            return
+        }
+
+        // No HTML cache - try to fetch from network
         do {
-            // Create theme based on current color scheme
             let theme = createTheme()
-
-            // Use Reeeed to extract and style content
             let result = try await Reeeed.fetchAndExtractContent(fromURL: url, theme: theme)
 
             await MainActor.run {
                 self.extractedContent = result
                 self.isLoading = false
             }
+
+            // Cache the HTML content for offline reading
+            let cached = CachedArticleContent(
+                styledHTML: result.styledHTML,
+                baseURL: result.baseURL,
+                title: result.extracted.title,
+                timestamp: Date()
+            )
+            await ArticleContentCache.shared.storeContent(cached, for: url)
+
+            // Also cache extracted text for offline reading
+            await cacheArticleText(from: result.styledHTML)
         } catch {
-            await MainActor.run {
-                self.error = error.localizedDescription
-                self.isLoading = false
+            // Network failed - check for text-only cache as fallback
+            if let cachedText = await ArticleTextCache.shared.cachedText(for: url) {
+                await MainActor.run {
+                    self.cachedPlainText = cachedText
+                    self.isOfflineMode = true
+                    self.isLoading = false
+                }
+            } else {
+                await MainActor.run {
+                    self.error = error.localizedDescription
+                    self.isLoading = false
+                }
             }
+        }
+    }
+
+    /// Cache extracted text for offline reading
+    private func cacheArticleText(from styledHTML: String) async {
+        let articleText = ArticleSummarizer.shared.extractReadableText(from: styledHTML)
+        if !articleText.isEmpty {
+            await ArticleTextCache.shared.storeText(
+                articleText,
+                for: url,
+                title: articleTitle,
+                sourceTitle: sourceTitle,
+                pubDate: articleDate
+            )
         }
     }
 

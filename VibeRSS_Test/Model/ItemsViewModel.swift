@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Reeeed
 
 @MainActor
 final class ItemsViewModel: ObservableObject {
@@ -10,18 +11,6 @@ final class ItemsViewModel: ObservableObject {
 
     private let service = FeedService()
     private var previousArticleIDs: Set<UUID> = []
-
-    /// Filter articles by age based on user setting (0 = no filter)
-    private func filterByAge(_ articles: [Article]) -> [Article] {
-        let ageDays = UserDefaults.standard.integer(forKey: "articleAgeDays")
-        guard ageDays > 0 else { return articles }
-
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -ageDays, to: Date()) ?? Date.distantPast
-        return articles.filter { article in
-            guard let pubDate = article.pubDate else { return true } // Keep articles without dates
-            return pubDate >= cutoffDate
-        }
-    }
 
     func load(for source: Source) async {
         isLoading = true; errorMessage = nil
@@ -38,9 +27,11 @@ final class ItemsViewModel: ObservableObject {
             Task { await ArticleReadStateManager.shared.updateLatestArticles(for: source.id, urls: articleURLs) }
 
             let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            let filtered = filterByAge(sorted)
-            updateNewArticles(from: filtered)
-            items = filtered
+            updateNewArticles(from: sorted)
+            items = sorted
+
+            // Cache articles for offline reading in the background
+            Task { await cacheArticlesForOffline(sorted) }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -55,5 +46,50 @@ final class ItemsViewModel: ObservableObject {
             newArticleIDs = currentIDs.subtracting(previousArticleIDs)
         }
         previousArticleIDs = currentIDs
+    }
+
+    /// Cache articles for offline reading when user opens a feed
+    /// Caches full styled HTML for the best offline experience
+    private func cacheArticlesForOffline(_ articles: [Article]) async {
+        let offlineCachingEnabled = UserDefaults.standard.object(forKey: "offlineCachingEnabled") as? Bool ?? true
+        guard offlineCachingEnabled else { return }
+
+        // Cache top 10 articles from this feed
+        let articlesToCache = Array(articles.prefix(10))
+
+        for article in articlesToCache {
+            // Skip if already cached (check HTML cache)
+            if await ArticleContentCache.shared.cachedContent(for: article.link) != nil {
+                continue
+            }
+
+            do {
+                // Fetch and extract full styled HTML using Reeeed
+                let result = try await Reeeed.fetchAndExtractContent(fromURL: article.link)
+
+                // Cache the styled HTML
+                let cached = CachedArticleContent(
+                    styledHTML: result.styledHTML,
+                    baseURL: result.baseURL,
+                    title: result.extracted.title,
+                    timestamp: Date()
+                )
+                await ArticleContentCache.shared.storeContent(cached, for: article.link)
+
+                // Also cache extracted text for summaries
+                let text = ArticleSummarizer.shared.extractReadableText(from: result.styledHTML)
+                if !text.isEmpty {
+                    await ArticleTextCache.shared.storeText(
+                        text,
+                        for: article.link,
+                        title: article.title,
+                        sourceTitle: article.sourceTitle,
+                        pubDate: article.pubDate
+                    )
+                }
+            } catch {
+                // Silently continue - offline caching is best effort
+            }
+        }
     }
 }
