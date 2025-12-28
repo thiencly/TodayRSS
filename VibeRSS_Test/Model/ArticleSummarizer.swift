@@ -320,8 +320,8 @@ actor ArticleSummarizer {
 
     /// Minimum character count for RSS description to be considered substantial enough for summarization
     private let minDescriptionLength = 200
-    /// Lower threshold for hero summaries (At a Glance) - speed over quality
-    private let minDescriptionLengthHero = 150
+    /// Higher threshold for hero summaries (At a Glance) - ensures quality context for AI
+    private let minDescriptionLengthHero = 400
 
     /// Maximum word count for hero summaries (truncate if AI exceeds this)
     private let maxHeroWords = 28

@@ -753,6 +753,7 @@ struct ContentView: View {
         }
 
         let hasNewArticles = !newArticles.isEmpty
+        print("At a Glance Debug: cachedArticles=\(feedArticles.count), previouslySeenLinks=\(previouslySeenLinks.count), newArticles=\(newArticles.count)")
 
         // If no new articles, mark all existing entries as not new and collapse
         if !hasNewArticles {
@@ -851,6 +852,8 @@ struct ContentView: View {
         // Update heroEntries - only if we have new valid entries, otherwise keep existing
         if !newEntries.isEmpty {
             heroEntries = newEntries
+            let newCount = newEntries.filter { $0.isNew }.count
+            print("At a Glance Debug: Set heroEntries with \(newEntries.count) entries, \(newCount) marked as new")
 
             // Auto-expand if card is collapsed and auto-expand is enabled
             if isHeroCollapsed && atAGlanceAutoExpand {

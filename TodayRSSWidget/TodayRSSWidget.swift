@@ -1134,7 +1134,7 @@ struct MediumSingleWidgetView: View {
                     Spacer()
 
                     Text(article.title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .lineLimit(4)
                         .multilineTextAlignment(.leading)
                         .foregroundStyle(.white)
@@ -1182,7 +1182,7 @@ struct MediumSingleWidgetView: View {
                     Spacer()
 
                     Text(article.title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .lineLimit(3)
                         .minimumScaleFactor(0.8)
                         .multilineTextAlignment(.center)
