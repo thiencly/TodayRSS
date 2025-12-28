@@ -328,7 +328,6 @@ struct ContentView: View {
 
     private let refreshService = FeedService()
 
-    private let maxConcurrentFeeds = 2
     private let maxPrefetchPerFeed = 6
     private let maxConcurrentArticlePrefetch = 1
     private let interBatchDelayNs: UInt64 = 150_000_000
@@ -390,7 +389,6 @@ struct ContentView: View {
                                 await withTaskGroup(of: Void.self) { inner in
                                     for item in batch {
                                         inner.addTask {
-                                            if Task.isCancelled { return }
                                             if Task.isCancelled { return }
                                             await articleGate.withPermit {
                                                 if await ArticleTextCache.shared.cachedText(for: item.link) != nil {
@@ -602,10 +600,13 @@ struct ContentView: View {
         guard let data = UserDefaults.standard.data(forKey: heroCacheKey) else { return }
         guard let decoded = try? JSONDecoder().decode([SidebarHeroCardView.Entry].self, from: data) else { return }
         // Filter out entries with empty summaries - they'll be regenerated
-        // Mark all cached entries as NOT new (they were already seen before app was killed)
         var filtered = decoded.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        // Compare against seen links to determine which entries are actually "new"
+        // This ensures articles the user hasn't read yet stay marked as new across app restarts
+        let seenLinks = loadSeenLinks()
         for i in filtered.indices {
-            filtered[i].isNew = false
+            filtered[i].isNew = !seenLinks.contains(filtered[i].link)
         }
         heroEntries = filtered
     }
@@ -618,7 +619,7 @@ struct ContentView: View {
         return Set(links.compactMap { URL(string: $0) })
     }
 
-    @MainActor private func loadHeroEntries(bypassCooldown: Bool = false) async {
+    @MainActor private func loadHeroEntries(useBackgroundCache: Bool = false) async {
         // If already loading, mark for refresh after current load completes
         if isLoadingHero {
             pendingHeroRefresh = true
@@ -636,13 +637,30 @@ struct ContentView: View {
         // 1. If background sync has new cached articles → use cache (instant)
         // 2. If triggered by background sync notification → use cache
         // 3. Otherwise → fetch RSS directly (if cooldown passed)
-        let useCachedArticles = hasNewCachedArticles || bypassCooldown
+        let useCachedArticles = hasNewCachedArticles || useBackgroundCache
         let shouldFetchRSS = !useCachedArticles && timeSinceLastRefresh > heroRefreshCooldown
 
         if !useCachedArticles && !shouldFetchRSS {
-            // Within cooldown period and no new cache - just use existing entries
+            // Within cooldown period and no new cache - still check existing entries
             if heroEntries.isEmpty {
                 loadHeroEntriesFromCache()
+            } else {
+                // Hot start: re-check existing entries against seen links
+                // This ensures we're always "checking for new articles" on app launch
+                let seenLinks = loadSeenLinks()
+                for i in heroEntries.indices {
+                    heroEntries[i].isNew = !seenLinks.contains(heroEntries[i].link)
+                }
+            }
+
+            // Auto-expand if there are new entries
+            let hasNewEntries = heroEntries.contains { $0.isNew }
+            if hasNewEntries && isHeroCollapsed && atAGlanceAutoExpand {
+                HapticManager.shared.success()
+                withAnimation(.snappy(duration: 0.3)) {
+                    isHeroCollapsed = false
+                }
+                UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
             }
             return
         }
@@ -760,7 +778,7 @@ struct ContentView: View {
 
             if pendingHeroRefresh {
                 pendingHeroRefresh = false
-                Task { await loadHeroEntries(bypassCooldown: true) }
+                Task { await loadHeroEntries(useBackgroundCache: true) }
             }
             return
         }
@@ -860,7 +878,7 @@ struct ContentView: View {
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
             pendingHeroRefresh = false
-            Task { await loadHeroEntries(bypassCooldown: true) }
+            Task { await loadHeroEntries(useBackgroundCache: true) }
         }
     }
 
@@ -1194,7 +1212,7 @@ struct ContentView: View {
                                 UserDefaults.standard.removeObject(forKey: heroCacheKey)
                                 Task {
                                     await ArticleSummarizer.shared.clearHeroSummaries()
-                                    await loadHeroEntries(bypassCooldown: true)
+                                    await loadHeroEntries(useBackgroundCache: true)
                                 }
                             } label: {
                                 Label("Clear At a Glance", systemImage: "sun.horizon")
@@ -1489,7 +1507,7 @@ struct ContentView: View {
             // Only if source list is visible
             sidebarRefreshTrigger = UUID()
             if isSourceListVisible {
-                Task { await loadHeroEntries(bypassCooldown: true) }
+                Task { await loadHeroEntries(useBackgroundCache: true) }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didNavigateToArticleList)) { _ in
