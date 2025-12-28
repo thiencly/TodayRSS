@@ -320,6 +320,8 @@ actor ArticleSummarizer {
 
     /// Minimum character count for RSS description to be considered substantial enough for summarization
     private let minDescriptionLength = 200
+    /// Lower threshold for hero summaries (At a Glance) - speed over quality
+    private let minDescriptionLengthHero = 150
 
     /// Maximum word count for hero summaries (truncate if AI exceeds this)
     private let maxHeroWords = 28
@@ -378,7 +380,8 @@ actor ArticleSummarizer {
 
         // Clean the RSS description first
         let cleanedDescription = fallbackText.map { cleanDescription($0) }
-        let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLength
+        // Use lower threshold for hero summaries (speed optimization)
+        let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLengthHero
 
         // Priority: 1) Cached full article, 2) Substantial RSS description (skip network!), 3) Fetch HTML, 4) Short RSS description
         let baseText: String
@@ -408,7 +411,8 @@ actor ArticleSummarizer {
         }
 
         // Use structure-aware slice for better content coverage
-        let primer = selectStructureAwareSlice(from: baseText, targetChars: 1000)
+        // Reduced from 1000 to 600 chars for faster AI processing (still enough for 25-word summary)
+        let primer = selectStructureAwareSlice(from: baseText, targetChars: 600)
         if primer.isEmpty { return nil }
 
         // Get session from pool (reuse pre-warmed sessions)

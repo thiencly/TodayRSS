@@ -141,6 +141,7 @@ final class SidebarCollectionVC: UIViewController {
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
     var onHideLatest: (() -> Void)?
     var onHideToday: (() -> Void)?
+    var onScrollBegan: (() -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -701,7 +702,12 @@ final class SidebarCollectionVC: UIViewController {
 
 // MARK: - Collection View Delegate
 
-extension SidebarCollectionVC: UICollectionViewDelegate {
+extension SidebarCollectionVC: UICollectionViewDelegate, UIScrollViewDelegate {
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        // Notify when user starts scrolling
+        onScrollBegan?()
+    }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
@@ -792,6 +798,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
     var onFeedContextMenu: ((Feed) -> UIMenu?)?
     var onHideLatest: (() -> Void)?
     var onHideToday: (() -> Void)?
+    var onScrollBegan: (() -> Void)?
 
     func makeUIViewController(context: Context) -> SidebarCollectionVC {
         let vc = SidebarCollectionVC()
@@ -832,6 +839,7 @@ struct CollapsibleSidebarList: UIViewControllerRepresentable {
         vc.onFeedContextMenu = onFeedContextMenu
         vc.onHideLatest = onHideLatest
         vc.onHideToday = onHideToday
+        vc.onScrollBegan = onScrollBegan
     }
 }
 

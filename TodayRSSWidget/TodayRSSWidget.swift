@@ -48,7 +48,8 @@ private struct WidgetGlowBackground: View {
 private func getArticles(for source: SourceEntity?) -> [WidgetArticle] {
     let manager = WidgetDataManager.shared
 
-    guard let source = source else {
+    // If no source selected or "All Sources" selected, return all articles
+    guard let source = source, source.id != "all-sources" else {
         return manager.allArticles()
     }
 
@@ -177,11 +178,19 @@ struct SourceEntity: AppEntity, Identifiable, Hashable {
 }
 
 struct SourceQuery: EntityQuery {
+    private static let allSourcesID = "all-sources"
+
     func entities(for identifiers: [String]) async throws -> [SourceEntity] {
         let config = WidgetDataManager.shared.loadSourceConfig()
         var results: [SourceEntity] = []
 
         for id in identifiers {
+            // Check for "All Sources" special ID
+            if id == Self.allSourcesID {
+                results.append(SourceEntity(id: Self.allSourcesID, displayName: "All Sources", isFolder: false))
+                continue
+            }
+
             // Use case-insensitive comparison for UUID strings
             let normalizedID = id.uppercased()
 
@@ -213,6 +222,9 @@ struct SourceQuery: EntityQuery {
     func suggestedEntities() async throws -> [SourceEntity] {
         let config = WidgetDataManager.shared.loadSourceConfig()
         var suggestions: [SourceEntity] = []
+
+        // Add "All Sources" as the first option
+        suggestions.append(SourceEntity(id: Self.allSourcesID, displayName: "📰 All Sources", isFolder: false))
 
         for folder in config.folders {
             suggestions.append(SourceEntity(id: folder.id, displayName: "📁 \(folder.name)", isFolder: true))
@@ -274,8 +286,9 @@ struct SmallWidgetProvider: AppIntentTimelineProvider {
     private let lockScreenEntryInterval: TimeInterval = 30 * 60
     /// Maximum number of timeline entries for home screen widgets
     private let homeScreenMaxEntries = 6
-    /// Maximum number of timeline entries for lock screen widgets (conserve refresh budget)
-    private let lockScreenMaxEntries = 2
+    /// Maximum number of timeline entries for lock screen widgets
+    /// More entries = less frequent reload requests = better for iOS budget
+    private let lockScreenMaxEntries = 6
 
     /// Check if this is a lock screen widget family
     private func isLockScreenWidget(_ family: WidgetFamily) -> Bool {
@@ -954,6 +967,276 @@ struct MediumRSSWidget: Widget {
 }
 
 // ============================================================================
+// MARK: - MEDIUM SINGLE WIDGET (1 article, fills entire widget)
+// ============================================================================
+
+// MARK: - Medium Single Widget Entry
+struct MediumSingleWidgetEntry: TimelineEntry {
+    let date: Date
+    let articles: [WidgetArticle]
+    let sourceName: String?
+}
+
+// MARK: - Medium Single Widget Intent
+struct MediumSingleWidgetIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource { "Select Source" }
+    static var description: IntentDescription { "Choose a feed or folder to display" }
+
+    @Parameter(title: "Source")
+    var source: SourceEntity?
+}
+
+// MARK: - Medium Single Widget Provider
+struct MediumSingleWidgetProvider: AppIntentTimelineProvider {
+    /// Interval between timeline entries (15 minutes)
+    private let entryInterval: TimeInterval = 15 * 60
+    /// Maximum number of timeline entries
+    private let maxEntries = 6
+
+    func placeholder(in context: Context) -> MediumSingleWidgetEntry {
+        MediumSingleWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
+    }
+
+    func snapshot(for configuration: MediumSingleWidgetIntent, in context: Context) async -> MediumSingleWidgetEntry {
+        let articles = getArticles(for: configuration.source)
+        return MediumSingleWidgetEntry(
+            date: Date(),
+            articles: articles.isEmpty ? sampleArticles : articles,
+            sourceName: configuration.source?.displayName ?? "All Sources"
+        )
+    }
+
+    func timeline(for configuration: MediumSingleWidgetIntent, in context: Context) async -> Timeline<MediumSingleWidgetEntry> {
+        // Save configuration to App Group so main app knows which feeds to sync
+        if let source = configuration.source, source.id != "all-sources" {
+            saveWidgetConfiguration(sourceIDs: [source.id])
+        } else {
+            saveWidgetConfiguration(sourceIDs: ["all"])
+        }
+
+        var articles = getArticles(for: configuration.source)
+        let sourceName = configuration.source?.displayName ?? "All Sources"
+
+        if articles.isEmpty {
+            articles = sampleArticles
+        }
+
+        let now = Date()
+
+        // Create timeline entries to cycle through articles
+        var entries: [MediumSingleWidgetEntry] = []
+        let articleCount = min(articles.count, maxEntries)
+
+        for i in 0..<articleCount {
+            let entryDate = now.addingTimeInterval(Double(i) * entryInterval)
+            // Rotate articles so each entry shows a different article first
+            let rotatedArticles = Array(articles.dropFirst(i)) + Array(articles.prefix(i))
+            entries.append(MediumSingleWidgetEntry(
+                date: entryDate,
+                articles: rotatedArticles,
+                sourceName: sourceName
+            ))
+        }
+
+        // If no entries were created, create at least one
+        if entries.isEmpty {
+            entries.append(MediumSingleWidgetEntry(
+                date: now,
+                articles: articles,
+                sourceName: sourceName
+            ))
+        }
+
+        return Timeline(entries: entries, policy: .atEnd)
+    }
+}
+
+// MARK: - Medium Single Widget View
+struct MediumSingleWidgetView: View {
+    let entry: MediumSingleWidgetEntry
+
+    var body: some View {
+        if let article = entry.articles.first {
+            let hasThumbnail = article.thumbnailImageURL != nil &&
+                WidgetImageCache.shared.loadImage(for: article.thumbnailImageURL!) != nil
+
+            if hasThumbnail {
+                mediumSingleWithThumbnail(article: article)
+            } else {
+                mediumSingleTextOnly(article: article)
+            }
+        } else {
+            VStack {
+                Image(systemName: "newspaper")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("No Articles")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mediumSingleWithThumbnail(article: WidgetArticle) -> some View {
+        let gradientColor = getDominantColor(for: article.thumbnailImageURL)
+
+        GeometryReader { geo in
+            ZStack {
+                CachedWidgetImage(thumbnailURL: article.thumbnailImageURL)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+
+                VStack(spacing: 0) {
+                    Spacer()
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: gradientColor.opacity(0.1), location: 0.3),
+                            .init(color: gradientColor.opacity(0.6), location: 0.5),
+                            .init(color: gradientColor.opacity(0.9), location: 0.65),
+                            .init(color: gradientColor, location: 0.75),
+                            .init(color: gradientColor, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: geo.size.height * 0.65)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        if let iconURL = article.sourceIconImageURL,
+                           let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
+                            Image(uiImage: iconImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+
+                        Text(article.sourceTitle ?? entry.sourceName ?? "TodayRSS")
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+
+                        if let pubDate = article.pubDate {
+                            Text("·")
+                                .font(.system(size: 13))
+                            Text(formatTime(pubDate))
+                                .font(.system(size: 12, weight: .medium))
+                        }
+
+                        Spacer()
+                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+
+                    Spacer()
+
+                    Text(article.title)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                }
+                .padding(20)
+            }
+        }
+        .widgetURL(article.deepLinkURL ?? article.linkURL)
+    }
+
+    @ViewBuilder
+    private func mediumSingleTextOnly(article: WidgetArticle) -> some View {
+        GeometryReader { geo in
+            ZStack {
+                WidgetGlowBackground()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        if let iconURL = article.sourceIconImageURL,
+                           let iconImage = WidgetImageCache.shared.loadImage(for: iconURL) {
+                            Image(uiImage: iconImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+
+                        Text(article.sourceTitle ?? entry.sourceName ?? "TodayRSS")
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+
+                        if let pubDate = article.pubDate {
+                            Text("·")
+                                .font(.system(size: 13))
+                            Text(formatTime(pubDate))
+                                .font(.system(size: 12, weight: .medium))
+                        }
+
+                        Spacer()
+                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+
+                    Spacer()
+
+                    Text(article.title)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+
+                    if !article.summary.isEmpty {
+                        Text(article.summary)
+                            .font(.system(size: 13, weight: .regular))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                    }
+
+                    Spacer()
+                }
+                .padding(20)
+            }
+        }
+        .widgetURL(article.deepLinkURL ?? article.linkURL)
+    }
+}
+
+// MARK: - Medium Single Widget Entry View
+struct MediumSingleWidgetEntryView: View {
+    var entry: MediumSingleWidgetEntry
+
+    var body: some View {
+        MediumSingleWidgetView(entry: entry)
+    }
+}
+
+// MARK: - Medium Single Widget Definition
+struct MediumSingleRSSWidget: Widget {
+    let kind: String = "MediumSingleRSSWidget"
+
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: kind, intent: MediumSingleWidgetIntent.self, provider: MediumSingleWidgetProvider()) { entry in
+            MediumSingleWidgetEntryView(entry: entry)
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+        }
+        .contentMarginsDisabled()
+        .configurationDisplayName("TodayRSS Featured")
+        .description("One article, full size display.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
+// ============================================================================
 // MARK: - Widget Bundle
 // ============================================================================
 
@@ -962,6 +1245,7 @@ struct TodayRSSWidgetBundle: WidgetBundle {
     var body: some Widget {
         SmallRSSWidget()
         MediumRSSWidget()
+        MediumSingleRSSWidget()
     }
 }
 
@@ -982,4 +1266,10 @@ struct TodayRSSWidgetBundle: WidgetBundle {
     SmallRSSWidget()
 } timeline: {
     SmallWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
+}
+
+#Preview("Medium Single", as: .systemMedium) {
+    MediumSingleRSSWidget()
+} timeline: {
+    MediumSingleWidgetEntry(date: Date(), articles: sampleArticles, sourceName: "TodayRSS")
 }

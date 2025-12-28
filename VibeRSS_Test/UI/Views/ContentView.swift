@@ -314,11 +314,12 @@ struct ContentView: View {
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
     @State private var isHeroCollapsed: Bool = UserDefaults.standard.bool(forKey: "isHeroCollapsed")
-    @State private var lastHeroUpdateDate: Date? = nil
-    private let heroUpdateCooldown: TimeInterval = 300 // 5 minutes
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
-    @State private var isInitialLoad: Bool = true
+    private let lastHeroRefreshKey = "viberss.lastHeroRefreshDate"
+
+    // Staleness threshold: refresh if cache is older than 1.5 hours (fallback for failed background sync)
+    private let heroStalenessThreshold: TimeInterval = 90 * 60
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
@@ -624,13 +625,38 @@ struct ContentView: View {
             return
         }
 
-        // Check cooldown - don't update more than once every 5 minutes (unless initial load or bypassed)
-        if !bypassCooldown && !isInitialLoad, let lastUpdate = lastHeroUpdateDate {
-            let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdate)
-            if timeSinceLastUpdate < heroUpdateCooldown {
-                // Within cooldown period, keep collapsed and skip update
-                return
+        // Check if cache is stale (fallback for failed background sync)
+        let lastRefresh = UserDefaults.standard.object(forKey: lastHeroRefreshKey) as? Date ?? .distantPast
+        let isCacheStale = Date().timeIntervalSince(lastRefresh) > heroStalenessThreshold
+
+        // Check if background sync has new articles pending (lightweight flag check)
+        // This handles the case where background sync completed while app was in background
+        let hasNewCachedArticles = BackgroundSyncManager.shared.hasNewArticlesPending()
+
+        // At a Glance uses cached articles only
+        // Regenerate when:
+        // 1. Explicitly triggered by background sync (bypassCooldown = true)
+        // 2. Cache is stale (>1.5 hours) - fallback for failed background sync
+        // 3. There are new cached articles we haven't shown yet
+        let shouldRegenerate = bypassCooldown || isCacheStale || hasNewCachedArticles
+
+        if !shouldRegenerate {
+            // Not triggered by background sync and cache is fresh - just use cached entries
+            if heroEntries.isEmpty {
+                loadHeroEntriesFromCache()
             }
+            return
+        }
+
+        if hasNewCachedArticles && !bypassCooldown && !isCacheStale {
+            print("At a Glance: Detected new cached articles from background sync")
+        }
+
+        // Determine if this is a fallback refresh (stale cache, needs network fetch)
+        let isFallbackRefresh = isCacheStale && !bypassCooldown
+
+        if isFallbackRefresh {
+            print("At a Glance: Cache stale (>\(Int(heroStalenessThreshold/60)) min), triggering fallback refresh with network fetch")
         }
 
         // Show loading indicator (glow will appear on collapsed card)
@@ -645,10 +671,7 @@ struct ContentView: View {
             }
         }
 
-        // Fetch from ALL sources
-        let feeds = store.feeds
-
-        // Use persisted seen links (survives app restart)
+        // Load seen links for filtering (persists across app restarts)
         let previouslySeenLinks = loadSeenLinks()
 
         // Keep existing entries indexed by link for comparison
@@ -657,24 +680,54 @@ struct ContentView: View {
             uniquingKeysWith: { first, _ in first }
         )
 
-        // Step 1: Fetch latest article from each feed in parallel
-        var feedArticles: [(feed: Feed, article: FeedItem)] = []
-        await withTaskGroup(of: (Feed, FeedItem)?.self) { group in
-            for feed in feeds {
-                group.addTask {
-                    do {
-                        let items = try await self.refreshService.loadItems(from: feed.url)
-                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
+        // Get articles - either from cache (normal) or network (fallback)
+        var feedArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
+
+        if isFallbackRefresh {
+            // FALLBACK: Fetch fresh articles from network (background sync failed)
+            // Clear any pending flag since we're fetching fresh data
+            BackgroundSyncManager.shared.clearNewArticlesPending()
+            let feeds = store.feeds
+            await withTaskGroup(of: (UUID, String, URL?, (String, URL, String, Date?))?.self) { group in
+                for feed in feeds {
+                    group.addTask {
+                        do {
+                            let items = try await self.refreshService.loadItems(from: feed.url)
+                            guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
+                                return nil
+                            }
+                            return (feed.id, feed.title, feed.iconURL, (latest.title, latest.link, latest.summary, latest.pubDate))
+                        } catch {
                             return nil
                         }
-                        return (feed, latest)
-                    } catch {
-                        return nil
+                    }
+                }
+                for await result in group {
+                    if let (feedID, feedTitle, feedIconURL, article) = result {
+                        feedArticles.append((feedID: feedID, feedTitle: feedTitle, feedIconURL: feedIconURL, article: article))
                     }
                 }
             }
-            for await result in group {
-                if let r = result { feedArticles.append(r) }
+        } else {
+            // NORMAL: Use cached articles from background sync (no network fetch)
+            let cachedArticles = BackgroundSyncManager.shared.loadCachedAtAGlanceArticles()
+
+            // Clear the pending flag now that we're processing
+            BackgroundSyncManager.shared.clearNewArticlesPending()
+
+            for cached in cachedArticles {
+                feedArticles.append((
+                    feedID: cached.feedID,
+                    feedTitle: cached.feedTitle,
+                    feedIconURL: cached.feedIconURL,
+                    article: (cached.articleTitle, cached.articleLink, cached.articleSummary, cached.pubDate)
+                ))
+            }
+
+            if cachedArticles.isEmpty {
+                print("At a Glance: No cached articles from background sync")
+                isLoadingHero = false
+                return
             }
         }
 
@@ -684,12 +737,13 @@ struct ContentView: View {
         // Only keep NEW articles (not seen before)
         // Also deduplicate by link to prevent count mismatch when syndicated content
         // appears in multiple feeds with the same URL
-        var newArticles: [(feed: Feed, article: FeedItem)] = []
+        var newArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
         var seenNewLinks: Set<URL> = []
-        for (feed, article) in feedArticles {
-            if !previouslySeenLinks.contains(article.link) && !seenNewLinks.contains(article.link) {
-                newArticles.append((feed, article))
-                seenNewLinks.insert(article.link)
+        for item in feedArticles {
+            let articleLink = item.article.link
+            if !previouslySeenLinks.contains(articleLink) && !seenNewLinks.contains(articleLink) {
+                newArticles.append(item)
+                seenNewLinks.insert(articleLink)
                 // Limit to entitlement-aware at-a-glance count
                 let effectiveLimit = min(atAGlanceCount, EntitlementManager.shared.atAGlanceLimit)
                 if newArticles.count >= effectiveLimit {
@@ -707,8 +761,6 @@ struct ContentView: View {
                 heroEntries[i].isNew = false
             }
             isLoadingHero = false
-            isInitialLoad = false
-            lastHeroUpdateDate = Date()
 
             // Collapse the card (user can tap to expand and see prior articles)
             withAnimation(.snappy(duration: 0.3)) {
@@ -716,6 +768,9 @@ struct ContentView: View {
             }
 
             saveHeroEntriesToCache()
+
+            // Update last refresh timestamp (successful check, even if no new articles)
+            UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
 
             if pendingHeroRefresh {
                 pendingHeroRefresh = false
@@ -727,8 +782,21 @@ struct ContentView: View {
         // Step 2: Generate summaries for new articles
         var newEntries: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
-            for (feed, article) in newArticles {
-                let existingEntry = existingEntriesByLink[article.link]
+            for item in newArticles {
+                let existingEntry = existingEntriesByLink[item.article.link]
+
+                // Create a minimal Feed for display purposes
+                let displayFeed = Feed(
+                    id: item.feedID,
+                    title: item.feedTitle,
+                    url: URL(string: "https://placeholder")!, // Not used for display
+                    iconURL: item.feedIconURL
+                )
+
+                let articleLink = item.article.link
+                let articleTitle = item.article.title
+                let articleSummary = item.article.summary
+                let articlePubDate = item.article.pubDate
 
                 group.addTask {
                     // Check if we already have a valid summary
@@ -743,17 +811,14 @@ struct ContentView: View {
                         )
                     }
 
-                    // Generate new summary
+                    // Generate new summary (2 attempts, no delay for speed)
                     let minSummaryLength = 50
                     var summary = ""
-                    for attempt in 1...3 {
-                        summary = await ArticleSummarizer.shared.fastHeroSummary(url: article.link, articleText: article.summary) ?? ""
+                    for attempt in 1...2 {
+                        summary = await ArticleSummarizer.shared.fastHeroSummary(url: articleLink, articleText: articleSummary) ?? ""
                         let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !trimmed.isEmpty && trimmed.count >= minSummaryLength {
                             break
-                        }
-                        if attempt < 3 {
-                            try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
                         }
                     }
 
@@ -763,12 +828,12 @@ struct ContentView: View {
                     }
 
                     return SidebarHeroCardView.Entry(
-                        source: feed,
-                        title: article.title,
+                        source: displayFeed,
+                        title: articleTitle,
                         oneLine: summary,
-                        link: article.link,
+                        link: articleLink,
                         isNew: true,
-                        pubDate: article.pubDate
+                        pubDate: articlePubDate
                     )
                 }
             }
@@ -787,25 +852,24 @@ struct ContentView: View {
         if !newEntries.isEmpty {
             heroEntries = newEntries
 
-            // Handle reveal and expand based on context
-            if !isInitialLoad {
-                // Only expand if card is collapsed and auto-expand is on
-                if isHeroCollapsed && atAGlanceAutoExpand {
-                    HapticManager.shared.success()
-                    withAnimation(.snappy(duration: 0.3)) {
-                        isHeroCollapsed = false
-                    }
-                    UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
+            // Auto-expand if card is collapsed and auto-expand is enabled
+            if isHeroCollapsed && atAGlanceAutoExpand {
+                HapticManager.shared.success()
+                withAnimation(.snappy(duration: 0.3)) {
+                    isHeroCollapsed = false
                 }
+                UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
             }
 
             saveHeroEntriesToCache()
+
+            // Update last refresh timestamp (successful regeneration)
+            UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
         }
         // If newEntries is empty (all summaries failed), keep existing heroEntries
+        // Don't update timestamp - we want to retry on next check
 
         isLoadingHero = false
-        lastHeroUpdateDate = Date()
-        isInitialLoad = false
 
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
@@ -1079,7 +1143,8 @@ struct ContentView: View {
                 withAnimation {
                     showTodayView = false
                 }
-            }
+            },
+            onScrollBegan: nil
         )
         .ignoresSafeArea()
         .id(sidebarRefreshTrigger)
@@ -1438,7 +1503,7 @@ struct ContentView: View {
             // Only if source list is visible
             sidebarRefreshTrigger = UUID()
             if isSourceListVisible {
-                Task { await loadHeroEntries() }
+                Task { await loadHeroEntries(bypassCooldown: true) }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didNavigateToArticleList)) { _ in
