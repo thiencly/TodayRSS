@@ -318,8 +318,8 @@ struct ContentView: View {
     private let seenLinksKey = "viberss.heroSeenLinks"
     private let lastHeroRefreshKey = "viberss.lastHeroRefreshDate"
 
-    // Staleness threshold: refresh if cache is older than 1.5 hours (fallback for failed background sync)
-    private let heroStalenessThreshold: TimeInterval = 90 * 60
+    // Cooldown between direct RSS fetches for At a Glance (when no cached data available)
+    private let heroRefreshCooldown: TimeInterval = 5 * 60 // 5 minutes
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
@@ -625,39 +625,28 @@ struct ContentView: View {
             return
         }
 
-        // Check if cache is stale (fallback for failed background sync)
-        let lastRefresh = UserDefaults.standard.object(forKey: lastHeroRefreshKey) as? Date ?? .distantPast
-        let isCacheStale = Date().timeIntervalSince(lastRefresh) > heroStalenessThreshold
-
-        // Check if background sync has new articles pending (lightweight flag check)
-        // This handles the case where background sync completed while app was in background
+        // Check if background sync has new articles pending
         let hasNewCachedArticles = BackgroundSyncManager.shared.hasNewArticlesPending()
 
-        // At a Glance uses cached articles only
-        // Regenerate when:
-        // 1. Explicitly triggered by background sync (bypassCooldown = true)
-        // 2. Cache is stale (>1.5 hours) - fallback for failed background sync
-        // 3. There are new cached articles we haven't shown yet
-        let shouldRegenerate = bypassCooldown || isCacheStale || hasNewCachedArticles
+        // Check time since last refresh (for cooldown when fetching RSS directly)
+        let lastRefresh = UserDefaults.standard.object(forKey: lastHeroRefreshKey) as? Date ?? .distantPast
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
 
-        if !shouldRegenerate {
-            // Not triggered by background sync and cache is fresh - just use cached entries
+        // Determine data source:
+        // 1. If background sync has new cached articles → use cache (instant)
+        // 2. If triggered by background sync notification → use cache
+        // 3. Otherwise → fetch RSS directly (if cooldown passed)
+        let useCachedArticles = hasNewCachedArticles || bypassCooldown
+        let shouldFetchRSS = !useCachedArticles && timeSinceLastRefresh > heroRefreshCooldown
+
+        if !useCachedArticles && !shouldFetchRSS {
+            // Within cooldown period and no new cache - just use existing entries
             if heroEntries.isEmpty {
                 loadHeroEntriesFromCache()
             }
             return
         }
 
-        if hasNewCachedArticles && !bypassCooldown && !isCacheStale {
-            print("At a Glance: Detected new cached articles from background sync")
-        }
-
-        // Determine if this is a fallback refresh (stale cache, needs network fetch)
-        let isFallbackRefresh = isCacheStale && !bypassCooldown
-
-        if isFallbackRefresh {
-            print("At a Glance: Cache stale (>\(Int(heroStalenessThreshold/60)) min), triggering fallback refresh with network fetch")
-        }
 
         // Show loading indicator (glow will appear on collapsed card)
         isLoadingHero = true
@@ -680,13 +669,31 @@ struct ContentView: View {
             uniquingKeysWith: { first, _ in first }
         )
 
-        // Get articles - either from cache (normal) or network (fallback)
+        // Get articles - either from cache (background sync) or RSS fetch (direct)
         var feedArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
 
-        if isFallbackRefresh {
-            // FALLBACK: Fetch fresh articles from network (background sync failed)
-            // Clear any pending flag since we're fetching fresh data
+        if useCachedArticles {
+            // Use cached articles from background sync (instant, no network)
+            let cachedArticles = BackgroundSyncManager.shared.loadCachedAtAGlanceArticles()
+
+            // Clear the pending flag now that we're processing
             BackgroundSyncManager.shared.clearNewArticlesPending()
+
+            for cached in cachedArticles {
+                feedArticles.append((
+                    feedID: cached.feedID,
+                    feedTitle: cached.feedTitle,
+                    feedIconURL: cached.feedIconURL,
+                    article: (cached.articleTitle, cached.articleLink, cached.articleSummary, cached.pubDate)
+                ))
+            }
+
+            if cachedArticles.isEmpty {
+                isLoadingHero = false
+                return
+            }
+        } else {
+            // Fetch RSS directly (quick since few new articles expected)
             let feeds = store.feeds
             await withTaskGroup(of: (UUID, String, URL?, (String, URL, String, Date?))?.self) { group in
                 for feed in feeds {
@@ -707,27 +714,6 @@ struct ContentView: View {
                         feedArticles.append((feedID: feedID, feedTitle: feedTitle, feedIconURL: feedIconURL, article: article))
                     }
                 }
-            }
-        } else {
-            // NORMAL: Use cached articles from background sync (no network fetch)
-            let cachedArticles = BackgroundSyncManager.shared.loadCachedAtAGlanceArticles()
-
-            // Clear the pending flag now that we're processing
-            BackgroundSyncManager.shared.clearNewArticlesPending()
-
-            for cached in cachedArticles {
-                feedArticles.append((
-                    feedID: cached.feedID,
-                    feedTitle: cached.feedTitle,
-                    feedIconURL: cached.feedIconURL,
-                    article: (cached.articleTitle, cached.articleLink, cached.articleSummary, cached.pubDate)
-                ))
-            }
-
-            if cachedArticles.isEmpty {
-                print("At a Glance: No cached articles from background sync")
-                isLoadingHero = false
-                return
             }
         }
 
@@ -753,7 +739,6 @@ struct ContentView: View {
         }
 
         let hasNewArticles = !newArticles.isEmpty
-        print("At a Glance Debug: cachedArticles=\(feedArticles.count), previouslySeenLinks=\(previouslySeenLinks.count), newArticles=\(newArticles.count)")
 
         // If no new articles, mark all existing entries as not new and collapse
         if !hasNewArticles {
@@ -852,8 +837,6 @@ struct ContentView: View {
         // Update heroEntries - only if we have new valid entries, otherwise keep existing
         if !newEntries.isEmpty {
             heroEntries = newEntries
-            let newCount = newEntries.filter { $0.isNew }.count
-            print("At a Glance Debug: Set heroEntries with \(newEntries.count) entries, \(newCount) marked as new")
 
             // Auto-expand if card is collapsed and auto-expand is enabled
             if isHeroCollapsed && atAGlanceAutoExpand {

@@ -13,7 +13,27 @@ final class ItemsViewModel: ObservableObject {
     private var previousArticleIDs: Set<UUID> = []
 
     func load(for source: Source) async {
-        isLoading = true; errorMessage = nil
+        isLoading = true
+        errorMessage = nil
+
+        // Try to load from cache first (instant)
+        if let cachedItems = await FeedItemsCache.shared.getFeedItems(
+            for: source.id,
+            sourceID: source.id,
+            sourceTitle: source.title,
+            sourceIconURL: source.iconURL
+        ) {
+            let sorted = cachedItems.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
+            isLoading = false
+
+            // Cache articles for offline reading in the background
+            Task { await cacheArticlesForOffline(sorted) }
+            return
+        }
+
+        // Fallback to network fetch if no cache
         do {
             var result = try await service.loadItems(from: source.url)
             for i in result.indices {
@@ -29,6 +49,14 @@ final class ItemsViewModel: ObservableObject {
             let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
             updateNewArticles(from: sorted)
             items = sorted
+
+            // Cache the feed items for next time
+            await FeedItemsCache.shared.storeFeedItems(
+                sorted,
+                for: source.id,
+                feedTitle: source.title,
+                feedIconURL: source.iconURL
+            )
 
             // Cache articles for offline reading in the background
             Task { await cacheArticlesForOffline(sorted) }

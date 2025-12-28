@@ -24,9 +24,37 @@ final class FolderItemsViewModel: ObservableObject {
     }
 
     func load(for folder: Folder, feeds: [Feed]) async {
-        isLoading = true; errorMessage = nil
+        isLoading = true
+        errorMessage = nil
         let sources = feeds.filter { $0.folderID == folder.id }
         var all: [Article] = []
+        var hasCachedData = false
+
+        // Try to load from cache first (instant)
+        for src in sources {
+            if let cachedItems = await FeedItemsCache.shared.getFeedItems(
+                for: src.id,
+                sourceID: src.id,
+                sourceTitle: src.title,
+                sourceIconURL: src.iconURL
+            ) {
+                all.append(contentsOf: cachedItems)
+                hasCachedData = true
+            }
+        }
+
+        if hasCachedData && !all.isEmpty {
+            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
+            isLoading = false
+
+            // Cache articles for offline reading in the background
+            Task { await cacheArticlesForOffline(sorted) }
+            return
+        }
+
+        // Fallback to network fetch if no cache
         var articlesByFeed: [UUID: [FeedItem]] = [:]
 
         await withTaskGroup(of: (UUID, [FeedItem]).self) { group in
@@ -70,9 +98,44 @@ final class FolderItemsViewModel: ObservableObject {
     }
 
     func loadAll(feeds: [Feed]) async {
-        isLoading = true; errorMessage = nil
+        isLoading = true
+        errorMessage = nil
         let sources = feeds
         var all: [Article] = []
+        var hasCachedData = false
+
+        // Try to load from cache first (instant)
+        for src in sources {
+            if let cachedItems = await FeedItemsCache.shared.getFeedItems(
+                for: src.id,
+                sourceID: src.id,
+                sourceTitle: src.title,
+                sourceIconURL: src.iconURL
+            ) {
+                all.append(contentsOf: cachedItems)
+                hasCachedData = true
+            }
+        }
+
+        if hasCachedData && !all.isEmpty {
+            // Filter to only show articles from today
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
+            let filtered = all.filter { article in
+                guard let pubDate = article.pubDate else { return false }
+                return pubDate >= startOfToday
+            }
+            let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            updateNewArticles(from: sorted)
+            items = sorted
+            isLoading = false
+
+            // Cache articles for offline reading in the background
+            Task { await cacheArticlesForOffline(sorted) }
+            return
+        }
+
+        // Fallback to network fetch if no cache
         var articlesByFeed: [UUID: [FeedItem]] = [:]
 
         await withTaskGroup(of: (UUID, [FeedItem]).self) { group in

@@ -320,8 +320,6 @@ actor ArticleSummarizer {
 
     /// Minimum character count for RSS description to be considered substantial enough for summarization
     private let minDescriptionLength = 200
-    /// Higher threshold for hero summaries (At a Glance) - ensures quality context for AI
-    private let minDescriptionLengthHero = 400
 
     /// Maximum word count for hero summaries (truncate if AI exceeds this)
     private let maxHeroWords = 28
@@ -380,34 +378,39 @@ actor ArticleSummarizer {
 
         // Clean the RSS description first
         let cleanedDescription = fallbackText.map { cleanDescription($0) }
-        // Use lower threshold for hero summaries (speed optimization)
-        let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLengthHero
+        let minDescriptionLength = 400
 
-        // Priority: 1) Cached full article, 2) Substantial RSS description (skip network!), 3) Fetch HTML, 4) Short RSS description
+        // Priority: 1) Cached full article text (from background sync)
+        //           2) RSS description if 400+ chars
+        //           3) Fetch HTML and extract text
         let baseText: String
         if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
-            // Best: use cached full article text
+            // Best: use cached full article text from background sync
             baseText = cachedText
-        } else if hasSubstantialDescription, let description = cleanedDescription {
-            // Good: RSS description is substantial enough - skip HTML fetch entirely for speed
-            baseText = description
-        } else if let html = try? await fetchHTMLWithAdaptiveTimeout(url: url) {
-            // Fetch HTML only if description was too short
-            let extracted = extractReadableText(from: String(html.prefix(100_000)))
-            if !extracted.isEmpty {
-                baseText = extracted
-                await ArticleTextCache.shared.storeText(extracted, for: url)
-            } else if let description = cleanedDescription, !description.isEmpty {
-                // HTML extraction failed, use whatever RSS description we have
-                baseText = description
-            } else {
-                return nil
-            }
-        } else if let description = cleanedDescription, !description.isEmpty {
-            // Network failed, use whatever RSS description we have
+        } else if let description = cleanedDescription, description.count >= minDescriptionLength {
+            // Good: use RSS description if it's long enough (400+ chars)
             baseText = description
         } else {
-            return nil
+            // Fallback: fetch HTML and extract text
+            do {
+                let html = try await fetchHTML(url: url)
+                let extracted = extractReadableText(from: String(html.prefix(100_000)))
+                if !extracted.isEmpty {
+                    baseText = extracted
+                } else if let description = cleanedDescription, !description.isEmpty {
+                    // Use short description as last resort
+                    baseText = description
+                } else {
+                    return nil
+                }
+            } catch {
+                // Network error - use short description if available
+                if let description = cleanedDescription, !description.isEmpty {
+                    baseText = description
+                } else {
+                    return nil
+                }
+            }
         }
 
         // Use structure-aware slice for better content coverage
