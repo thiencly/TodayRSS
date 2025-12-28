@@ -235,23 +235,37 @@ struct FeedDetailView: View {
             Task { await ArticleSummarizer.shared.setExpanded(true, url: item.link, length: length) }
         }
 
+        // Retry logic for when on-device AI becomes temporarily unavailable
+        let maxRetries = 2
+        var attempt = 0
         var sawAny = false
-        var lastUpdateTime = Date.distantPast
         var latestText = ""
-        let throttleInterval: TimeInterval = 0.05  // 50ms = 20hz
 
-        let stream = await ArticleSummarizer.shared.streamSummary(url: item.link, length: length, seedText: item.summary)
-        for await partial in stream {
-            sawAny = true
-            latestText = partial
-            let now = Date()
-            if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
-                lastUpdateTime = now
-                inlineSummaries[item.id] = latestText
-                summaryErrors.remove(item.id)
-                aiSummarized.insert(item.id)
+        while attempt < maxRetries && !sawAny {
+            if attempt > 0 {
+                // Wait before retry - gives the on-device model time to recover
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second
             }
+
+            var lastUpdateTime = Date.distantPast
+            let throttleInterval: TimeInterval = 0.05  // 50ms = 20hz
+
+            let stream = await ArticleSummarizer.shared.streamSummary(url: item.link, length: length, seedText: item.summary)
+            for await partial in stream {
+                sawAny = true
+                latestText = partial
+                let now = Date()
+                if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
+                    lastUpdateTime = now
+                    inlineSummaries[item.id] = latestText
+                    summaryErrors.remove(item.id)
+                    aiSummarized.insert(item.id)
+                }
+            }
+
+            attempt += 1
         }
+
         // Final update
         if sawAny {
             inlineSummaries[item.id] = latestText

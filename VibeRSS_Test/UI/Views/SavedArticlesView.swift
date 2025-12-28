@@ -150,21 +150,34 @@ struct SavedArticlesView: View {
             Task { await ArticleSummarizer.shared.setExpanded(true, url: article.url, length: length) }
         }
 
+        // Retry logic for when on-device AI becomes temporarily unavailable
+        let maxRetries = 2
+        var attempt = 0
         var sawAny = false
-        var lastUpdateTime = Date.distantPast
         var latestText = ""
-        let throttleInterval: TimeInterval = 0.05
 
-        let stream = await ArticleSummarizer.shared.streamSummary(url: article.url, length: length, seedText: nil)
-        for await partial in stream {
-            sawAny = true
-            latestText = partial
-            let now = Date()
-            if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
-                lastUpdateTime = now
-                inlineSummaries[article.id] = latestText
-                summaryErrors.remove(article.id)
+        while attempt < maxRetries && !sawAny {
+            if attempt > 0 {
+                // Wait before retry - gives the on-device model time to recover
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second
             }
+
+            var lastUpdateTime = Date.distantPast
+            let throttleInterval: TimeInterval = 0.05
+
+            let stream = await ArticleSummarizer.shared.streamSummary(url: article.url, length: length, seedText: nil)
+            for await partial in stream {
+                sawAny = true
+                latestText = partial
+                let now = Date()
+                if now.timeIntervalSince(lastUpdateTime) >= throttleInterval {
+                    lastUpdateTime = now
+                    inlineSummaries[article.id] = latestText
+                    summaryErrors.remove(article.id)
+                }
+            }
+
+            attempt += 1
         }
 
         if sawAny {

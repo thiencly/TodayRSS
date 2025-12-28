@@ -313,6 +313,7 @@ struct ContentView: View {
     @State private var heroEntries: [SidebarHeroCardView.Entry] = []
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
+    @State private var hasTriggeredInitialHeroLoad: Bool = false
     @State private var isHeroCollapsed: Bool = UserDefaults.standard.bool(forKey: "isHeroCollapsed")
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
@@ -707,6 +708,17 @@ struct ContentView: View {
             }
 
             if cachedArticles.isEmpty {
+                // No cached articles - restore card state (don't leave it collapsed)
+                // This handles the case where pendingHeroRefresh triggered a reload
+                // but the cache was already processed
+                if !heroEntries.isEmpty && atAGlanceAutoExpand {
+                    let hasNewEntries = heroEntries.contains { $0.isNew }
+                    if hasNewEntries {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            isHeroCollapsed = false
+                        }
+                    }
+                }
                 isLoadingHero = false
                 return
             }
@@ -1460,6 +1472,8 @@ struct ContentView: View {
             Task {
                 // Small delay to allow child views (article list) to register their appearance first
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+                // Mark that we've triggered the initial load (prevents double-trigger from scenePhase)
+                hasTriggeredInitialHeroLoad = true
                 // Only generate hero summaries if source list is visible
                 if isSourceListVisible {
                     await loadHeroEntries()
@@ -1474,7 +1488,8 @@ struct ContentView: View {
                 sidebarRefreshTrigger = UUID()
                 // Only generate hero summaries if source list is visible
                 // This prevents generating summaries while on article list view
-                if isSourceListVisible {
+                // Skip on cold start - onAppear already handles that case
+                if isSourceListVisible && hasTriggeredInitialHeroLoad {
                     Task { await loadHeroEntries() }
                 }
             } else if phase == .background {
