@@ -879,6 +879,7 @@ struct NewsReelView: View {
                                 Image(systemName: SavedArticlesManager.shared.isSaved(url: article.link) ? "heart.fill" : "heart")
                                     .font(.title2)
                                     .foregroundStyle(SavedArticlesManager.shared.isSaved(url: article.link) ? .red : .white)
+                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                                     .frame(width: 44, height: 44)
                             }
 
@@ -894,6 +895,7 @@ struct NewsReelView: View {
                                         Image(systemName: "arrow.clockwise")
                                             .font(.title2)
                                             .foregroundStyle(.white)
+                                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                                     }
                                 }
                                 .frame(width: 44, height: 44)
@@ -907,6 +909,7 @@ struct NewsReelView: View {
                                 Image(systemName: "square.and.arrow.up")
                                     .font(.title2)
                                     .foregroundStyle(.white)
+                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                                     .frame(width: 44, height: 44)
                             }
                         }
@@ -923,6 +926,7 @@ struct NewsReelView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                             .frame(width: 44, height: 44)
                             .glassEffect(.regular.interactive(), in: .circle)
                     }
@@ -941,6 +945,7 @@ struct NewsReelView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                             .frame(width: 44, height: 44)
                             .glassEffect(.regular.interactive(), in: .circle)
                     }
@@ -962,6 +967,7 @@ struct NewsReelView: View {
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .glassEffect(.regular.interactive(), in: .capsule)

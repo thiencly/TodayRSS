@@ -167,6 +167,7 @@ struct TopicPill: View {
             Text(name)
                 .font(.system(.subheadline, design: .rounded, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background {
