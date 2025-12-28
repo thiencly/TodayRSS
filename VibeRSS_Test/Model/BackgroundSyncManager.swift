@@ -736,7 +736,7 @@ final class BackgroundSyncManager {
         scheduleBackgroundRefresh()
     }
 
-    /// Call when app becomes active - always sync to refresh feed list cache
+    /// Call when app becomes active - only sync if user's interval has passed
     func handleBecomeActive() async {
         // Purge expired cached articles on app launch
         let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
@@ -746,8 +746,22 @@ final class BackgroundSyncManager {
         // Preload feed items cache into memory for faster access
         await FeedItemsCache.shared.preloadCache()
 
-        // Always sync on app launch to refresh feed list cache
-        // This ensures new article indicators are up to date
-        await performSync()
+        // Reload widget timelines with cached data
+        WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
+
+        // Only sync if user's configured interval has passed
+        // This respects user settings - background sync is NOT triggered on every app launch
+        guard let interval = syncInterval.timeInterval else {
+            // Manual mode - no automatic sync
+            return
+        }
+
+        let lastSync = lastSyncDate ?? .distantPast
+        let timeSinceLastSync = Date().timeIntervalSince(lastSync)
+
+        if timeSinceLastSync >= interval {
+            await performSync()
+        }
     }
 }
