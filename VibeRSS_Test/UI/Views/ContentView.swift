@@ -537,6 +537,9 @@ struct ContentView: View {
         // Encode JSON off main thread to prevent UI freeze
         let entries = heroEntries
         let seenLinksKey = self.seenLinksKey
+        // Only mark entries as "seen" if the user can actually see them (source list visible)
+        // This prevents marking entries as seen when they're generated while user is in article list
+        let shouldMarkAsSeen = isSourceListVisible
         Task.detached(priority: .utility) {
             do {
                 // Only cache entries that have valid summaries
@@ -544,22 +547,26 @@ struct ContentView: View {
                 let data = try JSONEncoder().encode(validEntries)
                 UserDefaults.standard.set(data, forKey: self.heroCacheKey)
 
-                // MERGE new seen links with existing ones to persist across cold starts
-                // This ensures articles are only marked as new once, even if they're
-                // no longer displayed in the current At a Glance entries
-                var existingLinks: Set<String> = []
-                if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
-                   let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
-                    existingLinks = Set(decoded)
+                // Only merge into seen links if user can see the source list
+                // Otherwise, entries will show as "new" when user returns
+                if shouldMarkAsSeen {
+                    // MERGE new seen links with existing ones to persist across cold starts
+                    // This ensures articles are only marked as new once, even if they're
+                    // no longer displayed in the current At a Glance entries
+                    var existingLinks: Set<String> = []
+                    if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
+                       let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
+                        existingLinks = Set(decoded)
+                    }
+
+                    let newLinks = Set(validEntries.map { $0.link.absoluteString })
+                    let mergedLinks = existingLinks.union(newLinks)
+
+                    // Limit to last 500 links to prevent unbounded growth
+                    let limitedLinks = Array(mergedLinks.suffix(500))
+                    let linksData = try JSONEncoder().encode(limitedLinks)
+                    UserDefaults.standard.set(linksData, forKey: seenLinksKey)
                 }
-
-                let newLinks = Set(validEntries.map { $0.link.absoluteString })
-                let mergedLinks = existingLinks.union(newLinks)
-
-                // Limit to last 500 links to prevent unbounded growth
-                let limitedLinks = Array(mergedLinks.suffix(500))
-                let linksData = try JSONEncoder().encode(limitedLinks)
-                UserDefaults.standard.set(linksData, forKey: seenLinksKey)
             } catch {}
         }
     }

@@ -152,14 +152,14 @@ struct ArticleRowView: View, Equatable {
         }
     }
 
-    // Title with inline dot at the very end (after last character on last line)
+    // Title with inline dot at the beginning (before first character)
     private var titleWithNewIndicator: Text {
         if state.isNew {
-            // Use non-breaking space (\u{00A0}) so dot doesn't wrap to new line alone
-            return Text(state.title) + Text(" \u{00A0}") + Text(Image(systemName: "circle.fill"))
+            return Text(Image(systemName: "circle.fill"))
                 .font(.system(size: 6))
                 .foregroundColor(tintColor)
                 .baselineOffset(4) // Vertically center with headline text
+                + Text("\u{00A0} ") + Text(state.title)
         } else {
             return Text(state.title)
         }

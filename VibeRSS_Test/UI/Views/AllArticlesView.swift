@@ -111,6 +111,9 @@ struct AllArticlesView: View {
                     if !state.isNew { seenURLs.insert(state.url) }
                     if state.isRead { readURLs.insert(state.url) }
                 }
+                // Mark all articles as seen immediately (persists even if app is killed)
+                // Local seenURLs is NOT updated so dots remain visible during this session
+                await ArticleReadStateManager.shared.markAllAsSeen(urls)
             }
         }
         .navigationTitle("Today")
