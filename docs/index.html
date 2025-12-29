@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeRSS - Support</title>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --bg: #f5f5f7;
+            --card-bg: #ffffff;
+            --text: #1d1d1f;
+            --text-secondary: #86868b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card-bg: #1c1c1e;
+                --text: #f5f5f7;
+                --text-secondary: #86868b;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 60px 24px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .app-icon {
+            width: 120px;
+            height: 120px;
+            border-radius: 27%;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .card h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .card p:last-child {
+            margin-bottom: 0;
+        }
+
+        .contact-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+
+        .contact-link:hover {
+            text-decoration: underline;
+        }
+
+        .faq-item {
+            margin-bottom: 20px;
+        }
+
+        .faq-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .faq-item h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .faq-item p {
+            font-size: 0.95rem;
+            margin-bottom: 0;
+        }
+
+        .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .links a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(134, 134, 139, 0.2);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .icon {
+            font-size: 1.4rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <img src="app-icon.png" alt="VibeRSS" class="app-icon" onerror="this.style.display='none'">
+            <h1>VibeRSS</h1>
+            <p class="tagline">Your intelligent RSS reader with AI summaries</p>
+        </header>
+
+        <div class="card">
+            <h2><span class="icon">💬</span> Contact Support</h2>
+            <p>Have a question, found a bug, or want to suggest a feature? We'd love to hear from you!</p>
+            <a href="mailto:thiencly@me.com" class="contact-link">
+                <span>thiencly@me.com</span>
+            </a>
+        </div>
+
+        <div class="card">
+            <h2><span class="icon">❓</span> Frequently Asked Questions</h2>
+
+            <div class="faq-item">
+                <h3>How do I add a new RSS feed?</h3>
+                <p>Tap the + button in the top right corner of the source list, then paste the URL of the RSS feed or website you want to follow.</p>
+            </div>
+
+            <div class="faq-item">
+                <h3>How does AI summarization work?</h3>
+                <p>VibeRSS uses Apple's on-device AI to generate summaries of articles. This happens entirely on your device - no data is sent to external servers. Requires iPhone 16 or newer, or iPad with M-series chip.</p>
+            </div>
+
+            <div class="faq-item">
+                <h3>Why do I see "Summarization unavailable"?</h3>
+                <p>On-device AI requires compatible hardware (iPhone 16+, iPad with M-series chip) and iOS 26 or later. If you have compatible hardware, try waiting a moment and tapping the summarize button again.</p>
+            </div>
+
+            <div class="faq-item">
+                <h3>How do I organize my feeds into topics?</h3>
+                <p>Long-press on a feed in the source list, then select "Move to Topic" to organize your feeds into folders.</p>
+            </div>
+
+            <div class="faq-item">
+                <h3>Does VibeRSS sync across devices?</h3>
+                <p>Currently, VibeRSS stores data locally on your device. iCloud sync is planned for a future update.</p>
+            </div>
+
+            <div class="faq-item">
+                <h3>How do I restore my subscription?</h3>
+                <p>Go to Settings within the app and tap "Restore Purchases" to restore any previous subscriptions.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="icon">📄</span> Legal</h2>
+            <div class="links">
+                <a href="privacy.html">Privacy Policy</a>
+                <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank">Terms of Use (EULA)</a>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 VibeRSS. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

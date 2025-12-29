@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeRSS - Privacy Policy</title>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --bg: #f5f5f7;
+            --card-bg: #ffffff;
+            --text: #1d1d1f;
+            --text-secondary: #86868b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card-bg: #1c1c1e;
+                --text: #f5f5f7;
+                --text-secondary: #86868b;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 60px 24px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 32px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .last-updated {
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        p:last-child {
+            margin-bottom: 0;
+        }
+
+        ul {
+            color: var(--text-secondary);
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        .highlight {
+            background: rgba(0, 122, 255, 0.1);
+            border-left: 3px solid var(--primary);
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 16px 0;
+        }
+
+        .highlight p {
+            color: var(--text);
+            margin: 0;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(134, 134, 139, 0.2);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        a {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Support</a>
+
+        <h1>Privacy Policy</h1>
+        <p class="last-updated">Last updated: December 29, 2025</p>
+
+        <div class="card">
+            <h2>Overview</h2>
+            <div class="highlight">
+                <p><strong>VibeRSS is designed with privacy in mind.</strong> Your data stays on your device. We don't collect, store, or share your personal information.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Data Collection</h2>
+            <p><strong>We do not collect any personal data.</strong> VibeRSS operates entirely on your device:</p>
+            <ul>
+                <li>Your RSS feed subscriptions are stored locally on your device</li>
+                <li>Article content is fetched directly from the RSS sources you subscribe to</li>
+                <li>AI summaries are generated on-device using Apple's built-in AI - no data is sent to external servers</li>
+                <li>Your reading history and preferences remain on your device</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Third-Party Services</h2>
+            <p><strong>RSS Feeds:</strong> When you subscribe to an RSS feed, VibeRSS fetches content directly from that feed's server. The feed provider may have their own privacy policy regarding how they handle requests.</p>
+            <p><strong>Apple Services:</strong> If you purchase a subscription, the transaction is handled by Apple through the App Store. Please refer to <a href="https://www.apple.com/legal/privacy/" target="_blank">Apple's Privacy Policy</a> for information about how Apple handles payment data.</p>
+        </div>
+
+        <div class="card">
+            <h2>On-Device AI</h2>
+            <p>VibeRSS uses Apple's on-device AI capabilities (Apple Intelligence) for article summarization. This processing happens entirely on your device:</p>
+            <ul>
+                <li>No article content is sent to external servers for summarization</li>
+                <li>Summaries are generated locally using Apple's built-in language models</li>
+                <li>Your reading habits and preferences are never transmitted</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Data Storage</h2>
+            <p>All app data is stored locally on your device:</p>
+            <ul>
+                <li>Feed subscriptions and folders</li>
+                <li>Cached articles and summaries</li>
+                <li>App settings and preferences</li>
+                <li>Saved articles</li>
+            </ul>
+            <p>You can delete all app data by uninstalling VibeRSS from your device.</p>
+        </div>
+
+        <div class="card">
+            <h2>Children's Privacy</h2>
+            <p>VibeRSS does not knowingly collect any information from children under 13. The app does not require account creation or collect any personal information.</p>
+        </div>
+
+        <div class="card">
+            <h2>Changes to This Policy</h2>
+            <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated revision date.</p>
+        </div>
+
+        <div class="card">
+            <h2>Contact Us</h2>
+            <p>If you have any questions about this Privacy Policy, please contact us at:</p>
+            <p><a href="mailto:thiencly@me.com">thiencly@me.com</a></p>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 VibeRSS. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>
