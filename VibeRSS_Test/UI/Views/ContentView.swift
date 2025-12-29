@@ -674,17 +674,9 @@ struct ContentView: View {
         }
 
 
-        // Show loading indicator (glow will appear on collapsed card)
-        isLoadingHero = true
+        // Don't show loading indicator yet - only show when actually generating summaries
+        // This prevents brief glow flash when RSS check is fast but finds no new articles
         pendingHeroRefresh = false
-
-        // Collapse the card while loading/generating
-        // This ensures consistent behavior whether cold or hot start
-        if !isHeroCollapsed {
-            withAnimation(.snappy(duration: 0.25)) {
-                isHeroCollapsed = true
-            }
-        }
 
         // Load seen links for filtering (persists across app restarts)
         let previouslySeenLinks = loadSeenLinks()
@@ -726,7 +718,6 @@ struct ContentView: View {
                         }
                     }
                 }
-                isLoadingHero = false
                 return
             }
         } else {
@@ -783,7 +774,6 @@ struct ContentView: View {
             for i in heroEntries.indices {
                 heroEntries[i].isNew = false
             }
-            isLoadingHero = false
 
             // Collapse the card (user can tap to expand and see prior articles)
             withAnimation(.snappy(duration: 0.3)) {
@@ -803,6 +793,15 @@ struct ContentView: View {
         }
 
         // Step 2: Generate summaries for new articles
+        // NOW show loading indicator since we have work to do
+        isLoadingHero = true
+
+        // Collapse the card while generating summaries
+        if !isHeroCollapsed {
+            withAnimation(.snappy(duration: 0.25)) {
+                isHeroCollapsed = true
+            }
+        }
         var newEntries: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
             for item in newArticles {
