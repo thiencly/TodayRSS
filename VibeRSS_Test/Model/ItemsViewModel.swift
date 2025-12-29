@@ -103,18 +103,6 @@ final class ItemsViewModel: ObservableObject {
                     timestamp: Date()
                 )
                 await ArticleContentCache.shared.storeContent(cached, for: article.link)
-
-                // Also cache extracted text for summaries
-                let text = ArticleSummarizer.shared.extractReadableText(from: result.styledHTML)
-                if !text.isEmpty {
-                    await ArticleTextCache.shared.storeText(
-                        text,
-                        for: article.link,
-                        title: article.title,
-                        sourceTitle: article.sourceTitle,
-                        pubDate: article.pubDate
-                    )
-                }
             } catch {
                 // Silently continue - offline caching is best effort
             }

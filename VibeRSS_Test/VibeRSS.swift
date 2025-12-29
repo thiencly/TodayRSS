@@ -26,10 +26,6 @@ struct VibeRSSApp: App {
     }
 
     init() {
-        // IMPORTANT: Migrate caches from UserDefaults to file storage FIRST
-        // This must happen before any other UserDefaults writes to avoid the 4MB limit
-        ArticleTextCache.migrateFromUserDefaultsIfNeeded()
-
         // Setup SF Pro Rounded for navigation bar titles
         AppAppearance.setupNavigationBarAppearance()
 

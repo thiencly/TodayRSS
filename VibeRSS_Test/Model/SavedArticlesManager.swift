@@ -105,18 +105,6 @@ final class SavedArticlesManager {
             )
             await ArticleContentCache.shared.storeContent(cached, for: article.url)
 
-            // Also cache extracted text for summaries
-            let text = ArticleSummarizer.shared.extractReadableText(from: result.styledHTML)
-            if !text.isEmpty {
-                await ArticleTextCache.shared.storeText(
-                    text,
-                    for: article.url,
-                    title: article.title,
-                    sourceTitle: article.sourceTitle,
-                    pubDate: article.pubDate
-                )
-            }
-
             print("Cached saved article for offline: \(article.title)")
         } catch {
             print("Failed to cache saved article: \(error.localizedDescription)")

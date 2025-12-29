@@ -397,14 +397,10 @@ actor ArticleSummarizer {
         let cleanedDescription = fallbackText.map { cleanDescription($0) }
         let minDescriptionLength = 400
 
-        // Priority: 1) Cached full article text (from background sync)
-        //           2) RSS description if 400+ chars
-        //           3) Fetch HTML and extract text
+        // Priority: 1) RSS description if 400+ chars
+        //           2) Fetch HTML and extract text
         let baseText: String
-        if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
-            // Best: use cached full article text from background sync
-            baseText = cachedText
-        } else if let description = cleanedDescription, description.count >= minDescriptionLength {
+        if let description = cleanedDescription, description.count >= minDescriptionLength {
             // Good: use RSS description if it's long enough (400+ chars)
             baseText = description
         } else {
@@ -475,6 +471,65 @@ actor ArticleSummarizer {
         return nil
     }
 
+    /// Generate a one-sentence summary from article description (for At a Glance)
+    /// Uses Apple Intelligence if available, falls back to extracting first sentence
+    func oneSentenceSummary(from description: String) async -> String {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        #if canImport(FoundationModels)
+        // Try AI summary if available
+        if AppleIntelligence.isAvailable {
+            // Limit input to 500 chars for speed
+            let input = String(trimmed.prefix(500))
+            let session = getHeroSession()
+
+            do {
+                let result = try await session.respond(to: input, generating: InlineSummary.self)
+                returnHeroSession(session)
+
+                var text = result.content.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    // Ensure it's actually one sentence (max ~20 words)
+                    text = truncateToWordLimit(text, maxWords: 20)
+                    return text
+                }
+            } catch {
+                // AI failed, fall through to fallback
+            }
+        }
+        #endif
+
+        // Fallback: extract first sentence from description
+        return extractFirstSentence(from: trimmed)
+    }
+
+    /// Extract the first sentence from text
+    private func extractFirstSentence(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        // Find first sentence ending (.!?)
+        if let range = trimmed.range(of: "[.!?]", options: .regularExpression) {
+            let sentence = String(trimmed[..<range.upperBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            // If sentence is reasonable length, return it
+            if sentence.count >= 20 && sentence.count <= 200 {
+                return sentence
+            }
+        }
+
+        // No clear sentence ending - take first ~150 chars at word boundary
+        if trimmed.count > 150 {
+            let prefix = String(trimmed.prefix(150))
+            if let lastSpace = prefix.lastIndex(of: " ") {
+                return String(prefix[..<lastSpace]) + "..."
+            }
+            return prefix + "..."
+        }
+
+        return trimmed
+    }
+
     /// Reel summary for news reel cards - ~50-60 words, 2-3 sentences
     /// Optimized for speed like fastHeroSummary but with slightly more detail
     func fastReelSummary(url: URL, articleText fallbackText: String?) async -> String? {
@@ -495,18 +550,15 @@ actor ArticleSummarizer {
         let cleanedDescription = fallbackText.map { cleanDescription($0) }
         let hasSubstantialDescription = (cleanedDescription?.count ?? 0) >= minDescriptionLength
 
-        // Priority: 1) Cached full article, 2) Substantial RSS description, 3) Fetch HTML, 4) Short RSS description
+        // Priority: 1) Substantial RSS description, 2) Fetch HTML, 3) Short RSS description
         let baseText: String
-        if let cachedText = await ArticleTextCache.shared.cachedText(for: url), !cachedText.isEmpty {
-            baseText = cachedText
-        } else if hasSubstantialDescription, let description = cleanedDescription {
+        if hasSubstantialDescription, let description = cleanedDescription {
             // RSS description is substantial enough - skip HTML fetch for speed
             baseText = description
         } else if let html = try? await fetchHTMLWithAdaptiveTimeout(url: url) {
             let extracted = extractReadableText(from: String(html.prefix(100_000)))
             if !extracted.isEmpty {
                 baseText = extracted
-                await ArticleTextCache.shared.storeText(extracted, for: url)
             } else if let description = cleanedDescription, !description.isEmpty {
                 baseText = description
             } else {
@@ -901,25 +953,18 @@ actor ArticleSummarizer {
                     return
                 }
 
-                // Try preloaded readable text first; otherwise fetch and extract
-                let cachedText = await ArticleTextCache.shared.cachedText(for: url)
-                let baseText: String
-                if let cachedText, !cachedText.isEmpty {
-                    baseText = String(cachedText.prefix(150_000))
-                } else {
-                    guard let html = try? await fetchHTML(url: url) else {
-                        continuation.finish()
-                        return
-                    }
-                    let limitedHTML = String(html.prefix(150_000))
-                    let extracted = extractReadableText(from: limitedHTML)
-                    if extracted.isEmpty {
-                        continuation.finish()
-                        return
-                    }
-                    baseText = extracted
-                    await ArticleTextCache.shared.storeText(extracted, for: url)
+                // Fetch HTML and extract text
+                guard let html = try? await fetchHTML(url: url) else {
+                    continuation.finish()
+                    return
                 }
+                let limitedHTML = String(html.prefix(150_000))
+                let extracted = extractReadableText(from: limitedHTML)
+                if extracted.isEmpty {
+                    continuation.finish()
+                    return
+                }
+                let baseText = extracted
 
                 switch length {
                 case .quick, .reel:

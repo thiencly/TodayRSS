@@ -199,7 +199,6 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var showingSuggestedSources = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
-    @State private var cacheStats: (count: Int, sizeBytes: Int) = (0, 0)
 
     var body: some View {
         NavigationStack {
@@ -327,7 +326,7 @@ struct SettingsView: View {
                     Text("Show articles from the selected rolling time period in the News Reel.")
                 }
 
-                // MARK: - Offline Reading Section
+                // MARK: - Article Retention Section
                 Section {
                     Picker("Keep Articles For", selection: $cacheRetentionDays) {
                         Text("1 Day").tag(1)
@@ -336,33 +335,10 @@ struct SettingsView: View {
                         Text("14 Days").tag(14)
                         Text("30 Days").tag(30)
                     }
-
-                    HStack {
-                        Text("Cached Articles")
-                        Spacer()
-                        Text("\(cacheStats.count)")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Cache Size")
-                        Spacer()
-                        Text(formatBytes(cacheStats.sizeBytes))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button(role: .destructive) {
-                        Task {
-                            await ArticleTextCache.shared.clear()
-                            cacheStats = await ArticleTextCache.shared.statistics()
-                        }
-                    } label: {
-                        Text("Clear Cache")
-                    }
                 } header: {
-                    Text("Offline Reading")
+                    Text("Article Retention")
                 } footer: {
-                    Text("Articles are cached for offline reading. Older articles are automatically removed based on this setting.")
+                    Text("Older articles are automatically filtered out during sync based on this setting.")
                 }
 
                 // MARK: - Sidebar Section
@@ -587,9 +563,6 @@ struct SettingsView: View {
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
             }
-            .task {
-                cacheStats = await ArticleTextCache.shared.statistics()
-            }
             .onChange(of: colorScheme) { _, newScheme in
                 // Update icon when system appearance changes (only if Auto is selected)
                 if AppIconOption(rawValue: selectedAppIcon) == .auto {
@@ -626,12 +599,6 @@ struct SettingsView: View {
                 print("Failed to set alternate icon: \(error.localizedDescription)")
             }
         }
-    }
-
-    private func formatBytes(_ bytes: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(bytes))
     }
 }
 
