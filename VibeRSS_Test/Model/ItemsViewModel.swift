@@ -12,28 +12,42 @@ final class ItemsViewModel: ObservableObject {
     private let service = FeedService()
     private var previousArticleIDs: Set<UUID> = []
 
+    // Skip network refresh if cache was updated within this interval
+    private let cacheFreshnessInterval: TimeInterval = 60 // 1 minute
+
     func load(for source: Source) async {
         isLoading = true
         errorMessage = nil
 
-        // Try to load from cache first (instant)
-        if let cachedItems = await FeedItemsCache.shared.getFeedItems(
+        // Try to load from cache first for instant display
+        let cachedItems = await FeedItemsCache.shared.getFeedItems(
             for: source.id,
             sourceID: source.id,
             sourceTitle: source.title,
             sourceIconURL: source.iconURL
-        ) {
+        )
+
+        // Check if cache is fresh (updated within last minute)
+        let lastUpdated = await FeedItemsCache.shared.getLastUpdated(for: source.id)
+        let cacheIsFresh = lastUpdated.map { Date().timeIntervalSince($0) < cacheFreshnessInterval } ?? false
+
+        if let cachedItems = cachedItems, !cachedItems.isEmpty {
             let sorted = cachedItems.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            updateNewArticles(from: sorted)
+            // Set initial article IDs from cache (no new indicators yet)
+            previousArticleIDs = Set(sorted.map { $0.id })
             items = sorted
             isLoading = false
 
             // Cache articles for offline reading in the background
             Task { await cacheArticlesForOffline(sorted) }
-            return
+
+            // Skip network refresh if cache is fresh (just fetched on app launch)
+            if cacheIsFresh {
+                return
+            }
         }
 
-        // Fallback to network fetch if no cache
+        // Fetch from network (cache is stale or empty)
         do {
             var result = try await service.loadItems(from: source.url)
             for i in result.indices {
@@ -47,8 +61,15 @@ final class ItemsViewModel: ObservableObject {
             Task { await ArticleReadStateManager.shared.updateLatestArticles(for: source.id, urls: articleURLs) }
 
             let sorted = result.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+            // Update new article indicators (compares against cached articles)
             updateNewArticles(from: sorted)
             items = sorted
+
+            // Notify sidebar to refresh if new articles were found
+            if !newArticleIDs.isEmpty {
+                NotificationCenter.default.post(name: .didFetchNewArticles, object: nil)
+            }
 
             // Cache the feed items for next time
             await FeedItemsCache.shared.storeFeedItems(
@@ -61,7 +82,10 @@ final class ItemsViewModel: ObservableObject {
             // Cache articles for offline reading in the background
             Task { await cacheArticlesForOffline(sorted) }
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // Only show error if we had no cached data
+            if cachedItems == nil || cachedItems!.isEmpty {
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
         }
         isLoading = false
     }

@@ -13,10 +13,6 @@ import Observation
 import Reeeed
 import UIKit
 
-// Notification for feed list cache updates
-extension Notification.Name {
-    static let feedListCacheUpdated = Notification.Name("feedListCacheUpdated")
-}
 
 @MainActor
 @Observable
@@ -193,24 +189,29 @@ final class BackgroundSyncManager {
         // Determine articles per feed for widget display
         let widgetFeedIDs: Set<UUID> = widgetInfo.feedIDsToSync ?? Set(feeds.map { $0.id })
 
-        if widgetInfo.hasWidgets {
-            if widgetInfo.hasAllSourcesWidget {
-                print("Background sync: All Sources widget - 5 articles per feed")
-            } else {
-                print("Background sync: Widget feeds (\(widgetFeedIDs.count)) get 5 articles")
-            }
+        // Skip if no widgets installed
+        guard widgetInfo.hasWidgets else {
+            print("Background sync: No widgets installed, skipping")
+            lastSyncDate = Date()
+            UserDefaults.standard.set(lastSyncDate, forKey: lastSyncKey)
+            return
+        }
+
+        if widgetInfo.hasAllSourcesWidget {
+            print("Background sync: All Sources widget - 5 articles per feed")
         } else {
-            print("Background sync: No widgets - caching feed lists only")
+            print("Background sync: Widget feeds (\(widgetFeedIDs.count)) - 5 articles per feed")
         }
 
         let feedService = FeedService()
         var articlesByFeed: [UUID: [FeedItem]] = [:]
-        var fullArticlesByFeed: [UUID: (feed: Feed, items: [FeedItem])] = [:]
 
-        // Fetch ALL articles from ALL feeds concurrently
-        // We cache the full list for instant feed loading
-        await withTaskGroup(of: (Feed, [FeedItem])?.self) { group in
+        // Fetch articles for widget feeds
+        await withTaskGroup(of: (UUID, [FeedItem])?.self) { group in
             for feed in feeds {
+                // Only fetch for widget feeds
+                guard widgetFeedIDs.contains(feed.id) else { continue }
+
                 group.addTask {
                     do {
                         var items = try await feedService.loadItems(from: feed.url)
@@ -222,15 +223,8 @@ final class BackgroundSyncManager {
                         }
                         // Sort by date
                         items.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-
-                        // Keep only recent items based on user's cache retention setting
-                        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
-                        let days = retentionDays > 0 ? retentionDays : 7 // Default to 7 days
-                        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-                        items = items.filter { item in
-                            if let d = item.pubDate { return d >= cutoff } else { return true }
-                        }
-                        return (feed, items)
+                        // Limit to 5 per feed for widget
+                        return (feed.id, Array(items.prefix(5)))
                     } catch {
                         print("Failed to fetch feed \(feed.title): \(error)")
                         return nil
@@ -239,20 +233,13 @@ final class BackgroundSyncManager {
             }
 
             for await result in group {
-                if let (feed, items) = result {
-                    fullArticlesByFeed[feed.id] = (feed: feed, items: items)
-                    // For widgets, limit articles per feed
-                    let isWidgetFeed = widgetFeedIDs.contains(feed.id)
-                    let articlesPerFeed = (widgetInfo.hasWidgets && isWidgetFeed) ? 5 : 1
-                    articlesByFeed[feed.id] = Array(items.prefix(articlesPerFeed))
+                if let (feedID, items) = result {
+                    articlesByFeed[feedID] = items
                 }
             }
         }
 
-        // Cache full feed lists for instant feed loading
-        await cacheFeedLists(fullArticlesByFeed: fullArticlesByFeed)
-
-        // Widget sync: Only if widgets are installed
+        // Widget sync
         if widgetInfo.hasWidgets && !articlesByFeed.isEmpty {
             // Prepare limited articles for widget (only widget-configured feeds)
             var widgetArticlesByFeed: [UUID: [FeedItem]] = [:]
@@ -292,30 +279,6 @@ final class BackgroundSyncManager {
         }
 
         print("Background sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")
-    }
-
-    // MARK: - Feed List Caching
-
-    /// Cache full feed lists for instant feed loading
-    private func cacheFeedLists(fullArticlesByFeed: [UUID: (feed: Feed, items: [FeedItem])]) async {
-        for (feedID, data) in fullArticlesByFeed {
-            await FeedItemsCache.shared.storeFeedItems(
-                data.items,
-                for: feedID,
-                feedTitle: data.feed.title,
-                feedIconURL: data.feed.iconURL
-            )
-
-            // Update ArticleReadStateManager with latest articles for new indicator dots
-            let urls = data.items.map { $0.link }
-            await ArticleReadStateManager.shared.updateLatestArticles(for: feedID, urls: urls)
-        }
-
-        // Notify that feed list cache has been updated
-        NotificationCenter.default.post(name: .feedListCacheUpdated, object: nil)
-
-        let totalArticles = fullArticlesByFeed.values.reduce(0) { $0 + $1.items.count }
-        print("Feed list cache: \(fullArticlesByFeed.count) feeds, \(totalArticles) articles")
     }
 
     // MARK: - Helper Methods
@@ -466,19 +429,18 @@ final class BackgroundSyncManager {
         scheduleBackgroundRefresh()
     }
 
-    /// Call when app becomes active - only sync if user's interval has passed
+    /// Call when app becomes active - refresh source indicators and widget sync if needed
     func handleBecomeActive() async {
-        // Preload feed items cache into memory for faster access
-        await FeedItemsCache.shared.preloadCache()
-
         // Reload widget timelines with cached data
         WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
         WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
 
-        // Only sync if user's configured interval has passed
-        // This respects user settings - background sync is NOT triggered on every app launch
+        // Refresh source list indicators (lightweight - just article lists, no content caching)
+        await refreshSourceIndicators()
+
+        // Only sync widgets if user's configured interval has passed
         guard let interval = syncInterval.timeInterval else {
-            // Manual mode - no automatic sync
+            // Manual mode - no automatic widget sync
             return
         }
 
@@ -488,5 +450,63 @@ final class BackgroundSyncManager {
         if timeSinceLastSync >= interval {
             await performSync()
         }
+    }
+
+    // MARK: - Source List Indicators
+
+    /// Refresh all feeds to update source list indicators and cache article lists
+    /// Fetches all feeds in parallel and caches them for instant display when user enters
+    private func refreshSourceIndicators() async {
+        let feeds = loadFeeds()
+        guard !feeds.isEmpty else { return }
+
+        let feedService = FeedService()
+
+        // Fetch all feeds in parallel
+        let results = await withTaskGroup(of: (Feed, [FeedItem])?.self) { group -> [(Feed, [FeedItem])] in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        var items = try await feedService.loadItems(from: feed.url)
+                        // Add source info to each item
+                        for i in items.indices {
+                            items[i].sourceID = feed.id
+                            items[i].sourceTitle = feed.title
+                            items[i].sourceIconURL = feed.iconURL
+                        }
+                        return (feed, items)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+
+            var collected: [(Feed, [FeedItem])] = []
+            for await result in group {
+                if let r = result {
+                    collected.append(r)
+                }
+            }
+            return collected
+        }
+
+        // Update caches with fetched results
+        for (feed, items) in results {
+            // Update source list indicators
+            let urls = items.map { $0.link }
+            await ArticleReadStateManager.shared.updateLatestArticlesImmediate(for: feed.id, urls: urls)
+
+            // Cache full article data for instant display when user enters feed
+            let sorted = items.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            await FeedItemsCache.shared.storeFeedItems(
+                sorted,
+                for: feed.id,
+                feedTitle: feed.title,
+                feedIconURL: feed.iconURL
+            )
+        }
+
+        // Notify sidebar to refresh
+        NotificationCenter.default.post(name: .didFetchNewArticles, object: nil)
     }
 }

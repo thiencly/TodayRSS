@@ -13,6 +13,9 @@ final class FolderItemsViewModel: ObservableObject {
     private var previousArticleIDs: Set<UUID> = []
     private var lastLoadedArticlesByFeed: [UUID: [FeedItem]] = [:]
 
+    // Skip network refresh if cache was updated within this interval
+    private let cacheFreshnessInterval: TimeInterval = 60 // 1 minute
+
     private func updateNewArticles(from articles: [Article]) {
         let currentIDs = Set(articles.map { $0.id })
         if previousArticleIDs.isEmpty {
@@ -23,14 +26,27 @@ final class FolderItemsViewModel: ObservableObject {
         previousArticleIDs = currentIDs
     }
 
+    /// Check if all feeds have fresh cache
+    private func allCachesAreFresh(for feedIDs: [UUID]) async -> Bool {
+        for feedID in feedIDs {
+            guard let lastUpdated = await FeedItemsCache.shared.getLastUpdated(for: feedID) else {
+                return false
+            }
+            if Date().timeIntervalSince(lastUpdated) >= cacheFreshnessInterval {
+                return false
+            }
+        }
+        return true
+    }
+
     func load(for folder: Folder, feeds: [Feed]) async {
         isLoading = true
         errorMessage = nil
         let sources = feeds.filter { $0.folderID == folder.id }
-        var all: [Article] = []
+        var cachedAll: [Article] = []
         var hasCachedData = false
 
-        // Try to load from cache first (instant)
+        // Try to load from cache first for instant display
         for src in sources {
             if let cachedItems = await FeedItemsCache.shared.getFeedItems(
                 for: src.id,
@@ -38,23 +54,32 @@ final class FolderItemsViewModel: ObservableObject {
                 sourceTitle: src.title,
                 sourceIconURL: src.iconURL
             ) {
-                all.append(contentsOf: cachedItems)
+                cachedAll.append(contentsOf: cachedItems)
                 hasCachedData = true
             }
         }
 
-        if hasCachedData && !all.isEmpty {
-            let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            updateNewArticles(from: sorted)
+        // Check if all caches are fresh
+        let cacheIsFresh = await allCachesAreFresh(for: sources.map { $0.id })
+
+        if hasCachedData && !cachedAll.isEmpty {
+            let sorted = cachedAll.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+            // Set initial article IDs from cache (no new indicators yet)
+            previousArticleIDs = Set(sorted.map { $0.id })
             items = sorted
             isLoading = false
 
             // Cache articles for offline reading in the background
             Task { await cacheArticlesForOffline(sorted) }
-            return
+
+            // Skip network refresh if cache is fresh (just fetched on app launch)
+            if cacheIsFresh {
+                return
+            }
         }
 
-        // Fallback to network fetch if no cache
+        // Fetch from network (cache is stale or empty)
+        var all: [Article] = []
         var articlesByFeed: [UUID: [FeedItem]] = [:]
 
         await withTaskGroup(of: (UUID, [FeedItem]).self) { group in
@@ -89,9 +114,28 @@ final class FolderItemsViewModel: ObservableObject {
         }
 
         let sorted = all.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+        // Update new article indicators (compares against cached articles)
         updateNewArticles(from: sorted)
         items = sorted
         isLoading = false
+
+        // Notify sidebar to refresh if new articles were found
+        if !newArticleIDs.isEmpty {
+            NotificationCenter.default.post(name: .didFetchNewArticles, object: nil)
+        }
+
+        // Cache feed items for next time
+        for (feedID, articles) in articlesByFeed {
+            if let feed = sources.first(where: { $0.id == feedID }) {
+                await FeedItemsCache.shared.storeFeedItems(
+                    articles,
+                    for: feedID,
+                    feedTitle: feed.title,
+                    feedIconURL: feed.iconURL
+                )
+            }
+        }
 
         // Cache articles for offline reading in the background
         Task { await cacheArticlesForOffline(sorted) }
@@ -101,10 +145,13 @@ final class FolderItemsViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         let sources = feeds
-        var all: [Article] = []
+        var cachedAll: [Article] = []
         var hasCachedData = false
 
-        // Try to load from cache first (instant)
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+
+        // Try to load from cache first for instant display
         for src in sources {
             if let cachedItems = await FeedItemsCache.shared.getFeedItems(
                 for: src.id,
@@ -112,30 +159,37 @@ final class FolderItemsViewModel: ObservableObject {
                 sourceTitle: src.title,
                 sourceIconURL: src.iconURL
             ) {
-                all.append(contentsOf: cachedItems)
+                cachedAll.append(contentsOf: cachedItems)
                 hasCachedData = true
             }
         }
 
-        if hasCachedData && !all.isEmpty {
+        // Check if all caches are fresh
+        let cacheIsFresh = await allCachesAreFresh(for: sources.map { $0.id })
+
+        if hasCachedData && !cachedAll.isEmpty {
             // Filter to only show articles from today
-            let calendar = Calendar.current
-            let startOfToday = calendar.startOfDay(for: Date())
-            let filtered = all.filter { article in
+            let filtered = cachedAll.filter { article in
                 guard let pubDate = article.pubDate else { return false }
                 return pubDate >= startOfToday
             }
             let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-            updateNewArticles(from: sorted)
+            // Set initial article IDs from cache (no new indicators yet)
+            previousArticleIDs = Set(sorted.map { $0.id })
             items = sorted
             isLoading = false
 
             // Cache articles for offline reading in the background
             Task { await cacheArticlesForOffline(sorted) }
-            return
+
+            // Skip network refresh if cache is fresh (just fetched on app launch)
+            if cacheIsFresh {
+                return
+            }
         }
 
-        // Fallback to network fetch if no cache
+        // Fetch from network (cache is stale or empty)
+        var all: [Article] = []
         var articlesByFeed: [UUID: [FeedItem]] = [:]
 
         await withTaskGroup(of: (UUID, [FeedItem]).self) { group in
@@ -165,16 +219,33 @@ final class FolderItemsViewModel: ObservableObject {
         }
 
         // Filter to only show articles from today
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
         let filtered = all.filter { article in
             guard let pubDate = article.pubDate else { return false }
             return pubDate >= startOfToday
         }
         let sorted = filtered.sorted { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+        // Update new article indicators (compares against cached articles)
         updateNewArticles(from: sorted)
         items = sorted
         isLoading = false
+
+        // Notify sidebar to refresh if new articles were found
+        if !newArticleIDs.isEmpty {
+            NotificationCenter.default.post(name: .didFetchNewArticles, object: nil)
+        }
+
+        // Cache feed items for next time
+        for (feedID, articles) in articlesByFeed {
+            if let feed = sources.first(where: { $0.id == feedID }) {
+                await FeedItemsCache.shared.storeFeedItems(
+                    articles,
+                    for: feedID,
+                    feedTitle: feed.title,
+                    feedIconURL: feed.iconURL
+                )
+            }
+        }
 
         // Cache articles for offline reading in the background
         Task { await cacheArticlesForOffline(sorted) }

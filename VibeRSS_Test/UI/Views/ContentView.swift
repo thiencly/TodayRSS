@@ -1377,6 +1377,10 @@ struct ContentView: View {
             // User navigated to an article list view - mark source list as not visible
             isSourceListVisible = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: .didFetchNewArticles)) { _ in
+            // Background fetch found new articles - refresh sidebar to update indicators
+            sidebarRefreshTrigger = UUID()
+        }
     }
 }
 
@@ -1384,4 +1388,5 @@ struct ContentView: View {
 extension Notification.Name {
     static let didReturnToSourceList = Notification.Name("didReturnToSourceList")
     static let didNavigateToArticleList = Notification.Name("didNavigateToArticleList")
+    static let didFetchNewArticles = Notification.Name("didFetchNewArticles")
 }
