@@ -82,6 +82,7 @@ struct ArticleReaderView: View {
     @State private var summaryText: String = ""
     @State private var showingSummary = false  // Toggle between article and summary view
     @State private var showSafariView = false
+    @State private var showAIUnavailableAlert = false
     @AppStorage("readerFontSize") private var fontSize: Double = 18
 
     // Format date as relative time string
@@ -148,6 +149,11 @@ struct ArticleReaderView: View {
         .fullScreenCover(isPresented: $showSafariView) {
             SafariReaderView(url: url)
                 .ignoresSafeArea()
+        }
+        .alert("Apple Intelligence Required", isPresented: $showAIUnavailableAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Article summarization requires Apple Intelligence, which is available on iPhone 16 or later, and iPad with M-series chip.")
         }
     }
 
@@ -257,6 +263,13 @@ struct ArticleReaderView: View {
 
     private func handleSummarizeButtonTap() {
         HapticManager.shared.click()
+
+        // Check if Apple Intelligence is available
+        guard AppleIntelligence.isAvailable else {
+            showAIUnavailableAlert = true
+            return
+        }
+
         if showingSummary && !summaryText.isEmpty && !isGeneratingSummary {
             // Toggle back to article
             withAnimation(.easeInOut(duration: 0.3)) {

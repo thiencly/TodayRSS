@@ -352,6 +352,10 @@ final class NewsReelViewModel: ObservableObject {
 
     /// Generate reel summary for article with automatic retry on failure
     func generateReelSummary(for article: Article) async {
+        // Skip AI summary generation if Apple Intelligence is not available
+        // The UI will fall back to showing the article description
+        guard AppleIntelligence.isAvailable else { return }
+
         let url = article.link
 
         // Check if already cached

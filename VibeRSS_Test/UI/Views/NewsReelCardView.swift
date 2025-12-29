@@ -193,7 +193,8 @@ struct NewsReelCardView: View {
                                     shouldRevealSummary = true
                                 }
                             }
-                        } else if isLoadingSummary || isRetryingSummary {
+                        } else if AppleIntelligence.isAvailable && (isLoadingSummary || isRetryingSummary) {
+                            // Only show loading state if Apple Intelligence is available
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: primaryTextColor))
@@ -202,7 +203,8 @@ struct NewsReelCardView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(tertiaryTextColor)
                             }
-                        } else if hasSummaryFailed {
+                        } else if AppleIntelligence.isAvailable && hasSummaryFailed {
+                            // Only show retry button if Apple Intelligence is available
                             Button {
                                 HapticManager.shared.click()
                                 onRetryTap()
@@ -223,6 +225,7 @@ struct NewsReelCardView: View {
                             }
                             .buttonStyle(.plain)
                         } else if !article.summary.isEmpty {
+                            // Fallback: show article description (used when AI unavailable or no summary yet)
                             Text(stripHTML(article.summary))
                                 .font(.body)
                                 .foregroundStyle(summaryTextColor)

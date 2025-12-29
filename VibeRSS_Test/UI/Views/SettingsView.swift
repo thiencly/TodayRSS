@@ -264,25 +264,49 @@ struct SettingsView: View {
                 SubscriptionStatusView(showingPaywall: $showingPaywall)
 
                 // ============================================================
+                // MARK: - APPLE INTELLIGENCE STATUS
+                // ============================================================
+
+                if !AppleIntelligence.isAvailable {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "brain")
+                                .foregroundStyle(.secondary)
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Apple Intelligence Not Available")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("AI-powered features like At a Glance summaries and article summarization require iPhone 16 or later, or iPad with M-series chip.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                // ============================================================
                 // MARK: - CONTENT GROUP
                 // ============================================================
 
-                // MARK: - At a Glance Section
-                Section {
-                    Picker("Articles to Show", selection: $atAGlanceCount) {
-                        ForEach(1...EntitlementManager.shared.atAGlanceLimit, id: \.self) { count in
-                            Text("\(count)").tag(count)
+                // MARK: - At a Glance Section (only show if Apple Intelligence is available)
+                if AppleIntelligence.isAvailable {
+                    Section {
+                        Picker("Articles to Show", selection: $atAGlanceCount) {
+                            ForEach(1...EntitlementManager.shared.atAGlanceLimit, id: \.self) { count in
+                                Text("\(count)").tag(count)
+                            }
                         }
-                    }
 
-                    Toggle("Auto-expand on New Articles", isOn: $atAGlanceAutoExpand)
-                } header: {
-                    Text("At a Glance")
-                } footer: {
-                    if EntitlementManager.shared.isPremium {
-                        Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
-                    } else {
-                        Text("At a Glance shows the latest articles from all your sources. Upgrade to Premium to show up to 4 articles.")
+                        Toggle("Auto-expand on New Articles", isOn: $atAGlanceAutoExpand)
+                    } header: {
+                        Text("At a Glance")
+                    } footer: {
+                        if EntitlementManager.shared.isPremium {
+                            Text("At a Glance shows the latest articles from all your sources. When there are new articles, only those will be shown. Auto-expand will open the card when new articles arrive.")
+                        } else {
+                            Text("At a Glance shows the latest articles from all your sources. Upgrade to Premium to show up to 4 articles.")
+                        }
                     }
                 }
 

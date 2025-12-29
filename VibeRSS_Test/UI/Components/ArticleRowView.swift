@@ -93,25 +93,28 @@ struct ArticleRowView: View, Equatable {
                         }
                     }
 
-                // Summarize button - using liquid glass version
-                // To revert to old style, change SummarizeButtonLiquidGlass to SummarizeButton
-                SummarizeButtonLiquidGlass(
-                    state: buttonState
-                ) {
-                    onTapSummarize()
-                }
-                .disabled(state.isError)
-
-                // AI Summary or error
-                if let summaryText = state.summaryText {
-                    CollapsibleText(text: summaryText, isExpanded: state.isExpanded)
-                } else if state.isError {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                        Text("Summarization unavailable on this device.")
+                // Summarize button - only show if Apple Intelligence is available
+                if AppleIntelligence.isAvailable {
+                    // Using liquid glass version
+                    // To revert to old style, change SummarizeButtonLiquidGlass to SummarizeButton
+                    SummarizeButtonLiquidGlass(
+                        state: buttonState
+                    ) {
+                        onTapSummarize()
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .disabled(state.isError)
+
+                    // AI Summary or error
+                    if let summaryText = state.summaryText {
+                        CollapsibleText(text: summaryText, isExpanded: state.isExpanded)
+                    } else if state.isError {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                            Text("Summarization unavailable on this device.")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 }
 
                 // Source badge

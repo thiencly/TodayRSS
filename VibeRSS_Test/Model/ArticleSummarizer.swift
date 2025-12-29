@@ -65,6 +65,23 @@ struct InlineSummary {
 }
 #endif
 
+// MARK: - Apple Intelligence Availability
+
+/// Check if Apple Intelligence (on-device AI) is available on this device
+/// Returns true on iPhone 16+, iPad with M-series chip, running iOS 26+
+enum AppleIntelligence {
+    /// Check availability - can be called from any thread
+    static var isAvailable: Bool {
+        #if canImport(FoundationModels)
+        let model = SystemLanguageModel.default
+        if case .available = model.availability {
+            return true
+        }
+        #endif
+        return false
+    }
+}
+
 // MARK: - ArticleSummarizer
 actor ArticleSummarizer {
     static let shared = ArticleSummarizer()

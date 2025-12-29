@@ -1174,8 +1174,8 @@ struct ContentView: View {
         .navigationTitle("TodayRSS")
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) {
-            // At a Glance card as overlay - expands on top of the list
-            if isLoadingHero || !heroEntries.isEmpty {
+            // At a Glance card as overlay - only show if Apple Intelligence is available
+            if AppleIntelligence.isAvailable && (isLoadingHero || !heroEntries.isEmpty) {
                 SidebarHeroCardView(
                     entries: heroEntries,
                     isLoading: isLoadingHero,
@@ -1473,16 +1473,19 @@ struct ContentView: View {
         .onAppear {
             selectedSource = store.feeds.first
             store.backfillIcons()
-            loadHeroEntriesFromCache()
-            // Start collapsed - will auto-expand if there are new articles
-            isHeroCollapsed = true
+            // Only load hero entries if Apple Intelligence is available
+            if AppleIntelligence.isAvailable {
+                loadHeroEntriesFromCache()
+                // Start collapsed - will auto-expand if there are new articles
+                isHeroCollapsed = true
+            }
             Task {
                 // Small delay to allow child views (article list) to register their appearance first
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
                 // Mark that we've triggered the initial load (prevents double-trigger from scenePhase)
                 hasTriggeredInitialHeroLoad = true
-                // Only generate hero summaries if source list is visible
-                if isSourceListVisible {
+                // Only generate hero summaries if source list is visible and Apple Intelligence is available
+                if isSourceListVisible && AppleIntelligence.isAvailable {
                     await loadHeroEntries()
                 }
                 // Fetch latest articles to show blue dots on sources/folders
@@ -1493,10 +1496,10 @@ struct ContentView: View {
             if phase == .active {
                 // Refresh sidebar to update blue dot indicators when app becomes active
                 sidebarRefreshTrigger = UUID()
-                // Only generate hero summaries if source list is visible
+                // Only generate hero summaries if source list is visible and Apple Intelligence is available
                 // This prevents generating summaries while on article list view
                 // Skip on cold start - onAppear already handles that case
-                if isSourceListVisible && hasTriggeredInitialHeroLoad {
+                if isSourceListVisible && hasTriggeredInitialHeroLoad && AppleIntelligence.isAvailable {
                     Task { await loadHeroEntries() }
                 }
             } else if phase == .background {
@@ -1510,8 +1513,8 @@ struct ContentView: View {
             }
         }
         .onChange(of: store.feeds) { _, _ in
-            // Only generate hero summaries if source list is visible
-            if isSourceListVisible {
+            // Only generate hero summaries if source list is visible and Apple Intelligence is available
+            if isSourceListVisible && AppleIntelligence.isAvailable {
                 Task { await loadHeroEntries() }
             }
         }
@@ -1520,15 +1523,17 @@ struct ContentView: View {
             isSourceListVisible = true
             // Refresh sidebar to update blue dot indicators
             sidebarRefreshTrigger = UUID()
-            // Load hero entries now that source list is visible
+            // Load hero entries now that source list is visible (if Apple Intelligence is available)
             // Don't mark as seen first - let user see blue dots for new articles
-            Task { await loadHeroEntries() }
+            if AppleIntelligence.isAvailable {
+                Task { await loadHeroEntries() }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .backgroundSyncCompleted)) { _ in
             // Refresh hero entries and sidebar after background sync completes
-            // Only if source list is visible
+            // Only if source list is visible and Apple Intelligence is available
             sidebarRefreshTrigger = UUID()
-            if isSourceListVisible {
+            if isSourceListVisible && AppleIntelligence.isAvailable {
                 Task { await loadHeroEntries(useBackgroundCache: true) }
             }
         }
