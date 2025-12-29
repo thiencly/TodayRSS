@@ -65,73 +65,6 @@ final class BackgroundSyncManager {
     private let syncIntervalKey = "backgroundSyncInterval"
     private let lastSyncKey = "lastBackgroundSyncDate"
     private let lastFullSyncKey = "lastFullBackgroundSyncDate"
-    private let atAGlanceArticlesCacheKey = "viberss.atAGlanceArticlesCache"
-    private let newArticlesPendingKey = "viberss.newAtAGlanceArticlesPending"
-
-    // At a Glance minimum refresh interval (1 hour)
-    private let atAGlanceMinInterval: TimeInterval = 60 * 60
-
-    // MARK: - At a Glance Article Cache
-
-    /// Cached article for At a Glance (lightweight, just metadata needed for display)
-    struct CachedAtAGlanceArticle: Codable {
-        let feedID: UUID
-        let feedTitle: String
-        let feedIconURL: URL?
-        let articleTitle: String
-        let articleLink: URL
-        let articleSummary: String
-        let pubDate: Date?
-    }
-
-    /// Save articles for At a Glance to use without network fetch
-    func saveArticlesForAtAGlance(articles: [(feed: Feed, article: FeedItem)]) {
-        let cached = articles.map { (feed, article) in
-            CachedAtAGlanceArticle(
-                feedID: feed.id,
-                feedTitle: feed.title,
-                feedIconURL: feed.iconURL,
-                articleTitle: article.title,
-                articleLink: article.link,
-                articleSummary: article.summary,
-                pubDate: article.pubDate
-            )
-        }
-
-        do {
-            let data = try JSONEncoder().encode(cached)
-            UserDefaults.standard.set(data, forKey: atAGlanceArticlesCacheKey)
-            // Set flag so At a Glance knows new articles are available
-            setNewArticlesPending()
-        } catch {
-            print("Failed to cache At a Glance articles: \(error)")
-        }
-    }
-
-    /// Load cached articles for At a Glance (no network fetch needed)
-    func loadCachedAtAGlanceArticles() -> [CachedAtAGlanceArticle] {
-        guard let data = UserDefaults.standard.data(forKey: atAGlanceArticlesCacheKey),
-              let cached = try? JSONDecoder().decode([CachedAtAGlanceArticle].self, from: data) else {
-            return []
-        }
-        return cached
-    }
-
-    /// Check if there are new articles pending from background sync
-    /// This is a lightweight check (just a boolean flag) vs loading all cached articles
-    func hasNewArticlesPending() -> Bool {
-        return UserDefaults.standard.bool(forKey: newArticlesPendingKey)
-    }
-
-    /// Clear the new articles pending flag (call after At a Glance processes them)
-    func clearNewArticlesPending() {
-        UserDefaults.standard.set(false, forKey: newArticlesPendingKey)
-    }
-
-    /// Set flag indicating new articles are ready for At a Glance
-    private func setNewArticlesPending() {
-        UserDefaults.standard.set(true, forKey: newArticlesPendingKey)
-    }
 
     private init() {
         // Load saved settings
@@ -179,22 +112,14 @@ final class BackgroundSyncManager {
             return
         }
 
-        // Schedule at minimum of user interval or At a Glance minimum (1 hour)
-        // This ensures At a Glance refreshes at least hourly even if user sets longer interval
-        let scheduleInterval = min(interval, atAGlanceMinInterval)
-
         let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
         // Set earliest begin date based on sync interval
         // Apple recommends at least 15 minutes
-        request.earliestBeginDate = Date(timeIntervalSinceNow: max(scheduleInterval, 15 * 60))
+        request.earliestBeginDate = Date(timeIntervalSinceNow: max(interval, 15 * 60))
 
         do {
             try BGTaskScheduler.shared.submit(request)
-            if interval > atAGlanceMinInterval {
-                print("Background refresh scheduled: At a Glance every 1 hour, full sync every \(syncInterval.displayName)")
-            } else {
-                print("Background refresh scheduled for \(syncInterval.displayName)")
-            }
+            print("Background refresh scheduled for \(syncInterval.displayName)")
         } catch {
             print("Failed to schedule background refresh: \(error)")
         }
@@ -221,16 +146,9 @@ final class BackgroundSyncManager {
         // Schedule the next refresh
         scheduleBackgroundRefresh()
 
-        // Determine if we need full sync or just At a Glance refresh
-        let shouldDoFullSync = shouldPerformFullSync()
-
-        // Create a task to perform the appropriate sync
+        // Create a task to perform the sync
         let syncTask = Task {
-            if shouldDoFullSync {
-                await performSync()
-            } else {
-                await performAtAGlanceOnlySync()
-            }
+            await performSync()
         }
 
         // Set expiration handler
@@ -243,26 +161,6 @@ final class BackgroundSyncManager {
 
         // Mark task as completed
         task.setTaskCompleted(success: !syncTask.isCancelled)
-    }
-
-    /// Determine if we should do a full sync or just At a Glance refresh
-    private func shouldPerformFullSync() -> Bool {
-        guard let interval = syncInterval.timeInterval else {
-            // Manual mode - still do At a Glance refresh
-            return false
-        }
-
-        // If interval is <= 1 hour, always do full sync
-        if interval <= atAGlanceMinInterval {
-            return true
-        }
-
-        // For longer intervals, check when last full sync was
-        let lastFullSync = UserDefaults.standard.object(forKey: lastFullSyncKey) as? Date ?? .distantPast
-        let timeSinceFullSync = Date().timeIntervalSince(lastFullSync)
-
-        // Do full sync if enough time has passed based on user interval
-        return timeSinceFullSync >= interval
     }
 
     // MARK: - Sync Logic
@@ -358,17 +256,6 @@ final class BackgroundSyncManager {
         // Cache full feed lists for instant feed loading
         await cacheFeedLists(fullArticlesByFeed: fullArticlesByFeed)
 
-        // Cache articles for At a Glance (so it doesn't need to fetch from network)
-        // Get newest article from each feed, sorted by date
-        var atAGlanceArticles: [(feed: Feed, article: FeedItem)] = []
-        for feed in feeds {
-            if let articles = articlesByFeed[feed.id], let newest = articles.first {
-                atAGlanceArticles.append((feed: feed, article: newest))
-            }
-        }
-        atAGlanceArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
-        saveArticlesForAtAGlance(articles: atAGlanceArticles)
-
         // Widget sync: Only if widgets are installed
         if widgetInfo.hasWidgets && !articlesByFeed.isEmpty {
             // Prepare limited articles for widget (only widget-configured feeds)
@@ -417,87 +304,13 @@ final class BackgroundSyncManager {
             WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
         }
 
-        // Notify that sync completed (so At a Glance can refresh with cached data)
+        // Notify that sync completed
         NotificationCenter.default.post(name: .backgroundSyncCompleted, object: nil)
 
         print("Full sync completed: \(articlesByFeed.count) feeds, \(articlesByFeed.values.flatMap { $0 }.count) articles")
     }
 
-    /// Lightweight sync that only refreshes At a Glance content
-    /// Used when user interval is > 1 hour but At a Glance needs hourly updates
-    private func performAtAGlanceOnlySync() async {
-        guard !isSyncing else { return }
-
-        isSyncing = true
-        defer { isSyncing = false }
-
-        let feeds = loadFeeds()
-        guard !feeds.isEmpty else { return }
-
-        print("At a Glance sync: Fetching 1 newest article per feed")
-
-        let feedService = FeedService()
-        var articlesByFeed: [UUID: [FeedItem]] = [:]
-
-        // Fetch only 1 article per feed (for At a Glance)
-        await withTaskGroup(of: (UUID, [FeedItem])?.self) { group in
-            for feed in feeds {
-                group.addTask {
-                    do {
-                        var items = try await feedService.loadItems(from: feed.url)
-                        for i in items.indices {
-                            items[i].sourceID = feed.id
-                            items[i].sourceTitle = feed.title
-                            items[i].sourceIconURL = feed.iconURL
-                        }
-                        items.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
-
-                        // Keep only recent items based on retention setting
-                        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
-                        let days = retentionDays > 0 ? retentionDays : 7
-                        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-                        items = items.filter { item in
-                            if let d = item.pubDate { return d >= cutoff } else { return true }
-                        }
-                        return (feed.id, Array(items.prefix(1)))
-                    } catch {
-                        return nil
-                    }
-                }
-            }
-
-            for await result in group {
-                if let (feedID, items) = result {
-                    articlesByFeed[feedID] = items
-                }
-            }
-        }
-
-        // Cache articles for At a Glance (so it doesn't need to fetch from network)
-        var atAGlanceArticles: [(feed: Feed, article: FeedItem)] = []
-        for feed in feeds {
-            if let articles = articlesByFeed[feed.id], let newest = articles.first {
-                atAGlanceArticles.append((feed: feed, article: newest))
-            }
-        }
-        atAGlanceArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
-        saveArticlesForAtAGlance(articles: atAGlanceArticles)
-
-        // Pre-fetch article text for summaries
-        await prefetchArticleContent(articlesByFeed: articlesByFeed)
-
-        // Update last sync date (but NOT full sync date)
-        lastSyncDate = Date()
-        UserDefaults.standard.set(lastSyncDate, forKey: lastSyncKey)
-
-        // Notify that sync completed (so At a Glance can refresh)
-        NotificationCenter.default.post(name: .backgroundSyncCompleted, object: nil)
-
-        print("At a Glance sync completed: \(articlesByFeed.count) feeds")
-    }
-
-    /// Pre-fetch only the globally newest articles for At a Glance summaries
-    /// At a Glance shows max 4 articles, so we only cache the 4-6 newest globally
+    /// Pre-fetch the globally newest articles for offline reading
     private func prefetchArticleContent(articlesByFeed: [UUID: [FeedItem]]) async {
         // Check if offline caching is enabled (default: enabled)
         let offlineCachingEnabled = UserDefaults.standard.object(forKey: "offlineCachingEnabled") as? Bool ?? true

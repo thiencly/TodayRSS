@@ -1,6 +1,9 @@
 import SwiftUI
 import UIKit
 import WidgetKit
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 // MARK: - Hero Card Height Preference Key
 
@@ -319,8 +322,8 @@ struct ContentView: View {
     private let seenLinksKey = "viberss.heroSeenLinks"
     private let lastHeroRefreshKey = "viberss.lastHeroRefreshDate"
 
-    // Cooldown between direct RSS fetches for At a Glance (when no cached data available)
-    private let heroRefreshCooldown: TimeInterval = 5 * 60 // 5 minutes
+    // Cooldown between At a Glance checks (1 minute)
+    private let heroRefreshCooldown: TimeInterval = 60
     @State private var sidebarRefreshTrigger: UUID = UUID()
     @State private var isSourceListVisible: Bool = true
     @State private var showingNewsReel: Bool = false
@@ -627,50 +630,30 @@ struct ContentView: View {
         return Set(links.compactMap { URL(string: $0) })
     }
 
-    @MainActor private func loadHeroEntries(useBackgroundCache: Bool = false) async {
+    /// Load At a Glance entries on-demand
+    /// Checks for new articles on cold start, hot start, and when returning to source list
+    /// Uses 1 minute cooldown to prevent excessive checks
+    @MainActor private func loadHeroEntries() async {
         // If already loading, mark for refresh after current load completes
         if isLoadingHero {
             pendingHeroRefresh = true
             return
         }
 
-        // Check if background sync has new articles pending
-        let hasNewCachedArticles = BackgroundSyncManager.shared.hasNewArticlesPending()
-
-        // Check time since last refresh (for cooldown when fetching RSS directly)
+        // Check time since last refresh for cooldown
         let lastRefresh = UserDefaults.standard.object(forKey: lastHeroRefreshKey) as? Date ?? .distantPast
         let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
 
-        // Determine data source:
-        // 1. If background sync has new cached articles → use cache (instant)
-        // 2. If triggered by background sync notification → use cache
-        // 3. Otherwise → fetch RSS directly (if cooldown passed)
-        let useCachedArticles = hasNewCachedArticles || useBackgroundCache
-        let shouldFetchRSS = !useCachedArticles && timeSinceLastRefresh > heroRefreshCooldown
-
-        // Debug logging
         print("🔍 [AtAGlance] === loadHeroEntries START ===")
-        print("🔍 [AtAGlance] Current heroEntries: \(heroEntries.count) entries")
-        if !heroEntries.isEmpty {
-            for entry in heroEntries.prefix(3) {
-                let isNewStr = entry.isNew ? "🔵" : "⚪️"
-                print("🔍 [AtAGlance]   \(isNewStr) \(entry.title.prefix(40))...")
-            }
-        }
-        print("🔍 [AtAGlance] hasNewCachedArticles: \(hasNewCachedArticles)")
-        print("🔍 [AtAGlance] useBackgroundCache param: \(useBackgroundCache)")
-        print("🔍 [AtAGlance] useCachedArticles: \(useCachedArticles)")
         print("🔍 [AtAGlance] timeSinceLastRefresh: \(Int(timeSinceLastRefresh))s (cooldown: \(Int(heroRefreshCooldown))s)")
-        print("🔍 [AtAGlance] shouldFetchRSS: \(shouldFetchRSS)")
 
-        if !useCachedArticles && !shouldFetchRSS {
-            print("🔍 [AtAGlance] ⏸️ EARLY RETURN: Within cooldown, no new cache")
-            // Within cooldown period and no new cache - still check existing entries
+        // Within cooldown period - just update isNew status on existing entries
+        if timeSinceLastRefresh < heroRefreshCooldown {
+            print("🔍 [AtAGlance] ⏸️ Within cooldown")
             if heroEntries.isEmpty {
                 loadHeroEntriesFromCache()
             } else {
-                // Hot start: re-check existing entries against seen links
-                // This ensures we're always "checking for new articles" on app launch
+                // Re-check existing entries against seen links
                 let seenLinks = loadSeenLinks()
                 for i in heroEntries.indices {
                     heroEntries[i].isNew = !seenLinks.contains(heroEntries[i].link)
@@ -689,235 +672,117 @@ struct ContentView: View {
             return
         }
 
-
-        // Don't show loading indicator yet - only show when actually generating summaries
-        // This prevents brief glow flash when RSS check is fast but finds no new articles
         pendingHeroRefresh = false
 
-        // Load seen links for filtering (persists across app restarts)
+        // Load seen links for filtering
         let previouslySeenLinks = loadSeenLinks()
 
-        // Keep existing entries indexed by link for comparison
-        let existingEntriesByLink: [URL: SidebarHeroCardView.Entry] = Dictionary(
-            heroEntries.map { ($0.link, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        // Fetch RSS directly - one article per feed
+        let feeds = store.feeds
+        print("🔍 [AtAGlance] 🌐 Fetching from \(feeds.count) feeds")
 
-        // Get articles - either from cache (background sync) or RSS fetch (direct)
         var feedArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
 
-        if useCachedArticles {
-            print("🔍 [AtAGlance] 📦 Using CACHED articles from background sync")
-            // Use cached articles from background sync (instant, no network)
-            let cachedArticles = BackgroundSyncManager.shared.loadCachedAtAGlanceArticles()
-            print("🔍 [AtAGlance] Loaded \(cachedArticles.count) cached articles")
-
-            // Clear the pending flag now that we're processing
-            BackgroundSyncManager.shared.clearNewArticlesPending()
-
-            for cached in cachedArticles {
-                feedArticles.append((
-                    feedID: cached.feedID,
-                    feedTitle: cached.feedTitle,
-                    feedIconURL: cached.feedIconURL,
-                    article: (cached.articleTitle, cached.articleLink, cached.articleSummary, cached.pubDate)
-                ))
-            }
-
-            if cachedArticles.isEmpty {
-                // No cached articles - restore card state (don't leave it collapsed)
-                // This handles the case where pendingHeroRefresh triggered a reload
-                // but the cache was already processed
-                if !heroEntries.isEmpty && atAGlanceAutoExpand {
-                    let hasNewEntries = heroEntries.contains { $0.isNew }
-                    if hasNewEntries {
-                        withAnimation(.snappy(duration: 0.3)) {
-                            isHeroCollapsed = false
-                        }
-                    }
-                }
-                return
-            }
-        } else {
-            print("🔍 [AtAGlance] 🌐 Fetching FRESH RSS (cooldown passed)")
-            // Fetch RSS directly (quick since few new articles expected)
-            let feeds = store.feeds
-            print("🔍 [AtAGlance] Fetching from \(feeds.count) feeds")
-            await withTaskGroup(of: (UUID, String, URL?, (String, URL, String, Date?))?.self) { group in
-                for feed in feeds {
-                    group.addTask {
-                        do {
-                            let items = try await self.refreshService.loadItems(from: feed.url)
-                            guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
-                                return nil
-                            }
-                            return (feed.id, feed.title, feed.iconURL, (latest.title, latest.link, latest.summary, latest.pubDate))
-                        } catch {
+        await withTaskGroup(of: (UUID, String, URL?, (String, URL, String, Date?))?.self) { group in
+            for feed in feeds {
+                group.addTask {
+                    do {
+                        let items = try await self.refreshService.loadItems(from: feed.url)
+                        guard let latest = items.sorted(by: { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }).first else {
                             return nil
                         }
+                        return (feed.id, feed.title, feed.iconURL, (latest.title, latest.link, latest.summary, latest.pubDate))
+                    } catch {
+                        return nil
                     }
                 }
-                for await result in group {
-                    if let (feedID, feedTitle, feedIconURL, article) = result {
-                        feedArticles.append((feedID: feedID, feedTitle: feedTitle, feedIconURL: feedIconURL, article: article))
-                    }
+            }
+            for await result in group {
+                if let (feedID, feedTitle, feedIconURL, article) = result {
+                    feedArticles.append((feedID: feedID, feedTitle: feedTitle, feedIconURL: feedIconURL, article: article))
                 }
             }
         }
 
         // Sort by most recent first
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
+        print("🔍 [AtAGlance] Fetched \(feedArticles.count) articles")
 
-        // Debug: show what articles were fetched
-        print("🔍 [AtAGlance] Fetched \(feedArticles.count) articles total")
-        let debugFormatter = DateFormatter()
-        debugFormatter.dateFormat = "HH:mm"
-        for (idx, item) in feedArticles.prefix(5).enumerated() {
-            let dateStr = item.article.pubDate.map { debugFormatter.string(from: $0) } ?? "no date"
-            print("🔍 [AtAGlance] #\(idx+1): [\(dateStr)] \(item.article.title.prefix(40))...")
-        }
-
-        // Only keep NEW articles (not seen before)
-        // Also deduplicate by link to prevent count mismatch when syndicated content
-        // appears in multiple feeds with the same URL
+        // Find NEW articles (not seen before), deduplicated by link
         var newArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
         var seenNewLinks: Set<URL> = []
         let effectiveLimit = min(atAGlanceCount, EntitlementManager.shared.atAGlanceLimit)
 
-        // Debug: log what we're checking
-        print("🔍 [AtAGlance] Checking \(feedArticles.count) articles against \(previouslySeenLinks.count) seen links")
-        if !previouslySeenLinks.isEmpty {
-            print("🔍 [AtAGlance] Recent seen links (last 3): \(previouslySeenLinks.prefix(3).map { $0.absoluteString.suffix(30) })")
-        }
-
         for item in feedArticles {
             let articleLink = item.article.link
-            let isInSeenLinks = previouslySeenLinks.contains(articleLink)
-
-            // Skip if we've already added this link (dedupe syndicated content)
             guard !seenNewLinks.contains(articleLink) else { continue }
+            guard !previouslySeenLinks.contains(articleLink) else { continue }
 
-            if !isInSeenLinks {
-                newArticles.append(item)
-                seenNewLinks.insert(articleLink)
-                print("🔍 [AtAGlance] ✅ NEW: \(item.article.title.prefix(50))...")
-                if newArticles.count >= effectiveLimit {
-                    break
-                }
-            } else {
-                print("🔍 [AtAGlance] ⏭️ SKIP (seen): \(item.article.title.prefix(50))...")
-            }
+            newArticles.append(item)
+            seenNewLinks.insert(articleLink)
+            print("🔍 [AtAGlance] ✅ NEW: \(item.article.title.prefix(50))...")
+            if newArticles.count >= effectiveLimit { break }
         }
 
         print("🔍 [AtAGlance] Found \(newArticles.count) new articles")
 
-        let hasNewArticles = !newArticles.isEmpty
+        // Update timestamp now (successful check)
+        UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
 
-        // If no new articles, mark all existing entries as not new and collapse
-        if !hasNewArticles {
-            // Mark all existing entries as not new
+        // If no new articles, mark all existing as not new and collapse
+        if newArticles.isEmpty {
             for i in heroEntries.indices {
                 heroEntries[i].isNew = false
             }
-
-            // Collapse the card (user can tap to expand and see prior articles)
             withAnimation(.snappy(duration: 0.3)) {
                 isHeroCollapsed = true
             }
-
+            UserDefaults.standard.set(true, forKey: "isHeroCollapsed")
             saveHeroEntriesToCache()
-
-            // Update last refresh timestamp (successful check, even if no new articles)
-            UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
-            print("🔍 [AtAGlance] ⏱️ Timestamp updated (no new articles found)")
 
             if pendingHeroRefresh {
                 pendingHeroRefresh = false
-                Task { await loadHeroEntries(useBackgroundCache: true) }
+                Task { await loadHeroEntries() }
             }
             return
         }
 
-        // Step 2: Generate summaries for new articles
-        // Show loading indicator since we have work to do
+        // Show loading indicator - we have new articles to summarize
         isLoadingHero = true
 
-        // Collapse the card while generating summaries
+        // Collapse while generating (will expand when done)
         if !isHeroCollapsed {
             withAnimation(.snappy(duration: 0.25)) {
                 isHeroCollapsed = true
             }
         }
+
+        // Generate one-sentence summaries from article descriptions
         var newEntries: [SidebarHeroCardView.Entry] = []
         await withTaskGroup(of: SidebarHeroCardView.Entry?.self) { group in
             for item in newArticles {
-                let existingEntry = existingEntriesByLink[item.article.link]
-
-                // Create a minimal Feed for display purposes
                 let displayFeed = Feed(
                     id: item.feedID,
                     title: item.feedTitle,
-                    url: URL(string: "https://placeholder")!, // Not used for display
+                    url: URL(string: "https://placeholder")!,
                     iconURL: item.feedIconURL
                 )
-
                 let articleLink = item.article.link
                 let articleTitle = item.article.title
-                let articleSummary = item.article.summary
+                let articleDescription = item.article.summary
                 let articlePubDate = item.article.pubDate
 
                 group.addTask {
-                    // Check if we already have a valid summary
-                    if let existing = existingEntry, !existing.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return SidebarHeroCardView.Entry(
-                            source: existing.source,
-                            title: existing.title,
-                            oneLine: existing.oneLine,
-                            link: existing.link,
-                            isNew: true,
-                            pubDate: existing.pubDate
-                        )
-                    }
+                    // Summarize the description in one sentence
+                    let oneSentence = await self.summarizeDescriptionOneSentence(articleDescription)
 
-                    // Generate new summary (2 attempts, no delay for speed)
-                    let minSummaryLength = 50
-                    var summary = ""
-                    for attempt in 1...2 {
-                        summary = await ArticleSummarizer.shared.fastHeroSummary(url: articleLink, articleText: articleSummary) ?? ""
-                        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty && trimmed.count >= minSummaryLength {
-                            break
-                        }
-                    }
-
-                    var trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    // Fallback to RSS description if AI summary failed
-                    if trimmedSummary.isEmpty || trimmedSummary.count < minSummaryLength {
-                        // Use the RSS article summary/description as fallback
-                        let fallbackText = articleSummary.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !fallbackText.isEmpty {
-                            // Clean up HTML tags from RSS description
-                            let cleanedFallback = fallbackText
-                                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                            if cleanedFallback.count >= 20 {
-                                trimmedSummary = cleanedFallback
-                                print("🔍 [AtAGlance] ℹ️ Using RSS fallback for: \(articleTitle.prefix(30))...")
-                            }
-                        }
-                    }
-
-                    // Still no valid summary? Skip this article
-                    if trimmedSummary.isEmpty || trimmedSummary.count < 20 {
-                        print("🔍 [AtAGlance] ❌ No summary available for: \(articleTitle.prefix(30))...")
-                        return nil
-                    }
+                    // Use title as fallback if description is empty
+                    let displayText = oneSentence.isEmpty ? articleTitle : oneSentence
 
                     return SidebarHeroCardView.Entry(
                         source: displayFeed,
                         title: articleTitle,
-                        oneLine: trimmedSummary,
+                        oneLine: displayText,
                         link: articleLink,
                         isNew: true,
                         pubDate: articlePubDate
@@ -932,16 +797,16 @@ struct ContentView: View {
             }
         }
 
-        // Sort entries by date
+        // Sort by date
         newEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
 
-        print("🔍 [AtAGlance] Summary generation complete: \(newEntries.count) entries created")
+        print("🔍 [AtAGlance] Created \(newEntries.count) entries")
 
-        // Update heroEntries - only if we have new valid entries, otherwise keep existing
+        // Update entries
         if !newEntries.isEmpty {
             heroEntries = newEntries
 
-            // Auto-expand if card is collapsed and auto-expand is enabled
+            // Auto-expand if enabled
             if isHeroCollapsed && atAGlanceAutoExpand {
                 HapticManager.shared.success()
                 withAnimation(.snappy(duration: 0.3)) {
@@ -951,24 +816,38 @@ struct ContentView: View {
             }
 
             saveHeroEntriesToCache()
-
-            // Update last refresh timestamp (successful regeneration)
-            UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
-            print("🔍 [AtAGlance] ⏱️ Timestamp updated (new entries saved)")
-        } else {
-            print("🔍 [AtAGlance] ⚠️ No valid entries created, keeping old heroEntries")
         }
-        // If newEntries is empty (all summaries failed), keep existing heroEntries
-        // Don't update timestamp - we want to retry on next check
 
         isLoadingHero = false
         print("🔍 [AtAGlance] === loadHeroEntries END ===")
 
-        // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
             pendingHeroRefresh = false
-            Task { await loadHeroEntries(useBackgroundCache: true) }
+            Task { await loadHeroEntries() }
         }
+    }
+
+    /// Summarize article description to one sentence using Apple Intelligence
+    @MainActor private func summarizeDescriptionOneSentence(_ description: String) async -> String {
+        // Clean HTML tags from description
+        let cleaned = description
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return "" }
+
+        // Try AI summarization first (one sentence)
+        #if canImport(FoundationModels)
+        if AppleIntelligence.isAvailable {
+            if let summary = await ArticleSummarizer.shared.fastHeroSummary(url: URL(string: "about:blank")!, articleText: cleaned) {
+                // Extract just the first sentence
+                return oneSentence(from: summary)
+            }
+        }
+        #endif
+
+        // Fallback: use first sentence of cleaned description
+        return oneSentence(from: cleaned)
     }
 
     /// Fetch latest articles for all sources to populate sidebar blue dots on app launch
@@ -1297,11 +1176,13 @@ struct ContentView: View {
                             Divider()
 
                             Button {
-                                // Clear cache but keep showing old entries until new ones are ready
+                                // Clear cache and reset cooldown to force fresh fetch
                                 UserDefaults.standard.removeObject(forKey: heroCacheKey)
+                                UserDefaults.standard.removeObject(forKey: lastHeroRefreshKey)
+                                heroEntries = []
                                 Task {
                                     await ArticleSummarizer.shared.clearHeroSummaries()
-                                    await loadHeroEntries(useBackgroundCache: true)
+                                    await loadHeroEntries()
                                 }
                             } label: {
                                 Label("Clear At a Glance", systemImage: "sun.horizon")
@@ -1600,12 +1481,8 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .backgroundSyncCompleted)) { _ in
-            // Refresh hero entries and sidebar after background sync completes
-            // Only if source list is visible and Apple Intelligence is available
+            // Refresh sidebar after background sync completes
             sidebarRefreshTrigger = UUID()
-            if isSourceListVisible && AppleIntelligence.isAvailable {
-                Task { await loadHeroEntries(useBackgroundCache: true) }
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didNavigateToArticleList)) { _ in
             // User navigated to an article list view - mark source list as not visible
