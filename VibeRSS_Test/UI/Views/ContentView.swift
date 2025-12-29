@@ -648,7 +648,23 @@ struct ContentView: View {
         let useCachedArticles = hasNewCachedArticles || useBackgroundCache
         let shouldFetchRSS = !useCachedArticles && timeSinceLastRefresh > heroRefreshCooldown
 
+        // Debug logging
+        print("🔍 [AtAGlance] === loadHeroEntries START ===")
+        print("🔍 [AtAGlance] Current heroEntries: \(heroEntries.count) entries")
+        if !heroEntries.isEmpty {
+            for entry in heroEntries.prefix(3) {
+                let isNewStr = entry.isNew ? "🔵" : "⚪️"
+                print("🔍 [AtAGlance]   \(isNewStr) \(entry.title.prefix(40))...")
+            }
+        }
+        print("🔍 [AtAGlance] hasNewCachedArticles: \(hasNewCachedArticles)")
+        print("🔍 [AtAGlance] useBackgroundCache param: \(useBackgroundCache)")
+        print("🔍 [AtAGlance] useCachedArticles: \(useCachedArticles)")
+        print("🔍 [AtAGlance] timeSinceLastRefresh: \(Int(timeSinceLastRefresh))s (cooldown: \(Int(heroRefreshCooldown))s)")
+        print("🔍 [AtAGlance] shouldFetchRSS: \(shouldFetchRSS)")
+
         if !useCachedArticles && !shouldFetchRSS {
+            print("🔍 [AtAGlance] ⏸️ EARLY RETURN: Within cooldown, no new cache")
             // Within cooldown period and no new cache - still check existing entries
             if heroEntries.isEmpty {
                 loadHeroEntriesFromCache()
@@ -691,8 +707,10 @@ struct ContentView: View {
         var feedArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
 
         if useCachedArticles {
+            print("🔍 [AtAGlance] 📦 Using CACHED articles from background sync")
             // Use cached articles from background sync (instant, no network)
             let cachedArticles = BackgroundSyncManager.shared.loadCachedAtAGlanceArticles()
+            print("🔍 [AtAGlance] Loaded \(cachedArticles.count) cached articles")
 
             // Clear the pending flag now that we're processing
             BackgroundSyncManager.shared.clearNewArticlesPending()
@@ -721,8 +739,10 @@ struct ContentView: View {
                 return
             }
         } else {
+            print("🔍 [AtAGlance] 🌐 Fetching FRESH RSS (cooldown passed)")
             // Fetch RSS directly (quick since few new articles expected)
             let feeds = store.feeds
+            print("🔍 [AtAGlance] Fetching from \(feeds.count) feeds")
             await withTaskGroup(of: (UUID, String, URL?, (String, URL, String, Date?))?.self) { group in
                 for feed in feeds {
                     group.addTask {
@@ -748,23 +768,48 @@ struct ContentView: View {
         // Sort by most recent first
         feedArticles.sort { ($0.article.pubDate ?? .distantPast) > ($1.article.pubDate ?? .distantPast) }
 
+        // Debug: show what articles were fetched
+        print("🔍 [AtAGlance] Fetched \(feedArticles.count) articles total")
+        let debugFormatter = DateFormatter()
+        debugFormatter.dateFormat = "HH:mm"
+        for (idx, item) in feedArticles.prefix(5).enumerated() {
+            let dateStr = item.article.pubDate.map { debugFormatter.string(from: $0) } ?? "no date"
+            print("🔍 [AtAGlance] #\(idx+1): [\(dateStr)] \(item.article.title.prefix(40))...")
+        }
+
         // Only keep NEW articles (not seen before)
         // Also deduplicate by link to prevent count mismatch when syndicated content
         // appears in multiple feeds with the same URL
         var newArticles: [(feedID: UUID, feedTitle: String, feedIconURL: URL?, article: (title: String, link: URL, summary: String, pubDate: Date?))] = []
         var seenNewLinks: Set<URL> = []
+        let effectiveLimit = min(atAGlanceCount, EntitlementManager.shared.atAGlanceLimit)
+
+        // Debug: log what we're checking
+        print("🔍 [AtAGlance] Checking \(feedArticles.count) articles against \(previouslySeenLinks.count) seen links")
+        if !previouslySeenLinks.isEmpty {
+            print("🔍 [AtAGlance] Recent seen links (last 3): \(previouslySeenLinks.prefix(3).map { $0.absoluteString.suffix(30) })")
+        }
+
         for item in feedArticles {
             let articleLink = item.article.link
-            if !previouslySeenLinks.contains(articleLink) && !seenNewLinks.contains(articleLink) {
+            let isInSeenLinks = previouslySeenLinks.contains(articleLink)
+
+            // Skip if we've already added this link (dedupe syndicated content)
+            guard !seenNewLinks.contains(articleLink) else { continue }
+
+            if !isInSeenLinks {
                 newArticles.append(item)
                 seenNewLinks.insert(articleLink)
-                // Limit to entitlement-aware at-a-glance count
-                let effectiveLimit = min(atAGlanceCount, EntitlementManager.shared.atAGlanceLimit)
+                print("🔍 [AtAGlance] ✅ NEW: \(item.article.title.prefix(50))...")
                 if newArticles.count >= effectiveLimit {
                     break
                 }
+            } else {
+                print("🔍 [AtAGlance] ⏭️ SKIP (seen): \(item.article.title.prefix(50))...")
             }
         }
+
+        print("🔍 [AtAGlance] Found \(newArticles.count) new articles")
 
         let hasNewArticles = !newArticles.isEmpty
 
@@ -784,6 +829,7 @@ struct ContentView: View {
 
             // Update last refresh timestamp (successful check, even if no new articles)
             UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
+            print("🔍 [AtAGlance] ⏱️ Timestamp updated (no new articles found)")
 
             if pendingHeroRefresh {
                 pendingHeroRefresh = false
@@ -793,7 +839,7 @@ struct ContentView: View {
         }
 
         // Step 2: Generate summaries for new articles
-        // NOW show loading indicator since we have work to do
+        // Show loading indicator since we have work to do
         isLoadingHero = true
 
         // Collapse the card while generating summaries
@@ -844,15 +890,34 @@ struct ContentView: View {
                         }
                     }
 
-                    let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    // Fallback to RSS description if AI summary failed
                     if trimmedSummary.isEmpty || trimmedSummary.count < minSummaryLength {
+                        // Use the RSS article summary/description as fallback
+                        let fallbackText = articleSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !fallbackText.isEmpty {
+                            // Clean up HTML tags from RSS description
+                            let cleanedFallback = fallbackText
+                                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            if cleanedFallback.count >= 20 {
+                                trimmedSummary = cleanedFallback
+                                print("🔍 [AtAGlance] ℹ️ Using RSS fallback for: \(articleTitle.prefix(30))...")
+                            }
+                        }
+                    }
+
+                    // Still no valid summary? Skip this article
+                    if trimmedSummary.isEmpty || trimmedSummary.count < 20 {
+                        print("🔍 [AtAGlance] ❌ No summary available for: \(articleTitle.prefix(30))...")
                         return nil
                     }
 
                     return SidebarHeroCardView.Entry(
                         source: displayFeed,
                         title: articleTitle,
-                        oneLine: summary,
+                        oneLine: trimmedSummary,
                         link: articleLink,
                         isNew: true,
                         pubDate: articlePubDate
@@ -869,6 +934,8 @@ struct ContentView: View {
 
         // Sort entries by date
         newEntries.sort { ($0.pubDate ?? .distantPast) > ($1.pubDate ?? .distantPast) }
+
+        print("🔍 [AtAGlance] Summary generation complete: \(newEntries.count) entries created")
 
         // Update heroEntries - only if we have new valid entries, otherwise keep existing
         if !newEntries.isEmpty {
@@ -887,11 +954,15 @@ struct ContentView: View {
 
             // Update last refresh timestamp (successful regeneration)
             UserDefaults.standard.set(Date(), forKey: lastHeroRefreshKey)
+            print("🔍 [AtAGlance] ⏱️ Timestamp updated (new entries saved)")
+        } else {
+            print("🔍 [AtAGlance] ⚠️ No valid entries created, keeping old heroEntries")
         }
         // If newEntries is empty (all summaries failed), keep existing heroEntries
         // Don't update timestamp - we want to retry on next check
 
         isLoadingHero = false
+        print("🔍 [AtAGlance] === loadHeroEntries END ===")
 
         // If a refresh was requested while loading, run again
         if pendingHeroRefresh {
