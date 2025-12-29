@@ -114,6 +114,41 @@ actor ArticleContentCache {
         metadataCache = nil
     }
 
+    /// Purge cached articles older than specified days, excluding saved article URLs
+    /// - Parameters:
+    ///   - days: Remove articles cached more than this many days ago
+    ///   - excludeURLs: URLs to exclude from purging (saved articles)
+    func purgeOlderThan(days: Int, excludeURLs: Set<URL>) {
+        guard let cacheDir = cacheDirectory, days > 0 else { return }
+
+        var metadata = loadMetadata()
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+
+        // Build set of keys to exclude
+        let excludeKeys = Set(excludeURLs.map { cacheKey(for: $0) })
+
+        var removed = 0
+        for (key, entry) in metadata {
+            // Skip if this is a saved article
+            if excludeKeys.contains(key) {
+                continue
+            }
+
+            // Remove if older than cutoff
+            if entry.timestamp < cutoffDate {
+                let fileURL = cacheDir.appendingPathComponent("\(key).json")
+                try? fileManager.removeItem(at: fileURL)
+                metadata.removeValue(forKey: key)
+                removed += 1
+            }
+        }
+
+        if removed > 0 {
+            saveMetadata(metadata)
+            print("ArticleContentCache: Purged \(removed) articles older than \(days) days")
+        }
+    }
+
     /// Get cache statistics
     func statistics() -> (count: Int, sizeBytes: Int) {
         let metadata = loadMetadata()

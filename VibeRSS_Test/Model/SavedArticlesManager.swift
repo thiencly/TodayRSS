@@ -137,6 +137,11 @@ final class SavedArticlesManager {
         persistSavedArticles()
     }
 
+    func clearAll() {
+        savedArticles.removeAll()
+        persistSavedArticles()
+    }
+
     /// Returns true if operation succeeded, false if save limit reached
     @discardableResult
     func toggleSaved(article: Article) -> Bool {

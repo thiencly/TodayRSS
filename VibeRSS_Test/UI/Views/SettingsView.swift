@@ -199,6 +199,8 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var showingSuggestedSources = false
     @State private var backgroundRefreshStatus: UIBackgroundRefreshStatus = .available
+    @State private var cacheStats: (count: Int, sizeBytes: Int) = (0, 0)
+    @State private var showingClearSavedConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -335,10 +337,56 @@ struct SettingsView: View {
                         Text("14 Days").tag(14)
                         Text("30 Days").tag(30)
                     }
+
+                    HStack {
+                        Text("Cached Articles")
+                        Spacer()
+                        Text("\(cacheStats.count)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if cacheStats.sizeBytes > 0 {
+                        HStack {
+                            Text("Cache Size")
+                            Spacer()
+                            Text(formatBytes(cacheStats.sizeBytes))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        Task {
+                            await ArticleContentCache.shared.clear()
+                            cacheStats = await ArticleContentCache.shared.statistics()
+                        }
+                    } label: {
+                        Text("Clear Cache")
+                    }
                 } header: {
-                    Text("Article Retention")
+                    Text("Offline Reading")
                 } footer: {
-                    Text("Older articles are automatically filtered out during sync based on this setting.")
+                    Text("Articles are cached for offline reading when opened. Older cached articles are automatically removed based on your retention setting. Saved articles are never removed.")
+                }
+
+                // MARK: - Saved Articles Section
+                Section {
+                    HStack {
+                        Text("Saved Articles")
+                        Spacer()
+                        Text("\(SavedArticlesManager.shared.savedArticles.count)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button(role: .destructive) {
+                        showingClearSavedConfirmation = true
+                    } label: {
+                        Text("Clear All Saved Articles")
+                    }
+                    .disabled(SavedArticlesManager.shared.savedArticles.isEmpty)
+                } header: {
+                    Text("Saved Articles")
+                } footer: {
+                    Text("Saved articles are kept until you manually remove them.")
                 }
 
                 // MARK: - Sidebar Section
@@ -478,7 +526,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Background Refresh")
                 } footer: {
-                    Text("Keeps widgets and At a Glance updated with the latest articles.")
+                    Text("Keeps widgets updated with the latest articles.")
                 }
 
                 // MARK: - iCloud Sync Section
@@ -563,6 +611,21 @@ struct SettingsView: View {
             .onAppear {
                 backgroundRefreshStatus = UIApplication.shared.backgroundRefreshStatus
             }
+            .task {
+                cacheStats = await ArticleContentCache.shared.statistics()
+            }
+            .confirmationDialog(
+                "Clear All Saved Articles",
+                isPresented: $showingClearSavedConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear All", role: .destructive) {
+                    SavedArticlesManager.shared.clearAll()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will remove all \(SavedArticlesManager.shared.savedArticles.count) saved articles. This action cannot be undone.")
+            }
             .onChange(of: colorScheme) { _, newScheme in
                 // Update icon when system appearance changes (only if Auto is selected)
                 if AppIconOption(rawValue: selectedAppIcon) == .auto {
@@ -599,6 +662,12 @@ struct SettingsView: View {
                 print("Failed to set alternate icon: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 }
 

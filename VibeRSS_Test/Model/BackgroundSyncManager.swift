@@ -435,6 +435,9 @@ final class BackgroundSyncManager {
         WidgetCenter.shared.reloadTimelines(ofKind: "SmallRSSWidget")
         WidgetCenter.shared.reloadTimelines(ofKind: "MediumRSSWidget")
 
+        // Auto-purge old cached articles (excluding saved articles)
+        await purgeOldCachedArticles()
+
         // Refresh source list indicators (lightweight - just article lists, no content caching)
         await refreshSourceIndicators()
 
@@ -450,6 +453,22 @@ final class BackgroundSyncManager {
         if timeSinceLastSync >= interval {
             await performSync()
         }
+    }
+
+    // MARK: - Cache Purging
+
+    /// Purge old cached articles based on user's retention setting
+    /// Saved articles are never auto-purged
+    private func purgeOldCachedArticles() async {
+        // Get user's cache retention setting (default 7 days, 0 means never purge)
+        let retentionDays = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
+        guard retentionDays > 0 else { return }
+
+        // Get saved article URLs to exclude from purging
+        let savedURLs = Set(SavedArticlesManager.shared.savedArticles.map { $0.url })
+
+        // Purge old articles
+        await ArticleContentCache.shared.purgeOlderThan(days: retentionDays, excludeURLs: savedURLs)
     }
 
     // MARK: - Source List Indicators

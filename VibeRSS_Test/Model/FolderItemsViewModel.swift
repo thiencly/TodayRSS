@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import Reeeed
 
 @MainActor
 final class FolderItemsViewModel: ObservableObject {
@@ -69,9 +68,6 @@ final class FolderItemsViewModel: ObservableObject {
             items = sorted
             isLoading = false
 
-            // Cache articles for offline reading in the background
-            Task { await cacheArticlesForOffline(sorted) }
-
             // Skip network refresh if cache is fresh (just fetched on app launch)
             if cacheIsFresh {
                 return
@@ -136,9 +132,6 @@ final class FolderItemsViewModel: ObservableObject {
                 )
             }
         }
-
-        // Cache articles for offline reading in the background
-        Task { await cacheArticlesForOffline(sorted) }
     }
 
     func loadAll(feeds: [Feed]) async {
@@ -178,9 +171,6 @@ final class FolderItemsViewModel: ObservableObject {
             previousArticleIDs = Set(sorted.map { $0.id })
             items = sorted
             isLoading = false
-
-            // Cache articles for offline reading in the background
-            Task { await cacheArticlesForOffline(sorted) }
 
             // Skip network refresh if cache is fresh (just fetched on app launch)
             if cacheIsFresh {
@@ -244,42 +234,6 @@ final class FolderItemsViewModel: ObservableObject {
                     feedTitle: feed.title,
                     feedIconURL: feed.iconURL
                 )
-            }
-        }
-
-        // Cache articles for offline reading in the background
-        Task { await cacheArticlesForOffline(sorted) }
-    }
-
-    /// Cache articles for offline reading when user opens a folder/topic
-    /// Caches full styled HTML for the best offline experience
-    private func cacheArticlesForOffline(_ articles: [Article]) async {
-        let offlineCachingEnabled = UserDefaults.standard.object(forKey: "offlineCachingEnabled") as? Bool ?? true
-        guard offlineCachingEnabled else { return }
-
-        // Cache top 20 articles from this folder/topic
-        let articlesToCache = Array(articles.prefix(20))
-
-        for article in articlesToCache {
-            // Skip if already cached (check HTML cache)
-            if await ArticleContentCache.shared.cachedContent(for: article.link) != nil {
-                continue
-            }
-
-            do {
-                // Fetch and extract full styled HTML using Reeeed
-                let result = try await Reeeed.fetchAndExtractContent(fromURL: article.link)
-
-                // Cache the styled HTML
-                let cached = CachedArticleContent(
-                    styledHTML: result.styledHTML,
-                    baseURL: result.baseURL,
-                    title: result.extracted.title,
-                    timestamp: Date()
-                )
-                await ArticleContentCache.shared.storeContent(cached, for: article.link)
-            } catch {
-                // Silently continue - offline caching is best effort
             }
         }
     }
