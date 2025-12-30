@@ -312,7 +312,7 @@ struct ContentView: View {
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
     @State private var hasTriggeredInitialHeroLoad: Bool = false
-    @AppStorage("isHeroCollapsed") private var isHeroCollapsed: Bool = true
+    @State private var isHeroCollapsed: Bool = true
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
     private let lastHeroRefreshKey = "viberss.lastHeroRefreshDate"
@@ -1337,11 +1337,14 @@ struct ContentView: View {
                 if isSourceListVisible && hasTriggeredInitialHeroLoad && AppleIntelligence.isAvailable {
                     Task { await loadHeroEntries() }
                 }
+            } else if phase == .inactive {
+                // Collapse card when app becomes inactive (fires earlier than .background)
+                // This ensures the collapse animation completes before app snapshot is taken
+                withAnimation(.snappy(duration: 0.2)) {
+                    isHeroCollapsed = true
+                }
             } else if phase == .background {
-                // Collapse card when app goes to background
-                // @AppStorage automatically persists to UserDefaults
-                isHeroCollapsed = true
-                // Mark all current hero entries as "seen" when app goes to background
+                // Mark all current hero entries as "seen" when fully backgrounded
                 // This clears blue dots on next launch if no new articles
                 markAllHeroEntriesAsSeen()
             }
