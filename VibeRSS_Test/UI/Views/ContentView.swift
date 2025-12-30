@@ -1329,9 +1329,13 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 // Force collapsed state FIRST on hot start (before any loading)
-                // This prevents the brief "expanded then collapse" flash
+                // Use transaction to disable animations - prevents visible collapse flash
                 if hasTriggeredInitialHeroLoad && AppleIntelligence.isAvailable {
-                    isHeroCollapsed = true
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        isHeroCollapsed = true
+                    }
                 }
 
                 // Refresh sidebar to update blue dot indicators when app becomes active
