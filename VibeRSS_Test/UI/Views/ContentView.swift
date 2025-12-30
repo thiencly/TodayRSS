@@ -312,7 +312,7 @@ struct ContentView: View {
     @State private var isLoadingHero: Bool = false
     @State private var pendingHeroRefresh: Bool = false
     @State private var hasTriggeredInitialHeroLoad: Bool = false
-    @State private var isHeroCollapsed: Bool = UserDefaults.standard.bool(forKey: "isHeroCollapsed")
+    @AppStorage("isHeroCollapsed") private var isHeroCollapsed: Bool = true
     private let heroCacheKey = "viberss.heroEntries"
     private let seenLinksKey = "viberss.heroSeenLinks"
     private let lastHeroRefreshKey = "viberss.lastHeroRefreshDate"
@@ -728,7 +728,6 @@ struct ContentView: View {
                 withAnimation(.snappy(duration: 0.3)) {
                     isHeroCollapsed = false
                 }
-                UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
             }
 
             saveHeroEntriesToCache()
@@ -1032,7 +1031,6 @@ struct ContentView: View {
                         withAnimation(.snappy(duration: 0.3)) {
                             isHeroCollapsed.toggle()
                         }
-                        UserDefaults.standard.set(isHeroCollapsed, forKey: "isHeroCollapsed")
                     }
                 )
                 .padding(.horizontal, 20)
@@ -1328,15 +1326,8 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                // Force collapsed state FIRST on hot start (before any loading)
-                // Use transaction to disable animations - prevents visible collapse flash
-                if hasTriggeredInitialHeroLoad && AppleIntelligence.isAvailable {
-                    var transaction = Transaction()
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) {
-                        isHeroCollapsed = true
-                    }
-                }
+                // @AppStorage reads directly from UserDefaults, which is set to true on background
+                // So isHeroCollapsed should already be true - no need to force it here
 
                 // Refresh sidebar to update blue dot indicators when app becomes active
                 sidebarRefreshTrigger = UUID()
@@ -1348,9 +1339,8 @@ struct ContentView: View {
                 }
             } else if phase == .background {
                 // Collapse card when app goes to background
-                // So it's already collapsed on hot start (no animation visible to user)
+                // @AppStorage automatically persists to UserDefaults
                 isHeroCollapsed = true
-                UserDefaults.standard.set(true, forKey: "isHeroCollapsed")
                 // Mark all current hero entries as "seen" when app goes to background
                 // This clears blue dots on next launch if no new articles
                 markAllHeroEntriesAsSeen()
