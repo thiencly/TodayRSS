@@ -511,34 +511,32 @@ struct ContentView: View {
     }
 
     /// Save all current hero entry links as "seen" - call when app goes to background
+    /// IMPORTANT: This must be synchronous to complete before app suspension
     private func markAllHeroEntriesAsSeen() {
         // Update in-memory entries to clear blue dots immediately
         for i in heroEntries.indices {
             heroEntries[i].isNew = false
         }
 
-        // Persist to UserDefaults - merge with existing seen links
-        let entries = heroEntries
-        let seenLinksKey = self.seenLinksKey
-        Task.detached(priority: .utility) {
-            do {
-                // Load existing seen links
-                var existingLinks: Set<String> = []
-                if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
-                   let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
-                    existingLinks = Set(decoded)
-                }
+        // Persist to UserDefaults SYNCHRONOUSLY - must complete before app suspends
+        let validEntries = heroEntries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !validEntries.isEmpty else { return }
 
-                // Merge with current entries
-                let validEntries = entries.filter { !$0.oneLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                let newLinks = Set(validEntries.map { $0.link.absoluteString })
-                let mergedLinks = existingLinks.union(newLinks)
+        // Load existing seen links
+        var existingLinks: Set<String> = []
+        if let existingData = UserDefaults.standard.data(forKey: seenLinksKey),
+           let decoded = try? JSONDecoder().decode([String].self, from: existingData) {
+            existingLinks = Set(decoded)
+        }
 
-                // Limit to last 500 links to prevent unbounded growth
-                let limitedLinks = Array(mergedLinks.suffix(500))
-                let linksData = try JSONEncoder().encode(limitedLinks)
-                UserDefaults.standard.set(linksData, forKey: seenLinksKey)
-            } catch {}
+        // Merge with current entries
+        let newLinks = Set(validEntries.map { $0.link.absoluteString })
+        let mergedLinks = existingLinks.union(newLinks)
+
+        // Limit to last 500 links to prevent unbounded growth
+        let limitedLinks = Array(mergedLinks.suffix(500))
+        if let linksData = try? JSONEncoder().encode(limitedLinks) {
+            UserDefaults.standard.set(linksData, forKey: seenLinksKey)
         }
     }
 
@@ -579,6 +577,7 @@ struct ContentView: View {
 
         if timeSinceLastRefresh < heroRefreshCooldown {
             // Within cooldown - just update isNew flags on existing entries
+            // Do NOT auto-expand here - only expand after fresh RSS fetch confirms new articles
             if heroEntries.isEmpty {
                 loadHeroEntriesFromCache()
             } else {
@@ -587,16 +586,7 @@ struct ContentView: View {
                     heroEntries[i].isNew = !seenLinks.contains(heroEntries[i].link)
                 }
             }
-
-            // Auto-expand if there are new entries
-            let hasNewEntries = heroEntries.contains { $0.isNew }
-            if hasNewEntries && isHeroCollapsed && atAGlanceAutoExpand {
-                HapticManager.shared.success()
-                withAnimation(.snappy(duration: 0.3)) {
-                    isHeroCollapsed = false
-                }
-                UserDefaults.standard.set(false, forKey: "isHeroCollapsed")
-            }
+            // Stay collapsed - auto-expand only happens after fresh RSS fetch
             return
         }
 
@@ -1338,6 +1328,12 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                // Force collapsed state FIRST on hot start (before any loading)
+                // This prevents the brief "expanded then collapse" flash
+                if hasTriggeredInitialHeroLoad && AppleIntelligence.isAvailable {
+                    isHeroCollapsed = true
+                }
+
                 // Refresh sidebar to update blue dot indicators when app becomes active
                 sidebarRefreshTrigger = UUID()
                 // Only generate hero summaries if source list is visible and Apple Intelligence is available
