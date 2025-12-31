@@ -11,12 +11,26 @@ struct OnboardingView: View {
     @Binding var isPresented: Bool
     @ObservedObject var store: FeedStore
     @State private var currentPage = 0
-    @State private var selectedCategories: Set<UUID> = []
+    @State private var selectedSources: Set<URL> = []  // Track individual sources by URL
+    @State private var expandedCategories: Set<UUID> = []
     @State private var isAddingSources = false
+    @State private var showingPaywall = false
 
     init(isPresented: Binding<Bool>, store: FeedStore? = nil) {
         self._isPresented = isPresented
         self.store = store ?? FeedStore()
+    }
+
+    private var isPremium: Bool {
+        EntitlementManager.shared.isPremium
+    }
+
+    private var feedLimit: Int {
+        EntitlementManager.shared.feedLimit
+    }
+
+    private var canSelectMore: Bool {
+        isPremium || selectedSources.count < feedLimit
     }
 
     private let pages: [OnboardingPage] = [
@@ -108,7 +122,15 @@ struct OnboardingView: View {
                     ForEach(pages.indices, id: \.self) { index in
                         OnboardingPageView(
                             page: pages[index],
-                            selectedCategories: pages[index].type == .sources ? $selectedCategories : nil
+                            selectedSources: pages[index].type == .sources ? $selectedSources : nil,
+                            expandedCategories: pages[index].type == .sources ? $expandedCategories : nil,
+                            isPremium: isPremium,
+                            feedLimit: feedLimit,
+                            canSelectMore: canSelectMore,
+                            onLimitReached: {
+                                HapticManager.shared.error()
+                                showingPaywall = true
+                            }
                         )
                         .tag(index)
                     }
@@ -174,38 +196,42 @@ struct OnboardingView: View {
                 .padding(.bottom, 40)
             }
         }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(trigger: .feeds)
+        }
     }
 
     private func completeOnboarding() {
         // Add selected sources to the store, organized by topic
-        for categoryID in selectedCategories {
-            if let category = DefaultSources.categories.first(where: { $0.id == categoryID }) {
-                // Find or create folder for this category
-                let folder: Folder
-                if let existingFolder = store.folders.first(where: { $0.name.lowercased() == category.name.lowercased() }) {
-                    folder = existingFolder
-                } else {
-                    // Create new folder with the category's icon
-                    let newFolder = Folder(
-                        name: category.name,
-                        iconType: .sfSymbol(category.icon)
-                    )
-                    store.folders.append(newFolder)
-                    folder = newFolder
-                }
+        for category in DefaultSources.categories {
+            let sourcesFromCategory = category.sources.filter { selectedSources.contains($0.url) }
+            guard !sourcesFromCategory.isEmpty else { continue }
 
-                // Add sources to this folder
-                for source in category.sources {
-                    let alreadyExists = store.feeds.contains { $0.url == source.url }
-                    if !alreadyExists {
-                        var feed = Feed(
-                            title: source.title,
-                            url: source.url,
-                            iconURL: source.iconURL
-                        )
-                        feed.folderID = folder.id
-                        store.feeds.append(feed)
-                    }
+            // Find or create folder for this category
+            let folder: Folder
+            if let existingFolder = store.folders.first(where: { $0.name.lowercased() == category.name.lowercased() }) {
+                folder = existingFolder
+            } else {
+                // Create new folder with the category's icon
+                let newFolder = Folder(
+                    name: category.name,
+                    iconType: .sfSymbol(category.icon)
+                )
+                store.folders.append(newFolder)
+                folder = newFolder
+            }
+
+            // Add sources to this folder
+            for source in sourcesFromCategory {
+                let alreadyExists = store.feeds.contains { $0.url == source.url }
+                if !alreadyExists {
+                    var feed = Feed(
+                        title: source.title,
+                        url: source.url,
+                        iconURL: source.iconURL
+                    )
+                    feed.folderID = folder.id
+                    store.feeds.append(feed)
                 }
             }
         }
@@ -243,7 +269,12 @@ struct OnboardingFeature {
 
 struct OnboardingPageView: View {
     let page: OnboardingPage
-    var selectedCategories: Binding<Set<UUID>>?
+    var selectedSources: Binding<Set<URL>>?
+    var expandedCategories: Binding<Set<UUID>>?
+    var isPremium: Bool = false
+    var feedLimit: Int = 5
+    var canSelectMore: Bool = true
+    var onLimitReached: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -253,8 +284,12 @@ struct OnboardingPageView: View {
             case .features:
                 featuresContent
             case .sources:
-                if let binding = selectedCategories {
-                    sourcesContent(selectedCategories: binding)
+                if let sourcesBinding = selectedSources,
+                   let expandedBinding = expandedCategories {
+                    sourcesContent(
+                        selectedSources: sourcesBinding,
+                        expandedCategories: expandedBinding
+                    )
                 }
             }
         }
@@ -350,10 +385,13 @@ struct OnboardingPageView: View {
     }
 
     @ViewBuilder
-    private func sourcesContent(selectedCategories: Binding<Set<UUID>>) -> some View {
+    private func sourcesContent(
+        selectedSources: Binding<Set<URL>>,
+        expandedCategories: Binding<Set<UUID>>
+    ) -> some View {
         VStack(spacing: 0) {
             Spacer()
-                .frame(height: 20)
+                .frame(height: 10)
 
             // Title
             Text(page.title)
@@ -366,80 +404,192 @@ struct OnboardingPageView: View {
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 20)
+                .padding(.bottom, 12)
 
-            // Category picker
+            // Source limit counter for free users
+            if !isPremium {
+                HStack(spacing: 4) {
+                    Image(systemName: "number.circle.fill")
+                        .foregroundStyle(.blue)
+                    Text("\(selectedSources.wrappedValue.count) of \(feedLimit) sources selected")
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
+                .padding(.bottom, 12)
+            }
+
+            // Category picker with expandable sources
             ScrollView {
                 VStack(spacing: 10) {
                     ForEach(DefaultSources.categories) { category in
-                        SourceCategoryRow(
+                        OnboardingExpandableCategoryRow(
                             category: category,
-                            isSelected: selectedCategories.wrappedValue.contains(category.id)
-                        ) {
-                            HapticManager.shared.click()
-                            if selectedCategories.wrappedValue.contains(category.id) {
-                                selectedCategories.wrappedValue.remove(category.id)
-                            } else {
-                                selectedCategories.wrappedValue.insert(category.id)
-                            }
-                        }
+                            selectedSources: selectedSources,
+                            isExpanded: expandedCategories.wrappedValue.contains(category.id),
+                            canSelectMore: canSelectMore,
+                            onToggleExpand: {
+                                HapticManager.shared.click()
+                                withAnimation(.snappy(duration: 0.25)) {
+                                    if expandedCategories.wrappedValue.contains(category.id) {
+                                        expandedCategories.wrappedValue.remove(category.id)
+                                    } else {
+                                        expandedCategories.wrappedValue.insert(category.id)
+                                    }
+                                }
+                            },
+                            onLimitReached: onLimitReached ?? {}
+                        )
                     }
                 }
             }
 
             Spacer()
-                .frame(height: 20)
+                .frame(height: 10)
         }
     }
 }
 
-// MARK: - Source Category Row (for Onboarding)
+// MARK: - Expandable Category Row (for Onboarding)
 
-private struct SourceCategoryRow: View {
+private struct OnboardingExpandableCategoryRow: View {
     let category: SourceCategory
+    @Binding var selectedSources: Set<URL>
+    let isExpanded: Bool
+    let canSelectMore: Bool
+    let onToggleExpand: () -> Void
+    let onLimitReached: () -> Void
+
+    private var selectedCountInCategory: Int {
+        category.sources.filter { selectedSources.contains($0.url) }.count
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Category header (tap to expand)
+            Button(action: onToggleExpand) {
+                HStack(spacing: 12) {
+                    // Icon
+                    ZStack {
+                        Circle()
+                            .fill(category.iconColor.opacity(0.15))
+                            .frame(width: 44, height: 44)
+
+                        Image(systemName: category.icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(category.iconColor)
+                    }
+
+                    // Text
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(category.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.primary)
+
+                        Text("\(category.sources.count) sources")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    // Selection count badge
+                    if selectedCountInCategory > 0 {
+                        Text("\(selectedCountInCategory)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.blue))
+                    }
+
+                    // Chevron
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Expanded sources list
+            if isExpanded {
+                VStack(spacing: 0) {
+                    ForEach(category.sources) { source in
+                        let isSelected = selectedSources.contains(source.url)
+
+                        OnboardingSourceRow(
+                            source: source,
+                            isSelected: isSelected
+                        ) {
+                            HapticManager.shared.click()
+                            if isSelected {
+                                selectedSources.remove(source.url)
+                            } else {
+                                if canSelectMore {
+                                    selectedSources.insert(source.url)
+                                } else {
+                                    onLimitReached()
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 28)
+                .padding(.top, 6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+// MARK: - Individual Source Row (for Onboarding)
+
+private struct OnboardingSourceRow: View {
+    let source: DefaultSource
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                // Icon
+            HStack(spacing: 10) {
+                // Source icon placeholder
                 ZStack {
                     Circle()
-                        .fill(category.iconColor.opacity(0.15))
-                        .frame(width: 44, height: 44)
+                        .fill(Color(.tertiarySystemGroupedBackground))
+                        .frame(width: 32, height: 32)
 
-                    Image(systemName: category.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(category.iconColor)
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
 
-                // Text
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(category.name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.primary)
-
-                    Text("\(category.sources.count) sources")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                // Source name
+                Text(source.title)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
 
                 Spacer()
 
-                // Checkmark
+                // Checkbox
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.body)
                     .foregroundStyle(isSelected ? Color.blue : Color.secondary.opacity(0.4))
             }
-            .padding(12)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                    )
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
