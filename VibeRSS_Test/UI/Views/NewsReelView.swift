@@ -1145,6 +1145,18 @@ struct SourcePageView: View {
         viewModel.hasFeeds(forSourceAt: sourceIndex)
     }
 
+    private func markCurrentArticleAsSeen() {
+        let articleIndex = currentArticleIndex
+        if articleIndex >= 0 && articleIndex < articles.count {
+            let article = articles[articleIndex]
+            Task {
+                await viewModel.generateReelSummary(for: article)
+                // Mark article as seen so it doesn't show new indicator in other views
+                await ArticleReadStateManager.shared.markAsSeen(article.link)
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if articles.isEmpty {
@@ -1195,11 +1207,13 @@ struct SourcePageView: View {
             // Save position for this source
             viewModel.saveArticlePosition(newIndex, forSourceAt: sourceIndex)
 
-            // Generate summary for newly visible article
+            // Generate summary and mark as seen for newly visible article
             if newIndex >= 0 && newIndex < articles.count {
                 let article = articles[newIndex]
                 Task {
                     await viewModel.generateReelSummary(for: article)
+                    // Mark article as seen so it doesn't show new indicator in other views
+                    await ArticleReadStateManager.shared.markAsSeen(article.link)
                 }
             }
         }
@@ -1210,13 +1224,13 @@ struct SourcePageView: View {
             }
         }
         .onAppear {
-            // Generate summary for current article
-            let articleIndex = currentArticleIndex
-            if articleIndex >= 0 && articleIndex < articles.count {
-                let article = articles[articleIndex]
-                Task {
-                    await viewModel.generateReelSummary(for: article)
-                }
+            // Generate summary and mark as seen for current article
+            markCurrentArticleAsSeen()
+        }
+        .onChange(of: articles.count) { oldCount, newCount in
+            // When articles first load (from 0 to non-zero), mark first article as seen
+            if oldCount == 0 && newCount > 0 {
+                markCurrentArticleAsSeen()
             }
         }
         .sheet(isPresented: $showPaywall) {
